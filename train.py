@@ -1,0 +1,184 @@
+import os
+import torch.cuda
+import numpy as np
+from torch.utils.data import DataLoader, random_split
+from data_load import Image_and_force, TARGET_INDICES
+from sklearn.metrics import accuracy_score
+from model import *
+
+epochs = 100000
+batch_size = 256
+learning_rate = 1e-4
+weight_decay = 0.05
+log_interval = 8
+
+
+train_path = './train'
+
+def prediction(input, model):
+    encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
+
+    size_x = len(input)
+    # X = X.reshape((size_x * TARGET_INDICES, 1, 10, 8))
+    # X = encoder(input)
+    X = input.reshape((size_x, -1))
+    # X = decoder(X)
+    pred_class = classification_model(X)
+    pred_force = regression_model(X)
+
+    return pred_class, pred_force
+
+def train(log_interval, model, optimizer):
+    encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
+    enc_dec_optim, classification_optim, regression_optim = optimizer[0], optimizer[1], optimizer[2]
+
+    encoder.train()
+    decoder.train()
+    classification_model.train()
+    regression_model.train()
+
+    CElosses = []
+    MSElosses = []
+
+    for batch_idx, (X, y, force) in enumerate(train_loader):
+        X, y, force = X.to(device), y.to(device), force.to(device)
+
+        enc_dec_optim.zero_grad()
+        classification_optim.zero_grad()
+        regression_optim.zero_grad()
+
+        pred_class, pred_force = prediction(X, model)
+
+        CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
+        CElosses.append(CEloss.item())
+
+        pred_force = pred_force.reshape(len(force))
+        criterion = nn.MSELoss()
+        MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float())
+        MSElosses.append(MSEloss.item())
+
+        CEloss.backward(retain_graph=True)
+        MSEloss.backward()
+
+        enc_dec_optim.step()
+        regression_optim.step()
+        classification_optim.step()
+    print("Train: \tCE loss: {:.5f},\tMSE loss: {:.5f}".format(np.mean(CElosses), np.mean(MSElosses)))
+
+    return CElosses, MSElosses
+
+
+def validation(model, optimizer, epoch):
+    encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
+    enc_dec_optim, classification_optim, regression_optim = optimizer[0], optimizer[1], optimizer[2]
+
+    encoder.eval()
+    decoder.eval()
+    classification_model.eval()
+    regression_model.eval()
+
+    CEloss = 0
+    MSEloss = 0
+
+    all_y = []
+    all_y_pred = []
+
+    with torch.no_grad():
+        for X, y, force in test_loader:
+            X, y, force = X.to(device), y.to(device), force.to(device)
+
+            pred_class, pred_force = prediction(X, model)
+
+            CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
+            MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+
+            y = torch.max(y, 1)[1]
+            y_pred = pred_class.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
+
+            # collect all y and y_pred in all batches
+            all_y.extend(y)
+            all_y_pred.extend(y_pred)
+
+    CEloss /= len(test_loader)
+    MSEloss /= len(test_loader)
+
+    # compute accuracy
+    all_y = torch.stack(all_y, dim=0)
+    all_y_pred = torch.stack(all_y_pred, dim=0)
+    test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
+
+    torch.save(encoder.state_dict(), os.path.join(train_path + '/models/encoder.pth'))
+    torch.save(decoder.state_dict(), os.path.join(train_path + '/models/decoder.pth'))
+    torch.save(classification_model.state_dict(), os.path.join(train_path + '/models/classification_model.pth'))
+    torch.save(regression_model.state_dict(), os.path.join(train_path + '/models/regression_model.pth'))
+
+    torch.save(enc_dec_optim.state_dict(), os.path.join(train_path + '/models/enc_dec_optim.pth'))
+    torch.save(classification_optim.state_dict(), os.path.join(train_path + '/models/classification_optim.pth'))
+    torch.save(regression_optim.state_dict(), os.path.join(train_path + '/models/regression_optim.pth'))
+
+    print("({}) \t\t{:.5f}\t\t{:.5f}\t\t{:.5f}%".format(epoch, CEloss, MSEloss, test_score * 100))
+    print()
+
+    return CEloss, MSEloss
+
+
+
+if __name__ == '__main__':
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+
+    full_dataset = Image_and_force("./data/TWO")
+
+    # 전체 데이터를 70:20:10 비율로 나누기
+    total_size = len(full_dataset)
+    train_size = int(0.7 * total_size)
+    val_size = int(0.2 * total_size)
+    test_size = total_size - train_size - val_size
+
+    # 시드 고정 (random_state와 같은 역할)
+    generator = torch.Generator().manual_seed(42)
+    train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size],
+                                                            generator=generator)
+
+    # DataLoader로 변환
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    # 모델
+    encoder = Encoder()
+    encoder = encoder.to(device)
+    decoder = DecoderRNN()
+    decoder = decoder.to(device)
+    classification_model = PredictLabelModel()
+    classification_model = classification_model.to(device)
+    regression_model = PredictSheerModel()
+    regression_model = regression_model.to(device)
+
+    # parameter
+    enc_dec_params = list(encoder.parameters()) + list(decoder.parameters())
+    classification_params = list(classification_model.parameters())
+    regression_params = list(regression_model.parameters())
+
+    # Optimizer
+    enc_dec_optim = torch.optim.RMSprop(enc_dec_params, learning_rate, weight_decay=weight_decay)
+    classification_optim = torch.optim.RMSprop(classification_params, learning_rate, weight_decay=weight_decay)
+    regression_optim = torch.optim.RMSprop(regression_params, learning_rate, weight_decay=weight_decay)
+
+    train_losses = []
+    test_losses = []
+
+    # Train
+    for epoch in range(epochs):
+        # Train and Validation model
+        train_CE_losses, train_MSE_losses = train(log_interval, [encoder, decoder, classification_model, regression_model],
+                                                  [enc_dec_optim, classification_optim, regression_optim])
+        val_CE_losses, val_MSE_losses = validation([encoder, decoder, classification_model, regression_model],
+                                                [enc_dec_optim, classification_optim, regression_optim],
+                                                   epoch)
+
+        train_losses.append(np.vstack((train_CE_losses, train_MSE_losses)))
+        test_losses.append(np.vstack((val_CE_losses, val_MSE_losses)))
+
+        np.save(train_path + './train_losses.npy', np.array(train_losses))
+        np.save(train_path + './test_losses.npy', np.array(test_losses))
