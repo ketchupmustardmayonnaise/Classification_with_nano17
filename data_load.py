@@ -10,6 +10,9 @@ import torch.nn.functional as F
 from scipy.interpolate import interp1d
 from torch.utils.data import Dataset
 from scipy.stats import pearsonr
+from scipy import signal
+from scipy.signal import filtfilt
+import matplotlib.pyplot as plt
 
 
 num_classes = 8
@@ -77,6 +80,7 @@ class Image_and_force(Dataset):
                         line_index += 1
 
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
+        self.force = self.apply_butterworth_filter()
 
         img_length = len(self.img)
         for angle in range(15, 360, 15):
@@ -113,11 +117,23 @@ class Image_and_force(Dataset):
             interp_func = interp1d(force_timestamp[index], force_data[index], kind='linear', fill_value='extrapolate', axis=0)
 
             # sensor1의 타임스탬프에 대해 sensor2 값 보간
-            r = interp_func(capacitance_data[index])
-            signal.butter
-            result.append(interp_func(capacitance_timestamp[index]))
+            r = interp_func(capacitance_timestamp[index])
+            result.append(r)
 
         return result
+
+    def apply_butterworth_filter(self):
+        result = []
+        for index in range(len(self.force)):
+            b, a = signal.butter(2, 0.3, 'low')
+            data = []
+            for sig in range(6):
+                r = filtfilt(b, a, self.force[index][:, sig])
+                data.append(r)
+
+            result.append(np.array(data).T)
+        return result
+
 
     def rotate_image_and_force(self, image, force, angle_deg):
         rotated_image = []

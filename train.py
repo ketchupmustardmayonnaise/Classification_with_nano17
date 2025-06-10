@@ -23,10 +23,10 @@ def prediction(input, model):
     # X = encoder(input)
     X = input.reshape((size_x, -1))
     # X = decoder(X)
-    pred_class = classification_model(X)
+    # pred_class = classification_model(X)
     pred_force = regression_model(X)
 
-    return pred_class, pred_force
+    return pred_force
 
 def train(log_interval, model, optimizer):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
@@ -47,23 +47,24 @@ def train(log_interval, model, optimizer):
         classification_optim.zero_grad()
         regression_optim.zero_grad()
 
-        pred_class, pred_force = prediction(X, model)
+        pred_force = prediction(X, model)
 
-        CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
-        CElosses.append(CEloss.item())
+        # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
+        # CElosses.append(CEloss.item())
 
         pred_force = pred_force.reshape(len(force))
         criterion = nn.MSELoss()
         MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float())
         MSElosses.append(MSEloss.item())
 
-        CEloss.backward(retain_graph=True)
+        # CEloss.backward(retain_graph=True)
         MSEloss.backward()
 
         enc_dec_optim.step()
         regression_optim.step()
-        classification_optim.step()
+        # classification_optim.step()
     print("Train: \tCE loss: {:.5f},\tMSE loss: {:.5f}".format(np.mean(CElosses), np.mean(MSElosses)))
+    print("Train: \tMSE loss: {:.5f}".format(np.mean(MSElosses)))
 
     return CElosses, MSElosses
 
@@ -87,25 +88,25 @@ def validation(model, optimizer, epoch):
         for X, y, force in test_loader:
             X, y, force = X.to(device), y.to(device), force.to(device)
 
-            pred_class, pred_force = prediction(X, model)
+            pred_force = prediction(X, model)
 
-            CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
+            # CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
             MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
 
-            y = torch.max(y, 1)[1]
-            y_pred = pred_class.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
+            # y = torch.max(y, 1)[1]
+            # y_pred = pred_class.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
 
             # collect all y and y_pred in all batches
-            all_y.extend(y)
-            all_y_pred.extend(y_pred)
+            # all_y.extend(y)
+            # all_y_pred.extend(y_pred)
 
-    CEloss /= len(test_loader)
+    # CEloss /= len(test_loader)
     MSEloss /= len(test_loader)
 
     # compute accuracy
-    all_y = torch.stack(all_y, dim=0)
-    all_y_pred = torch.stack(all_y_pred, dim=0)
-    test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
+    # all_y = torch.stack(all_y, dim=0)
+    # all_y_pred = torch.stack(all_y_pred, dim=0)
+    # test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
 
     torch.save(encoder.state_dict(), os.path.join(train_path + '/models/encoder.pth'))
     torch.save(decoder.state_dict(), os.path.join(train_path + '/models/decoder.pth'))
@@ -116,10 +117,11 @@ def validation(model, optimizer, epoch):
     torch.save(classification_optim.state_dict(), os.path.join(train_path + '/models/classification_optim.pth'))
     torch.save(regression_optim.state_dict(), os.path.join(train_path + '/models/regression_optim.pth'))
 
-    print("({}) \t\t{:.5f}\t\t{:.5f}\t\t{:.5f}%".format(epoch, CEloss, MSEloss, test_score * 100))
+    # print("({}) \t\t{:.5f}\t\t{:.5f}\t\t{:.5f}%".format(epoch, CEloss, MSEloss, test_score * 100))
+    print("({}) \t\t{:.5f}".format(epoch, MSEloss))
     print()
 
-    return CEloss, MSEloss
+    return MSEloss
 
 
 
