@@ -34,7 +34,7 @@ class BasicBlock(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, block, num_block_list, n_classes=1000):
         super().__init__()
-        assert len(num_block_list) == 5
+        assert len(num_block_list) == 4
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=3, bias=False),
@@ -48,10 +48,9 @@ class ResNet(nn.Module):
         self.stage2 = self.make_stage(block, 64, num_block_list[1], stride=2)
         self.stage3 = self.make_stage(block, 128, num_block_list[2], stride=2)
         self.stage4 = self.make_stage(block, 256, num_block_list[3], stride=2)
-        self.stage5 = self.make_stage(block, 512, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(256 * block.expansion, 256)
+        self.fc = nn.Linear(256 * block.expansion, 500)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -86,4 +85,4 @@ class ResNet(nn.Module):
         return x
 
 def resnet_learning(**kwargs):
-    return ResNet(BasicBlock, [2, 2, 2, 2, 2], **kwargs)
+    return ResNet(BasicBlock, [2, 1, 2, 2], **kwargs)

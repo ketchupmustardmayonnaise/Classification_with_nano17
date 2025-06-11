@@ -3,7 +3,7 @@ import torch.cuda
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
-from data_load import Image_and_force, TARGET_INDICES, SIZE
+from data_load import Image_and_force, TARGET_INDICES, SIZE, FLAG_RESIZE
 from sklearn.metrics import accuracy_score
 from model import *
 from resnet import *
@@ -11,22 +11,24 @@ from scheduler import *
 
 epochs = 100000
 batch_size = 256
-learning_rate = 1e-3
+learning_rate = 1e-4
 weight_decay = 0.05
 log_interval = 8
 
 train_path = './train'
+full_dataset = Image_and_force("./data/TWO")
 
 def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
 
     size_x = len(input)
-    X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
+    if FLAG_RESIZE:
+        X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
+    else:
+        X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
     X = encoder(X)
     X = X.reshape((size_x, TARGET_INDICES, -1))
-    #X = input.reshape((size_x, -1))
     X = decoder(X)
-    # pred_class = classification_model(X)
     pred_force = regression_model(X)
 
     return pred_force
@@ -52,6 +54,8 @@ def train(log_interval, model, optimizer, scheduler):
         regression_optim.zero_grad()
 
         pred_force = prediction(X, model)
+        pred_force = pred_force * full_dataset.force_std + full_dataset.force_mean
+        force = force * full_dataset.force_std + full_dataset.force_mean
 
         # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
         # CElosses.append(CEloss.item())
@@ -94,6 +98,8 @@ def validation(model, optimizer, epoch):
             X, y, force = X.to(device), y.to(device), force.to(device)
 
             pred_force = prediction(X, model)
+            pred_force = pred_force * full_dataset.force_std + full_dataset.force_mean
+            force = force * full_dataset.force_std + full_dataset.force_mean
 
             # CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
             MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
@@ -133,8 +139,6 @@ def validation(model, optimizer, epoch):
 if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
-
-    full_dataset = Image_and_force("./data/TWO")
 
     # 전체 데이터를 70:20:10 비율로 나누기
     total_size = len(full_dataset)

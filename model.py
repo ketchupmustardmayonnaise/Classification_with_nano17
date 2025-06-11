@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
 
-encoder_output = 256
-decoder_output = 1000
+encoder_output = 500
+decoder_output = 500
 regression_FC_dim = 256
 classification_FC_dim = 128
 
@@ -57,12 +57,13 @@ class DecoderRNN(nn.Module):
             input_size=self.input_size,
             hidden_size=self.output_size,
             num_layers=h_RNN_layers,
-            batch_first=True,  # input & output will has batch size as 1s dimension. e.g. (batch, time_step, input_size)
+            batch_first=True,   # input & output will has batch size as 1s dimension. e.g. (batch, time_step, input_size)
+            bidirectional=True
         )
 
     def forward(self, x_RNN):
         self.LSTM.flatten_parameters()
-        RNN_out, _ = self.GRU(x_RNN, None)
+        RNN_out, _ = self.LSTM(x_RNN, None)
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
@@ -105,23 +106,25 @@ class PredictSheerModel(nn.Module):
         self.drop_p = None
         self.num_hidden_layer = num_hidden_layer
 
-        self.input = nn.Linear(input_size, FCdim)
+        self.input = nn.Linear(2 * input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
         self.output = nn.Linear(FCdim, dim)
 
         self.bn = torch.nn.BatchNorm1d(FCdim)
+        self.dropout1 = nn.Dropout(drop_p)
+        self.dropout2 = nn.Dropout(drop_p)
 
     def forward(self, input):
         x = self.input(input)
         x = self.bn(x)
         x = F.relu(x)
-        x = F.dropout(x, training=self.training)
+        x = self.dropout1(x)
 
         for index in range(self.num_hidden_layer):
             x = self.hidden_layer(x)
             x = self.bn(x)
             x = F.relu(x)
-            x = F.dropout(x, training=self.training)
+            x = self.dropout2(x)
 
         x = self.output(x)
 

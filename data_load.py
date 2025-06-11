@@ -21,6 +21,8 @@ TARGET_INDICES = 10
 STRIDE = 5
 SIZE = (28, 28)
 
+FLAG_RESIZE = False
+
 class Image_and_force(Dataset):
     def __init__(self, path='./data/TWO'):
         self.img = []
@@ -83,7 +85,7 @@ class Image_and_force(Dataset):
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
 
-        self.img = self.resize_image(SIZE)
+        # self.img = self.resize_image(SIZE)
 
         img_length = len(self.img)
         for angle in range(15, 360, 15):
@@ -111,7 +113,12 @@ class Image_and_force(Dataset):
         self.img_max = np.max(self.img)
         self.img = (self.img_max - self.img) / self.img_max
         self.img = torch.Tensor(self.img)
-        # self.force *= (-1)
+
+        self.force_mean = np.mean(self.force[:, 2])
+        self.force_std = np.std(self.force[:, 2])
+
+        self.force[:, 2] -= self.force_mean
+        self.force[:, 2] /= self.force_std
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
@@ -153,7 +160,10 @@ class Image_and_force(Dataset):
 
         for index in range(len(image)):
             # 이미지 회전
-            temp_img = np.float32(image[index]).reshape(SIZE)
+            if FLAG_RESIZE:
+                temp_img = np.float32(image[index]).reshape(SIZE)
+            else:
+                temp_img = np.float32(image[index]).reshape((10, 8))
             (h, w) = temp_img.shape
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
@@ -225,6 +235,21 @@ class Image_and_force(Dataset):
         self.label = self.label[indices]
         self.force = self.force[indices]
 
+        # 몰려있는 데이터 삭제
+        z_scores = np.abs(stats.zscore(self.force[:, 2]))
+        # 확률적으로 삭제할 데이터 범위 선택
+        np.random.seed(0)
+        too_many_datas_indices = np.where((self.force[:, 2] > -0.1) & (self.force[:, 2] < 0.1))[0]
+        drop_prob = 0.5
+
+        # 확률적으로 삭제할 데이터들 선택
+        delete_flags = np.random.rand(len(too_many_datas_indices)) < drop_prob
+        indices_to_delete = too_many_datas_indices[delete_flags]
+
+        self.img = np.delete(self.img, indices_to_delete, axis=0)
+        self.label = np.delete(self.label, indices_to_delete, axis=0)
+        self.force = np.delete(self.force, indices_to_delete, axis=0)
+
         # self.img = self.img[self.force[:, 2] < 0]
         # self.label = self.label[self.force[:, 2] < 0]
         # self.force = self.force[self.force[:, 2] < 0]
@@ -248,5 +273,5 @@ class Image_and_force(Dataset):
 
 data = Image_and_force()
 
-plt.hist(np.array(data.force)[:, 2], bins=50)
+plt.hist(np.array(data.force)[:, 2], bins=500)
 plt.show()
