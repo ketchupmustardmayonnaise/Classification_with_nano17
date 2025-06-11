@@ -1,17 +1,19 @@
 import os
 import torch.cuda
 import numpy as np
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
-from data_load import Image_and_force, TARGET_INDICES
+from data_load import Image_and_force, TARGET_INDICES, SIZE
 from sklearn.metrics import accuracy_score
 from model import *
+from resnet import *
+from scheduler import *
 
 epochs = 100000
 batch_size = 256
-learning_rate = 1e-4
+learning_rate = 1e-3
 weight_decay = 0.05
 log_interval = 8
-
 
 train_path = './train'
 
@@ -19,18 +21,20 @@ def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
 
     size_x = len(input)
-    # X = X.reshape((size_x * TARGET_INDICES, 1, 10, 8))
-    # X = encoder(input)
-    X = input.reshape((size_x, -1))
-    # X = decoder(X)
+    X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
+    X = encoder(X)
+    X = X.reshape((size_x, TARGET_INDICES, -1))
+    #X = input.reshape((size_x, -1))
+    X = decoder(X)
     # pred_class = classification_model(X)
     pred_force = regression_model(X)
 
     return pred_force
 
-def train(log_interval, model, optimizer):
+def train(log_interval, model, optimizer, scheduler):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
     enc_dec_optim, classification_optim, regression_optim = optimizer[0], optimizer[1], optimizer[2]
+    enc_dec_scheduler, regression_scheduler = scheduler[0], scheduler[1]
 
     encoder.train()
     decoder.train()
@@ -52,9 +56,8 @@ def train(log_interval, model, optimizer):
         # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
         # CElosses.append(CEloss.item())
 
-        pred_force = pred_force.reshape(len(force))
         criterion = nn.MSELoss()
-        MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float())
+        MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
         MSElosses.append(MSEloss.item())
 
         # CEloss.backward(retain_graph=True)
@@ -62,11 +65,13 @@ def train(log_interval, model, optimizer):
 
         enc_dec_optim.step()
         regression_optim.step()
-        # classification_optim.step()
-    print("Train: \tCE loss: {:.5f},\tMSE loss: {:.5f}".format(np.mean(CElosses), np.mean(MSElosses)))
-    print("Train: \tMSE loss: {:.5f}".format(np.mean(MSElosses)))
 
-    return CElosses, MSElosses
+        enc_dec_scheduler.step()
+        regression_scheduler.step()
+        # classification_optim.step()
+
+    print("Train: \tMSE loss: {:.5f}".format( np.mean(MSElosses)))
+    return MSElosses
 
 
 def validation(model, optimizer, epoch):
@@ -150,6 +155,8 @@ if __name__ == '__main__':
     # 모델
     encoder = Encoder()
     encoder = encoder.to(device)
+    resnet = resnet_learning()
+    resnet = resnet.to(device)
     decoder = DecoderRNN()
     decoder = decoder.to(device)
     classification_model = PredictLabelModel()
@@ -167,20 +174,25 @@ if __name__ == '__main__':
     classification_optim = torch.optim.RMSprop(classification_params, learning_rate, weight_decay=weight_decay)
     regression_optim = torch.optim.RMSprop(regression_params, learning_rate, weight_decay=weight_decay)
 
+    # Scheduler
+    enc_scheduler = CosineAnnealingWarmUpRestarts(enc_dec_optim, T_0=150, eta_max=0.1, T_up=10, gamma=0.5)
+    regression_scheduler = CosineAnnealingWarmUpRestarts(enc_dec_optim, T_0=150, eta_max=0.1, T_up=10, gamma=0.5)
+
     train_losses = []
     test_losses = []
 
     # Train
     for epoch in range(epochs):
         # Train and Validation model
-        train_CE_losses, train_MSE_losses = train(log_interval, [encoder, decoder, classification_model, regression_model],
-                                                  [enc_dec_optim, classification_optim, regression_optim])
-        val_CE_losses, val_MSE_losses = validation([encoder, decoder, classification_model, regression_model],
+        train_MSE_losses = train(log_interval, [resnet, decoder, classification_model, regression_model],
+                                                  [enc_dec_optim, classification_optim, regression_optim],
+                                                    [enc_scheduler, regression_scheduler])
+        val_MSE_losses = validation([resnet, decoder, classification_model, regression_model],
                                                 [enc_dec_optim, classification_optim, regression_optim],
                                                    epoch)
 
-        train_losses.append(np.vstack((train_CE_losses, train_MSE_losses)))
-        test_losses.append(np.vstack((val_CE_losses, val_MSE_losses)))
+        train_losses.append(train_MSE_losses)
+        test_losses.append(val_MSE_losses)
 
         np.save(train_path + './train_losses.npy', np.array(train_losses))
         np.save(train_path + './test_losses.npy', np.array(test_losses))

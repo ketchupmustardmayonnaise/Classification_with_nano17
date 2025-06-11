@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from data_load import TARGET_INDICES, SIZE
 
-encoder_output = 216
-decoder_output = 20 * 10 * 8
-regression_FC_dim = 512
+encoder_output = 256
+decoder_output = 1000
+regression_FC_dim = 256
 classification_FC_dim = 128
 
-num_hidden_of_regression = 5
+num_hidden_of_regression = 1
 num_hidden_of_classification = 3
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels=20, out_channels=[3, 9, 27], kernel_size=3, padding=0):
+    def __init__(self, in_channels=1, out_channels=[3, 3, 9], kernel_size=3, padding=0):
         super(Encoder, self).__init__()
 
         self.layer1 = nn.Conv2d(in_channels=in_channels,
@@ -24,20 +25,21 @@ class Encoder(nn.Module):
                                 kernel_size=kernel_size,
                                 padding=padding)
 
-        # self.layer3 = nn.Conv2d(in_channels=out_channels[1],
-        #                        out_channels=out_channels[2],
-        #                        kernel_size=kernel_size,
-        #                        padding=padding)
+
+        self.layer3 = nn.Conv2d(in_channels=out_channels[1],
+                               out_channels=out_channels[2],
+                               kernel_size=kernel_size,
+                               padding=padding)
 
     def forward(self, x):
         x = self.layer1(x)
         x = self.layer2(x)
-        # x = self.layer3(x)
-        x = x.flatten()
+        x = self.layer3(x)
+        # x = x.flatten()
         return x
 
 class DecoderRNN(nn.Module):
-    def __init__(self, input_size=encoder_output, h_RNN_layers=2, output_size=decoder_output, drop_p=0.3):
+    def __init__(self, input_size=encoder_output, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
         super(DecoderRNN, self).__init__()
 
         self.input_size = input_size
@@ -107,14 +109,18 @@ class PredictSheerModel(nn.Module):
         self.hidden_layer = nn.Linear(FCdim, FCdim)
         self.output = nn.Linear(FCdim, dim)
 
+        self.bn = torch.nn.BatchNorm1d(FCdim)
+
     def forward(self, input):
         x = self.input(input)
-        x = F.leaky_relu(x)
+        x = self.bn(x)
+        x = F.relu(x)
         x = F.dropout(x, training=self.training)
 
         for index in range(self.num_hidden_layer):
             x = self.hidden_layer(x)
-            x = F.leaky_relu(x)
+            x = self.bn(x)
+            x = F.relu(x)
             x = F.dropout(x, training=self.training)
 
         x = self.output(x)

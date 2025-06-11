@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from scipy.interpolate import interp1d
 from torch.utils.data import Dataset
 from scipy.stats import pearsonr
-from scipy import signal
+from scipy import signal, stats
 from scipy.signal import filtfilt
 import matplotlib.pyplot as plt
 
@@ -19,6 +19,7 @@ num_classes = 8
 
 TARGET_INDICES = 10
 STRIDE = 5
+SIZE = (28, 28)
 
 class Image_and_force(Dataset):
     def __init__(self, path='./data/TWO'):
@@ -79,8 +80,10 @@ class Image_and_force(Dataset):
 
                         line_index += 1
 
-        self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
         self.force = self.apply_butterworth_filter()
+        self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
+
+        self.img = self.resize_image(SIZE)
 
         img_length = len(self.img)
         for angle in range(15, 360, 15):
@@ -90,14 +93,13 @@ class Image_and_force(Dataset):
                 self.force.append(force)
                 self.label.append(self.label[index])
 
+        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
+        self.outlier_filter()
+        self.preprocess()
+
         # label
         self.label = torch.Tensor(self.label)
         self.label = F.one_hot(self.label.to(torch.int64), num_classes=num_classes)
-
-        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
-        self.preprocess()
-        # self.img = self.img.reshape((len(self.img), TARGET_INDICES, 1, 10, 8))
-        # self.img = self.img.reshape((len(self.img), TARGET_INDICES, 10, 8))
 
     def __len__(self):
         return len(self.img)
@@ -109,6 +111,7 @@ class Image_and_force(Dataset):
         self.img_max = np.max(self.img)
         self.img = (self.img_max - self.img) / self.img_max
         self.img = torch.Tensor(self.img)
+        # self.force *= (-1)
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
@@ -125,10 +128,11 @@ class Image_and_force(Dataset):
     def apply_butterworth_filter(self):
         result = []
         for index in range(len(self.force)):
+            temp_force = np.array(self.force[index])
             b, a = signal.butter(2, 0.3, 'low')
             data = []
             for sig in range(6):
-                r = filtfilt(b, a, self.force[index][:, sig])
+                r = filtfilt(b, a, temp_force[:, sig])
                 data.append(r)
 
             result.append(np.array(data).T)
@@ -149,7 +153,7 @@ class Image_and_force(Dataset):
 
         for index in range(len(image)):
             # 이미지 회전
-            temp_img = np.float32(image[index]).reshape((10, 8))
+            temp_img = np.float32(image[index]).reshape(SIZE)
             (h, w) = temp_img.shape
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
@@ -168,6 +172,18 @@ class Image_and_force(Dataset):
                             rotated_torque[0], rotated_torque[1], tz)).T
 
         return rotated_image, new_force
+
+    def resize_image(self, size):
+        result = []
+        for data_index in range(len(self.img)):
+            data = []
+            for frame_index in range(len(self.img[data_index])):
+                resized_img = cv2.resize(self.img[data_index][frame_index], size,
+                                         interpolation=cv2.INTER_CUBIC)
+                data.append(resized_img)
+            result.append(data)
+
+        return result
 
 
     def break_images_smaller(self, original_img, original_force, original_label,
@@ -196,7 +212,23 @@ class Image_and_force(Dataset):
                 label.append(original_label[index])
                 frame += stride
 
-        return img, force, label
+        return img, np.array(force), label
+
+    def outlier_filter(self):
+        z_scores = np.abs(stats.zscore(self.force[:, 2]))
+        indices = np.where(z_scores < 2.5)[0]
+
+        self.img = np.array(self.img)
+        self.label = np.array(self.label)
+
+        self.img = self.img[indices]
+        self.label = self.label[indices]
+        self.force = self.force[indices]
+
+        # self.img = self.img[self.force[:, 2] < 0]
+        # self.label = self.label[self.force[:, 2] < 0]
+        # self.force = self.force[self.force[:, 2] < 0]
+
 
     def visualization(self, count):
         import random, cv2
@@ -204,25 +236,17 @@ class Image_and_force(Dataset):
         for i in range(count): # count: 몇 번 보여 줄 것인가
             random_index = random.randint(0, len(self.img))
             for frame in range(len(self.img[random_index])):
-                dst = cv2.resize(self.img[random_index][frame].astype('float32'), (224, 224), interpolation=cv2.INTER_AREA)
+                dst = cv2.resize(np.array(self.img[random_index][frame]), (224, 224), interpolation=cv2.INTER_AREA)
                 dst = cv2.cvtColor(dst, cv2.COLOR_GRAY2RGB)
                 cv2.putText(dst, str(self.label[random_index]), (15, 15), 1, 1.3, (255, 0, 0), 2)
-                cv2.line(dst, (100, 100),
-                         (100 + int(self.force[random_index][0].item() * 50), 100 + int(self.force[random_index][1].item() * 50)),
+                cv2.line(dst, (200, 100),
+                         (200, 100 + int(self.force[random_index][2].item() * 50)),
                          (0, 255, 0), 3)
 
                 cv2.imshow("image", dst)
                 cv2.waitKey(500)
 
-    def correlation(self):
-        force_value = np.array(self.force)
-        force_value = force_value[:, 2]
-        X = np.array(self.img).reshape(len(self.img), TARGET_INDICES, 10 * 8)
-
-        correlations = np.array([pearsonr(X[:, i], force_value)[0] for i in range(X.shape[1])])
-        correlations = correlations.reshape(TARGET_INDICES, 10, 8)
-
-        return correlations
-
 data = Image_and_force()
-# print(data.correlation())
+
+plt.hist(np.array(data.force)[:, 2], bins=50)
+plt.show()

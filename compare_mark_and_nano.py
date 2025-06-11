@@ -29,6 +29,6 @@ for line in mark_lines:
 interp_func = interp1d(nano_timestamp, nano_data, kind='linear', fill_value='extrapolate', axis=0)
 interp_nano_data = interp_func(mark_timestamp)
 
-plt.plot(mark_data, label='mark')
-plt.plot(interp_nano_data, label='nano')
+plt.plot(mark_data, label='mark', color='red')
+plt.plot(interp_nano_data, label='nano', color='blue')
 plt.show()
