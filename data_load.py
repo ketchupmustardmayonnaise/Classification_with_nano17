@@ -22,6 +22,7 @@ STRIDE = 1
 SIZE = (28, 28)
 
 FLAG_RESIZE = False
+IMG_MAX = 512
 
 class Image_and_force(Dataset):
     def __init__(self, path='./data/TWO'):
@@ -89,8 +90,8 @@ class Image_and_force(Dataset):
         self.flip()
 
         img_length = len(self.img)
-        for angle in range(90, 360, 15):
-           for index in range(img_length-1, 0, -1):
+        for angle in range(0, 360, 90):
+           for index in range(0, img_length, 1):
                img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
                self.img.append(np.array(img))
                self.force.append(force)
@@ -111,10 +112,9 @@ class Image_and_force(Dataset):
         return self.img[index], self.label[index], self.force[index][2]
 
     def preprocess(self):
-        self.img_max = np.max(self.img)
-        self.img = (self.img_max - self.img) / self.img_max
+        self.img = self.img.astype(np.float32)
+        self.img = np.where(self.img >= IMG_MAX, 1.0, self.img / IMG_MAX)
         self.img = torch.Tensor(self.img)
-        print(self.img_max)
 
         # self.force_mean = np.mean(self.force[:, 2])
         # self.force_std = np.std(self.force[:, 2])
@@ -169,7 +169,8 @@ class Image_and_force(Dataset):
             (h, w) = temp_img.shape
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
-            rotated = cv2.warpAffine(temp_img, M, (w, h))
+            rotated = cv2.warpAffine(temp_img, M, (w, h),
+                                     borderMode=cv2.BORDER_REPLICATE)
             rotated_image.append(rotated)
 
         # 힘 벡터 회전

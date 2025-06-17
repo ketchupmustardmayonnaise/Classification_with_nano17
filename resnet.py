@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from torchinfo import summary
 
 class BasicBlock(nn.Module):
     expansion = 1
