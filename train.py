@@ -12,7 +12,7 @@ from scheduler import *
 epochs = 100000
 batch_size = 256
 learning_rate = 1e-4
-weight_decay = 0.05
+weight_decay = 0.1
 log_interval = 8
 
 train_path = './train'
@@ -27,8 +27,8 @@ def prediction(input, model):
     else:
         X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
     X = encoder(X)
-    X = X.reshape((size_x, TARGET_INDICES, -1))
-    X = decoder(X)
+    X = X.reshape((size_x, -1))
+    # X = decoder(X)
     pred_force = regression_model(X)
 
     return pred_force

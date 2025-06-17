@@ -114,11 +114,11 @@ class Image_and_force(Dataset):
         self.img = (self.img_max - self.img) / self.img_max
         self.img = torch.Tensor(self.img)
 
-        self.force_mean = np.mean(self.force[:, 2])
-        self.force_std = np.std(self.force[:, 2])
+        # self.force_mean = np.mean(self.force[:, 2])
+        # self.force_std = np.std(self.force[:, 2])
 
-        self.force[:, 2] -= self.force_mean
-        self.force[:, 2] /= self.force_std
+        # self.force[:, 2] -= self.force_mean
+        # self.force[:, 2] /= self.force_std
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
@@ -236,19 +236,20 @@ class Image_and_force(Dataset):
         self.force = self.force[indices]
 
         # 몰려있는 데이터 삭제
-        z_scores = np.abs(stats.zscore(self.force[:, 2]))
+        # z_scores = np.abs(stats.zscore(self.force[:, 2]))
         # 확률적으로 삭제할 데이터 범위 선택
-        np.random.seed(0)
-        too_many_datas_indices = np.where((self.force[:, 2] > -0.1) & (self.force[:, 2] < 0.1))[0]
-        drop_prob = 0.5
+
+        # np.random.seed(0)
+        # too_many_datas_indices = np.where((self.force[:, 2] > -0.1) & (self.force[:, 2] < 0.1))[0]
+        # drop_prob = 0.5
 
         # 확률적으로 삭제할 데이터들 선택
-        delete_flags = np.random.rand(len(too_many_datas_indices)) < drop_prob
-        indices_to_delete = too_many_datas_indices[delete_flags]
+        # delete_flags = np.random.rand(len(too_many_datas_indices)) < drop_prob
+        # indices_to_delete = too_many_datas_indices[delete_flags]
 
-        self.img = np.delete(self.img, indices_to_delete, axis=0)
-        self.label = np.delete(self.label, indices_to_delete, axis=0)
-        self.force = np.delete(self.force, indices_to_delete, axis=0)
+        # self.img = np.delete(self.img, indices_to_delete, axis=0)
+        # self.label = np.delete(self.label, indices_to_delete, axis=0)
+        # self.force = np.delete(self.force, indices_to_delete, axis=0)
 
         # self.img = self.img[self.force[:, 2] < 0]
         # self.label = self.label[self.force[:, 2] < 0]
@@ -273,5 +274,5 @@ class Image_and_force(Dataset):
 
 data = Image_and_force()
 
-plt.hist(np.array(data.force)[:, 2], bins=500)
+plt.hist(np.array(data.force)[:, 2], bins=300)
 plt.show()

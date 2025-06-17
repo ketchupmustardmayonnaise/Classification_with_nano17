@@ -43,14 +43,14 @@ class ResNet(nn.Module):
         )
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
-        self.in_channels = 32
+        self.in_channels = 1
         self.stage1 = self.make_stage(block, 32, num_block_list[0], stride=1)
         self.stage2 = self.make_stage(block, 64, num_block_list[1], stride=2)
         self.stage3 = self.make_stage(block, 128, num_block_list[2], stride=2)
         self.stage4 = self.make_stage(block, 256, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(256 * block.expansion, 500)
+        self.fc = nn.Linear(256 * 2, 56)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -72,17 +72,17 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.maxpool(x)
+        # x = self.conv1(x)
+        # x = self.maxpool(x)
         x = self.stage1(x)
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        x = self.avgpool(x)
+        # x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
 
         return x
 
 def resnet_learning(**kwargs):
-    return ResNet(BasicBlock, [2, 1, 2, 2], **kwargs)
+    return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)

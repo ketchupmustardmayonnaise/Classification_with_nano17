@@ -3,16 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
 
-encoder_output = 500
-decoder_output = 500
-regression_FC_dim = 256
+encoder_output = 1000
+decoder_output = 560
+regression_FC_dim = 560
 classification_FC_dim = 128
 
-num_hidden_of_regression = 1
+num_hidden_of_regression = 0
 num_hidden_of_classification = 3
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels=1, out_channels=[3, 3, 9], kernel_size=3, padding=0):
+    def __init__(self, in_channels=1, out_channels=[32, 32, 64], kernel_size=3, padding=0):
         super(Encoder, self).__init__()
 
         self.layer1 = nn.Conv2d(in_channels=in_channels,
@@ -62,8 +62,8 @@ class DecoderRNN(nn.Module):
         )
 
     def forward(self, x_RNN):
-        self.LSTM.flatten_parameters()
-        RNN_out, _ = self.LSTM(x_RNN, None)
+        self.GRU.flatten_parameters()
+        RNN_out, _ = self.GRU(x_RNN, None)
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
@@ -106,7 +106,7 @@ class PredictSheerModel(nn.Module):
         self.drop_p = None
         self.num_hidden_layer = num_hidden_layer
 
-        self.input = nn.Linear(2 * input_size, FCdim)
+        self.input = nn.Linear(input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
         self.output = nn.Linear(FCdim, dim)
 
