@@ -17,8 +17,8 @@ import matplotlib.pyplot as plt
 
 num_classes = 8
 
-TARGET_INDICES = 10
-STRIDE = 5
+TARGET_INDICES = 8
+STRIDE = 1
 SIZE = (28, 28)
 
 FLAG_RESIZE = False
@@ -86,14 +86,15 @@ class Image_and_force(Dataset):
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
 
         # self.img = self.resize_image(SIZE)
+        self.flip()
 
         img_length = len(self.img)
-        for angle in range(15, 360, 15):
-            for index in range(img_length):
-                img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
-                self.img.append(np.array(img))
-                self.force.append(force)
-                self.label.append(self.label[index])
+        for angle in range(90, 360, 15):
+           for index in range(img_length-1, 0, -1):
+               img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
+               self.img.append(np.array(img))
+               self.force.append(force)
+               self.label.append(self.label[index])
 
         self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
         self.outlier_filter()
@@ -113,6 +114,7 @@ class Image_and_force(Dataset):
         self.img_max = np.max(self.img)
         self.img = (self.img_max - self.img) / self.img_max
         self.img = torch.Tensor(self.img)
+        print(self.img_max)
 
         # self.force_mean = np.mean(self.force[:, 2])
         # self.force_std = np.std(self.force[:, 2])
@@ -167,7 +169,8 @@ class Image_and_force(Dataset):
             (h, w) = temp_img.shape
             center = (w // 2, h // 2)
             M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
-            rotated_image.append(cv2.warpAffine(temp_img, M, (w, h)))
+            rotated = cv2.warpAffine(temp_img, M, (w, h))
+            rotated_image.append(rotated)
 
         # 힘 벡터 회전
         theta = np.radians(angle_deg)
@@ -182,6 +185,39 @@ class Image_and_force(Dataset):
                             rotated_torque[0], rotated_torque[1], tz)).T
 
         return rotated_image, new_force
+
+    def flip(self):
+        data_length = len(self.img)
+
+        for data_index in range(data_length):
+            augmentated_image = [[], [], []]
+            augmentated_force = [[], [], []]
+            for image_index in range(len(self.img[data_index])):
+                augmentated_image[0].append([row[::-1] for row in self.img[data_index][image_index]]) # 좌우 flip
+                augmentated_image[1].append(self.img[data_index][image_index][::-1])  # 상하 flip
+                augmentated_image[2].append([row[::-1] for row in self.img[data_index][image_index][::-1]])  # 상하좌우 flip
+
+            augmentated_image[0] = np.array(augmentated_image[0])
+            augmentated_image[1] = np.array(augmentated_image[1])
+            augmentated_image[2] = np.array(augmentated_image[2])
+
+            temp = self.force[data_index]
+            temp_x = np.copy(temp)
+            temp_x[:, [0, 3]] *= (-1)
+            temp_y = np.copy(temp)
+            temp_y[:, [1, 4]] *= (-1)
+            temp_xy = np.copy(temp)
+            temp_xy[:, [0, 1, 3, 4]] *= (-1)
+
+            augmentated_force[0] = temp_x
+            augmentated_force[1] = temp_y
+            augmentated_force[2] = temp_xy
+
+            self.img.extend(augmentated_image)
+            self.force.extend(augmentated_force)
+            self.label.append(self.label[data_index])
+            self.label.append(self.label[data_index])
+            self.label.append(self.label[data_index])
 
     def resize_image(self, size):
         result = []
@@ -216,24 +252,22 @@ class Image_and_force(Dataset):
             while frame + target_indices < len(original_img[index]):
                 img.append(original_img[index][frame: frame + target_indices])
                 temp_force = original_force[index][frame : frame + target_indices]
-                temp_force -= temp_force[0]
 
-                force.append(np.average(temp_force, axis=0))
+                force.append(temp_force[-1])
                 label.append(original_label[index])
                 frame += stride
 
         return img, np.array(force), label
 
     def outlier_filter(self):
-        z_scores = np.abs(stats.zscore(self.force[:, 2]))
-        indices = np.where(z_scores < 2.5)[0]
+        indices = np.where(abs(self.force[:, 2]) >= 35)[0]
 
         self.img = np.array(self.img)
         self.label = np.array(self.label)
 
-        self.img = self.img[indices]
-        self.label = self.label[indices]
-        self.force = self.force[indices]
+        self.img = np.delete(self.img, indices, axis=0)
+        self.label = np.delete(self.label, indices, axis=0)
+        self.force = np.delete(self.force, indices, axis=0)
 
         # 몰려있는 데이터 삭제
         # z_scores = np.abs(stats.zscore(self.force[:, 2]))

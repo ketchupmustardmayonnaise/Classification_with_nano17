@@ -10,9 +10,9 @@ from resnet import *
 from scheduler import *
 
 epochs = 100000
-batch_size = 256
+batch_size = 512
 learning_rate = 1e-4
-weight_decay = 0.1
+weight_decay = 0
 log_interval = 8
 
 train_path = './train'
@@ -54,8 +54,6 @@ def train(log_interval, model, optimizer, scheduler):
         regression_optim.zero_grad()
 
         pred_force = prediction(X, model)
-        pred_force = pred_force * full_dataset.force_std + full_dataset.force_mean
-        force = force * full_dataset.force_std + full_dataset.force_mean
 
         # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
         # CElosses.append(CEloss.item())
@@ -98,8 +96,6 @@ def validation(model, optimizer, epoch):
             X, y, force = X.to(device), y.to(device), force.to(device)
 
             pred_force = prediction(X, model)
-            pred_force = pred_force * full_dataset.force_std + full_dataset.force_mean
-            force = force * full_dataset.force_std + full_dataset.force_mean
 
             # CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
             MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
