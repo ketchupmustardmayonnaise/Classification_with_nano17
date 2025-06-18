@@ -130,9 +130,13 @@ class Image_and_force(Dataset):
 
     def apply_butterworth_filter(self):
         result = []
+
+        nyq = 0.5 * 29
+        cutoff = 10
+
         for index in range(len(self.force)):
             temp_force = np.array(self.force[index])
-            b, a = signal.butter(2, 0.3, 'low')
+            b, a = signal.butter(2, cutoff / nyq, 'low')
             data = []
             for sig in range(6):
                 r = filtfilt(b, a, temp_force[:, sig])
