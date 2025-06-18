@@ -17,7 +17,7 @@ import albumentations as A
 epochs = 100000
 batch_size = 512
 learning_rate = 1e-4
-weight_decay = 0.005
+weight_decay = 0.00
 log_interval = 8
 
 train_path = './train'
@@ -88,7 +88,7 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        X = image_transform(X)
+        # X = image_transform(X)
         X, y, force = X.to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
@@ -178,16 +178,10 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    # 전체 데이터를 70:20:10 비율로 나누기
-    total_size = len(full_dataset)
-    train_size = int(0.7 * total_size)
-    val_size = int(0.2 * total_size)
-    test_size = total_size - train_size - val_size
-
-    # 시드 고정 (random_state와 같은 역할)
-    generator = torch.Generator().manual_seed(42)
-    train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size],
-                                                            generator=generator)
+    train_dataset = Image_and_force('./data/two/train')
+    train_dataset.augmentation()
+    test_dataset = Image_and_force('./data/two/test')
+    val_dataset = Image_and_force('./data/two/val')
 
     # DataLoader로 변환
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)

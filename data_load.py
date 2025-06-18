@@ -124,9 +124,9 @@ class Image_and_force(Dataset):
         for angle in range(0, 360, 90):
            for index in range(0, img_length, 1):
                img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
-               self.img.append(np.array(img))
-               self.force.append(force)
-               self.label.append(self.label[index])
+               self.img = torch.vstack((self.img, torch.Tensor(img).unsqueeze(0)))
+               self.force = np.vstack((np.array(self.force), force))
+               self.label = torch.vstack((self.label, self.label[index]))
 
     def apply_butterworth_filter(self):
         result = []
@@ -148,15 +148,6 @@ class Image_and_force(Dataset):
     def rotate_image_and_force(self, image, force, angle_deg):
         rotated_image = []
 
-        fx = force[:, 0]
-        fy = force[:, 1]
-        fz = force[:, 2]
-        tx = force[:, 3]
-        ty = force[:, 4]
-        tz = force[:, 5]
-
-        new_force = []
-
         for index in range(len(image)):
             # 이미지 회전
             if FLAG_RESIZE:
@@ -176,11 +167,11 @@ class Image_and_force(Dataset):
             [np.cos(theta), -np.sin(theta)],
             [np.sin(theta), np.cos(theta)]
         ])
-        rotated_force = rotation_matrix @ np.array([fx, fy])
-        rotated_torque = rotation_matrix @ np.array([tx, ty])
+        rotated_force = rotation_matrix @ np.array([force[0], force[1]])
+        rotated_torque = rotation_matrix @ np.array([force[4], force[5]])
 
-        new_force = np.vstack((rotated_force[0], rotated_force[1], fz,
-                            rotated_torque[0], rotated_torque[1], tz)).T
+        new_force = np.vstack((rotated_force[0], rotated_force[1], force[2],
+                               rotated_torque[0], rotated_torque[1], force[5])).T
 
         return rotated_image, new_force
 
@@ -191,31 +182,21 @@ class Image_and_force(Dataset):
             augmentated_image = [[], [], []]
             augmentated_force = [[], [], []]
             for image_index in range(len(self.img[data_index])):
-                augmentated_image[0].append([row[::-1] for row in self.img[data_index][image_index]]) # 좌우 flip
-                augmentated_image[1].append(self.img[data_index][image_index][::-1])  # 상하 flip
-                augmentated_image[2].append([row[::-1] for row in self.img[data_index][image_index][::-1]])  # 상하좌우 flip
+                augmentated_image[0].append([row[::-1] for row in np.array(self.img[data_index][image_index])]) # 좌우 flip
+                augmentated_image[1].append(np.array(self.img[data_index][image_index])[::-1])  # 상하 flip
+                augmentated_image[2].append([row[::-1] for row in np.array(self.img[data_index][image_index])[::-1]])  # 상하좌우 flip
 
             augmentated_image[0] = np.array(augmentated_image[0])
             augmentated_image[1] = np.array(augmentated_image[1])
             augmentated_image[2] = np.array(augmentated_image[2])
 
-            temp = self.force[data_index]
-            temp_x = np.copy(temp)
-            temp_x[:, [0, 3]] *= (-1)
-            temp_y = np.copy(temp)
-            temp_y[:, [1, 4]] *= (-1)
-            temp_xy = np.copy(temp)
-            temp_xy[:, [0, 1, 3, 4]] *= (-1)
+            augmentated_image = torch.Tensor(np.array(augmentated_image))
 
-            augmentated_force[0] = temp_x
-            augmentated_force[1] = temp_y
-            augmentated_force[2] = temp_xy
-
-            self.img.extend(augmentated_image)
-            self.force.extend(augmentated_force)
-            self.label.append(self.label[data_index])
-            self.label.append(self.label[data_index])
-            self.label.append(self.label[data_index])
+            self.img = torch.vstack((self.img, augmentated_image))
+            self.force = np.append(self.force, [self.force[data_index]], axis=0)
+            self.label = torch.vstack((self.label, self.label[data_index]))
+            self.label = torch.vstack((self.label, self.label[data_index]))
+            self.label = torch.vstack((self.label, self.label[data_index]))
 
     def resize_image(self, size):
         result = []
