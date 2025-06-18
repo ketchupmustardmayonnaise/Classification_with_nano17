@@ -21,21 +21,23 @@ weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
+full_dataset = Image_and_force("./data/origin")
 
-# Augmentation
-transforms = A.ReplayCompose([
-    A.Rotate(
-        limit=[-180, 180],
-        interpolation=cv2.INTER_LINEAR,
-        border_mode=cv2.BORDER_REPLICATE,
-        rotate_method="largest_box",
-        crop_border=False
-    ),
-    A.VerticalFlip(p=0.5),
-    A.HorizontalFlip(p=0.5)
-])
 
 def image_transform(X):
+    # Augmentation
+    transforms = A.ReplayCompose([
+        A.Rotate(
+            limit=[-180, 180],
+            interpolation=cv2.INTER_LINEAR,
+            border_mode=cv2.BORDER_REPLICATE,
+            rotate_method="largest_box",
+            crop_border=False
+        ),
+        A.VerticalFlip(p=0.5),
+        A.HorizontalFlip(p=0.5)
+    ])
+
     data_size = len(X)
     X_transformed = []
 
@@ -86,22 +88,8 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        X_origin = copy.deepcopy(X)
-        size = len(X)
         X = image_transform(X)
-        X_transform = copy.deepcopy(X)
-        X = X.to(device)
-
-        for d in range(len(X)):
-            for i in range(8):
-                frame = X_origin[d][i]  # (10, 8)
-                frame = np.array(frame * 255).astype(np.uint8)
-                cv2.imshow(f"origin", frame)
-
-                frame = X_transform[d][i]  # (10, 8)
-                frame = np.array(frame * 255).astype(np.uint8)
-                cv2.imshow(f"transform", frame)
-                cv2.waitKey(500)  # 0.5초 간격
+        X, y, force = X.to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
         classification_optim.zero_grad()
@@ -190,12 +178,19 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    train_dataset = Image_and_force('./data/two/train')
-    test_dataset = Image_and_force('./data/two/test')
-    val_dataset = Image_and_force('./data/two/val')
+    # 전체 데이터를 70:20:10 비율로 나누기
+    total_size = len(full_dataset)
+    train_size = int(0.7 * total_size)
+    val_size = int(0.2 * total_size)
+    test_size = total_size - train_size - val_size
+
+    # 시드 고정 (random_state와 같은 역할)
+    generator = torch.Generator().manual_seed(42)
+    train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size],
+                                                            generator=generator)
 
     # DataLoader로 변환
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -231,8 +226,6 @@ if __name__ == '__main__':
     # Train
 
     for epoch in range(epochs):
-
-
         # Train and Validation model
         train_MSE_losses = train(log_interval, [resnet, decoder, classification_model, regression_model],
                                                   [enc_dec_optim, classification_optim, regression_optim],

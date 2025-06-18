@@ -263,7 +263,7 @@ class Image_and_force(Dataset):
         self.label = np.delete(self.label, indices, axis=0)
         self.force = np.delete(self.force, indices, axis=0)
 
-        self.force[:, 2] *= -1
+        # self.force[:, 2] *= -1
 
         # 몰려있는 데이터 삭제
         # z_scores = np.abs(stats.zscore(self.force[:, 2]))
