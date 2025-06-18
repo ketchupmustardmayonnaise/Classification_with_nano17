@@ -5,6 +5,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
 from data_load import Image_and_force, TARGET_INDICES, SIZE, FLAG_RESIZE
 from sklearn.metrics import accuracy_score
+from torchvision import transforms
 from model import *
 from resnet import *
 from scheduler import *
@@ -12,7 +13,7 @@ from scheduler import *
 epochs = 100000
 batch_size = 512
 learning_rate = 1e-4
-weight_decay = 0
+weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
@@ -27,8 +28,8 @@ def prediction(input, model):
     else:
         X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
     X = encoder(X)
-    X = X.reshape((size_x, -1))
-    # X = decoder(X)
+    X = X.reshape((size_x, TARGET_INDICES, -1))
+    X = decoder(X)
     pred_force = regression_model(X)
 
     return pred_force
@@ -146,6 +147,14 @@ if __name__ == '__main__':
     generator = torch.Generator().manual_seed(42)
     train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size],
                                                             generator=generator)
+    train_dataset.dataset.transform = transforms.Compose([
+        transforms.RandomRotation(degrees=(-180, 180),
+                                  interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.ToTensor(),
+    ])
+
 
     # DataLoader로 변환
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)

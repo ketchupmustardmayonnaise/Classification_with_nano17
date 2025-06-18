@@ -85,18 +85,6 @@ class Image_and_force(Dataset):
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
-
-        # self.img = self.resize_image(SIZE)
-        self.flip()
-
-        img_length = len(self.img)
-        for angle in range(0, 360, 90):
-           for index in range(0, img_length, 1):
-               img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
-               self.img.append(np.array(img))
-               self.force.append(force)
-               self.label.append(self.label[index])
-
         self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
         self.outlier_filter()
         self.preprocess()
@@ -116,12 +104,6 @@ class Image_and_force(Dataset):
         self.img = np.where(self.img >= IMG_MAX, 1.0, self.img / IMG_MAX)
         self.img = torch.Tensor(self.img)
 
-        # self.force_mean = np.mean(self.force[:, 2])
-        # self.force_std = np.std(self.force[:, 2])
-
-        # self.force[:, 2] -= self.force_mean
-        # self.force[:, 2] /= self.force_std
-
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
         for index in range(len(force_timestamp)):
@@ -133,6 +115,17 @@ class Image_and_force(Dataset):
             result.append(r)
 
         return result
+
+    def augmentation(self):
+        self.flip()
+
+        img_length = len(self.img)
+        for angle in range(0, 360, 90):
+           for index in range(0, img_length, 1):
+               img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
+               self.img.append(np.array(img))
+               self.force.append(force)
+               self.label.append(self.label[index])
 
     def apply_butterworth_filter(self):
         result = []
@@ -146,7 +139,6 @@ class Image_and_force(Dataset):
 
             result.append(np.array(data).T)
         return result
-
 
     def rotate_image_and_force(self, image, force, angle_deg):
         rotated_image = []
@@ -261,7 +253,7 @@ class Image_and_force(Dataset):
         return img, np.array(force), label
 
     def outlier_filter(self):
-        indices = np.where(abs(self.force[:, 2]) >= 35)[0]
+        indices = np.where((self.force[:, 2] <= -35) | (self.force[:, 2] > 0.1))[0]
 
         self.img = np.array(self.img)
         self.label = np.array(self.label)
@@ -269,6 +261,8 @@ class Image_and_force(Dataset):
         self.img = np.delete(self.img, indices, axis=0)
         self.label = np.delete(self.label, indices, axis=0)
         self.force = np.delete(self.force, indices, axis=0)
+
+        self.force[:, 2] *= -1
 
         # 몰려있는 데이터 삭제
         # z_scores = np.abs(stats.zscore(self.force[:, 2]))

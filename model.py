@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
 
-encoder_output = 1000
-decoder_output = 1000
-regression_FC_dim = 1000
+encoder_output = 64
+decoder_output = 64
+regression_FC_dim = 300
 classification_FC_dim = 128
 
 num_hidden_of_regression = 0
@@ -58,7 +58,7 @@ class DecoderRNN(nn.Module):
             hidden_size=self.output_size,
             num_layers=h_RNN_layers,
             batch_first=True,   # input & output will has batch size as 1s dimension. e.g. (batch, time_step, input_size)
-            bidirectional=True
+            # bidirectional=True
         )
 
     def forward(self, x_RNN):
