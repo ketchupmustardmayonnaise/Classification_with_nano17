@@ -1,4 +1,7 @@
+import copy
 import os
+
+import cv2
 import torch.cuda
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -9,6 +12,7 @@ from torchvision import transforms
 from model import *
 from resnet import *
 from scheduler import *
+import albumentations as A
 
 epochs = 100000
 batch_size = 512
@@ -17,7 +21,41 @@ weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
-full_dataset = Image_and_force("./data/TWO")
+
+# Augmentation
+transforms = A.ReplayCompose([
+    A.Rotate(
+        limit=[-180, 180],
+        interpolation=cv2.INTER_LINEAR,
+        border_mode=cv2.BORDER_REPLICATE,
+        rotate_method="largest_box",
+        crop_border=False
+    ),
+    A.VerticalFlip(p=0.5),
+    A.HorizontalFlip(p=0.5)
+])
+
+def image_transform(X):
+    data_size = len(X)
+    X_transformed = []
+
+    for index in range(len(X)):
+        X_temp = []
+        transformed = transforms(image=np.array(X[index][0]))
+        replay = transformed['replay']
+        X_temp.append(torch.from_numpy(np.array(transformed['image'])).reshape((10, 8)).tolist())
+
+        for frame in range(1, TARGET_INDICES):
+            transformed = A.ReplayCompose.replay(replay, image=np.array(X[index][frame]))
+            X_temp.append(torch.from_numpy(np.array(transformed['image'])).reshape((10, 8)).tolist())
+
+        X_transformed.append(X_temp)
+
+    if FLAG_RESIZE:
+        return torch.Tensor(X_transformed).reshape((data_size, TARGET_INDICES, SIZE[0], SIZE[1])).float()
+    else:
+        return torch.Tensor(X_transformed).reshape((data_size, TARGET_INDICES, 10, 8)).float()
+
 
 def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
@@ -48,7 +86,22 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        X, y, force = X.to(device), y.to(device), force.to(device)
+        X_origin = copy.deepcopy(X)
+        size = len(X)
+        X = image_transform(X)
+        X_transform = copy.deepcopy(X)
+        X = X.to(device)
+
+        for d in range(len(X)):
+            for i in range(8):
+                frame = X_origin[d][i]  # (10, 8)
+                frame = np.array(frame * 255).astype(np.uint8)
+                cv2.imshow(f"origin", frame)
+
+                frame = X_transform[d][i]  # (10, 8)
+                frame = np.array(frame * 255).astype(np.uint8)
+                cv2.imshow(f"transform", frame)
+                cv2.waitKey(500)  # 0.5초 간격
 
         enc_dec_optim.zero_grad()
         classification_optim.zero_grad()
@@ -137,27 +190,12 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    # 전체 데이터를 70:20:10 비율로 나누기
-    total_size = len(full_dataset)
-    train_size = int(0.7 * total_size)
-    val_size = int(0.2 * total_size)
-    test_size = total_size - train_size - val_size
-
-    # 시드 고정 (random_state와 같은 역할)
-    generator = torch.Generator().manual_seed(42)
-    train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size],
-                                                            generator=generator)
-    train_dataset.dataset.transform = transforms.Compose([
-        transforms.RandomRotation(degrees=(-180, 180),
-                                  interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-        transforms.ToTensor(),
-    ])
-
+    train_dataset = Image_and_force('./data/two/train')
+    test_dataset = Image_and_force('./data/two/test')
+    val_dataset = Image_and_force('./data/two/val')
 
     # DataLoader로 변환
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -191,7 +229,10 @@ if __name__ == '__main__':
     test_losses = []
 
     # Train
+
     for epoch in range(epochs):
+
+
         # Train and Validation model
         train_MSE_losses = train(log_interval, [resnet, decoder, classification_model, regression_model],
                                                   [enc_dec_optim, classification_optim, regression_optim],

@@ -13,6 +13,7 @@ from scipy.stats import pearsonr
 from scipy import signal, stats
 from scipy.signal import filtfilt
 import matplotlib.pyplot as plt
+from torchvision import transforms
 
 
 num_classes = 8
@@ -300,8 +301,3 @@ class Image_and_force(Dataset):
 
                 cv2.imshow("image", dst)
                 cv2.waitKey(500)
-
-data = Image_and_force()
-
-plt.hist(np.array(data.force)[:, 2], bins=300)
-plt.show()
