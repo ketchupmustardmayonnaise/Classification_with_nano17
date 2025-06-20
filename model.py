@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
 
 encoder_output = 64
-decoder_output = 64
-regression_FC_dim = 300
+decoder_output = 300
+regression_FC_dim = 64
 classification_FC_dim = 128
 
 num_hidden_of_regression = 0

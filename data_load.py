@@ -26,7 +26,7 @@ FLAG_RESIZE = False
 IMG_MAX = 512
 
 class Image_and_force(Dataset):
-    def __init__(self, path='./data/TWO'):
+    def __init__(self, path='./data/origin'):
         self.img = []
         self.force = []
         self.label = []
@@ -286,3 +286,5 @@ class Image_and_force(Dataset):
 
                 cv2.imshow("image", dst)
                 cv2.waitKey(500)
+
+Image_and_force()

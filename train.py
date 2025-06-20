@@ -16,8 +16,8 @@ import albumentations as A
 
 epochs = 100000
 batch_size = 512
-learning_rate = 1e-4
-weight_decay = 0.00
+learning_rate = 1e-3
+weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
@@ -88,7 +88,7 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        # X = image_transform(X)
+        #X = image_transform(X)
         X, y, force = X.to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
@@ -179,7 +179,6 @@ if __name__ == '__main__':
     device = torch.device("cuda" if use_cuda else "cpu")
 
     train_dataset = Image_and_force('./data/two/train')
-    train_dataset.augmentation()
     test_dataset = Image_and_force('./data/two/test')
     val_dataset = Image_and_force('./data/two/val')
 
