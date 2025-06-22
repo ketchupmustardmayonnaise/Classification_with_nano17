@@ -10,18 +10,17 @@ from data_load import Image_and_force, TARGET_INDICES, SIZE, FLAG_RESIZE
 from sklearn.metrics import accuracy_score
 from torchvision import transforms
 from model import *
-from resnet import *
 from scheduler import *
 import albumentations as A
 
 epochs = 100000
 batch_size = 512
-learning_rate = 1e-3
+learning_rate = 1e-4
 weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
-full_dataset = Image_and_force("./data/origin")
+full_dataset = Image_and_force("./data/full_dataset")
 
 
 def image_transform(X):
@@ -188,8 +187,6 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # 모델
-    encoder = Encoder()
-    encoder = encoder.to(device)
     resnet = resnet_learning()
     resnet = resnet.to(device)
     decoder = DecoderRNN()
@@ -200,7 +197,7 @@ if __name__ == '__main__':
     regression_model = regression_model.to(device)
 
     # parameter
-    enc_dec_params = list(encoder.parameters()) + list(decoder.parameters())
+    enc_dec_params = list(resnet.parameters()) + list(decoder.parameters())
     classification_params = list(classification_model.parameters())
     regression_params = list(regression_model.parameters())
 

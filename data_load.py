@@ -120,6 +120,7 @@ class Image_and_force(Dataset):
     def augmentation(self):
         self.flip()
 
+        '''
         img_length = len(self.img)
         for angle in range(0, 360, 90):
            for index in range(0, img_length, 1):
@@ -127,6 +128,7 @@ class Image_and_force(Dataset):
                self.img = torch.vstack((self.img, torch.Tensor(img).unsqueeze(0)))
                self.force = np.vstack((np.array(self.force), force))
                self.label = torch.vstack((self.label, self.label[index]))
+        '''
 
     def apply_butterworth_filter(self):
         result = []
@@ -179,24 +181,22 @@ class Image_and_force(Dataset):
         data_length = len(self.img)
 
         for data_index in range(data_length):
-            augmentated_image = [[], [], []]
-            augmentated_force = [[], [], []]
+            augmentated_image = []
             for image_index in range(len(self.img[data_index])):
-                augmentated_image[0].append([row[::-1] for row in np.array(self.img[data_index][image_index])]) # 좌우 flip
-                augmentated_image[1].append(np.array(self.img[data_index][image_index])[::-1])  # 상하 flip
-                augmentated_image[2].append([row[::-1] for row in np.array(self.img[data_index][image_index])[::-1]])  # 상하좌우 flip
+                augmentated_image.append([row[::-1] for row in np.array(self.img[data_index][image_index])]) # 좌우 flip
+                # augmentated_image[1].append(np.array(self.img[data_index][image_index])[::-1])  # 상하 flip
+                # augmentated_image[2].append([row[::-1] for row in np.array(self.img[data_index][image_index])[::-1]])  # 상하좌우 flip
 
-            augmentated_image[0] = np.array(augmentated_image[0])
-            augmentated_image[1] = np.array(augmentated_image[1])
-            augmentated_image[2] = np.array(augmentated_image[2])
+            augmentated_image = np.array(augmentated_image)
 
-            augmentated_image = torch.Tensor(np.array(augmentated_image))
+            # augmentated_image[1] = np.array(augmentated_image[1])
+            # augmentated_image[2] = np.array(augmentated_image[2])
 
-            self.img = torch.vstack((self.img, augmentated_image))
+            self.img = torch.vstack((self.img, torch.Tensor(augmentated_image.reshape((1, TARGET_INDICES, 10, 8)))))
             self.force = np.append(self.force, [self.force[data_index]], axis=0)
             self.label = torch.vstack((self.label, self.label[data_index]))
-            self.label = torch.vstack((self.label, self.label[data_index]))
-            self.label = torch.vstack((self.label, self.label[data_index]))
+            # self.label = torch.vstack((self.label, self.label[data_index]))
+            # self.label = torch.vstack((self.label, self.label[data_index]))
 
     def resize_image(self, size):
         result = []
@@ -286,5 +286,3 @@ class Image_and_force(Dataset):
 
                 cv2.imshow("image", dst)
                 cv2.waitKey(500)
-
-Image_and_force()
