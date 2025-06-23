@@ -6,56 +6,58 @@ import torch.cuda
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, random_split
+from torchinfo import summary
+
 from data_load import Image_and_force, TARGET_INDICES, SIZE, FLAG_RESIZE
 from sklearn.metrics import accuracy_score
 from torchvision import transforms
 from model import *
 from scheduler import *
 import albumentations as A
+from model_densenet import *
 
 epochs = 100000
 batch_size = 512
-learning_rate = 1e-4
+learning_rate = 1e-3
 weight_decay = 0.005
 log_interval = 8
 
 train_path = './train'
 full_dataset = Image_and_force("./data/full_dataset")
 
+def apply_all_frames(X_batch):
+    """
+    X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
+    Returns: Tensor with same shape
+    """
+    batch_size, num_frames, H, W = X_batch.shape
+    X_out = []
 
-def image_transform(X):
-    # Augmentation
-    transforms = A.ReplayCompose([
-        A.Rotate(
-            limit=[-180, 180],
-            interpolation=cv2.INTER_LINEAR,
-            border_mode=cv2.BORDER_REPLICATE,
-            rotate_method="largest_box",
-            crop_border=False
-        ),
-        A.VerticalFlip(p=0.5),
-        A.HorizontalFlip(p=0.5)
-    ])
+    # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
+    angle = np.random.uniform(-180, 180)
+    do_vflip = np.random.rand() < 0.5
+    do_hflip = np.random.rand() < 0.5
 
-    data_size = len(X)
-    X_transformed = []
+    for b in range(batch_size):
+        sample_out = []
+        for f in range(num_frames):
+            img = np.array(X_batch[b, f])
 
-    for index in range(len(X)):
-        X_temp = []
-        transformed = transforms(image=np.array(X[index][0]))
-        replay = transformed['replay']
-        X_temp.append(torch.from_numpy(np.array(transformed['image'])).reshape((10, 8)).tolist())
+            # 회전
+            M = cv2.getRotationMatrix2D((W // 2, H // 2), angle, 1)
+            img = cv2.warpAffine(img, M, (W, H), borderMode=cv2.BORDER_REPLICATE)
 
-        for frame in range(1, TARGET_INDICES):
-            transformed = A.ReplayCompose.replay(replay, image=np.array(X[index][frame]))
-            X_temp.append(torch.from_numpy(np.array(transformed['image'])).reshape((10, 8)).tolist())
+            # flip
+            if do_vflip:
+                img = cv2.flip(img, 0)
+            if do_hflip:
+                img = cv2.flip(img, 1)
 
-        X_transformed.append(X_temp)
+            sample_out.append(torch.from_numpy(img).float())
 
-    if FLAG_RESIZE:
-        return torch.Tensor(X_transformed).reshape((data_size, TARGET_INDICES, SIZE[0], SIZE[1])).float()
-    else:
-        return torch.Tensor(X_transformed).reshape((data_size, TARGET_INDICES, 10, 8)).float()
+        X_out.append(torch.stack(sample_out))  # (frame, H, W)
+
+    return torch.stack(X_out)  # (batch_size, frame, H, W)
 
 
 def prediction(input, model):
@@ -66,10 +68,9 @@ def prediction(input, model):
         X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
     else:
         X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
-    X = encoder(X)
-    X = X.reshape((size_x, TARGET_INDICES, -1))
-    X = decoder(X)
-    pred_force = regression_model(X)
+    pred_force = encoder(X)
+    #X = X.reshape((size_x, -1))
+    #pred_force = regression_model(X)
 
     return pred_force
 
@@ -87,7 +88,7 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        #X = image_transform(X)
+        X = apply_all_frames(X)
         X, y, force = X.to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
@@ -187,7 +188,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # 모델
-    resnet = resnet_learning()
+    resnet = DenseNet121()
     resnet = resnet.to(device)
     decoder = DecoderRNN()
     decoder = decoder.to(device)
@@ -195,6 +196,8 @@ if __name__ == '__main__':
     classification_model = classification_model.to(device)
     regression_model = PredictSheerModel()
     regression_model = regression_model.to(device)
+
+    summary(resnet, input_size=(batch_size * 10, 1, 10, 8))
 
     # parameter
     enc_dec_params = list(resnet.parameters()) + list(decoder.parameters())

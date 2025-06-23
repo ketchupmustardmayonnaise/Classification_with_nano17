@@ -18,7 +18,7 @@ from torchvision import transforms
 
 num_classes = 8
 
-TARGET_INDICES = 8
+TARGET_INDICES = 10
 STRIDE = 1
 SIZE = (28, 28)
 
@@ -84,6 +84,8 @@ class Image_and_force(Dataset):
 
                         line_index += 1
 
+        if FLAG_RESIZE:
+            self.img = self.resize_image(SIZE)
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
         self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)

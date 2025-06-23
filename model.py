@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
 
-encoder_output = 256 * 2
+encoder_output = 256
 decoder_output = 64
 regression_FC_dim = 64
 classification_FC_dim = 128
@@ -53,13 +53,13 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
         self.in_channels = 1
-        self.stage1 = self.make_stage(block, 32, num_block_list[0], stride=1)
-        self.stage2 = self.make_stage(block, 64, num_block_list[1], stride=2)
-        self.stage3 = self.make_stage(block, 128, num_block_list[2], stride=2)
-        self.stage4 = self.make_stage(block, 256, num_block_list[3], stride=2)
+        self.stage1 = self.make_stage(block, 8, num_block_list[0], stride=1)
+        self.stage2 = self.make_stage(block, 16, num_block_list[1], stride=2)
+        self.stage3 = self.make_stage(block, 32, num_block_list[2], stride=2)
+        self.stage4 = self.make_stage(block, 64, num_block_list[3], stride=2)
 
-        self.avgpool = nn.AdaptiveAvgPool2d((2, 2))
-        self.fc = nn.Linear(256 * 2, encoder_output)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(64 * 2, 4)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -87,15 +87,14 @@ class ResNet(nn.Module):
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        # x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        # x = self.fc(x)
+        #x = self.avgpool(x)
+        x = x.flatten(1)
+        x = self.fc(x)
 
         return x
 
 def resnet_learning(**kwargs):
     return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
-
 
 
 class DecoderRNN(nn.Module):
@@ -168,13 +167,14 @@ class PredictSheerModel(nn.Module):
 
         self.input = nn.Linear(input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
-        self.output = nn.Linear(FCdim, dim)
+        self.output = nn.Linear(10000, dim)
 
-        self.bn = torch.nn.BatchNorm1d(FCdim)
+        self.bn = torch.nn.BatchNorm1d(10000)
         self.dropout1 = nn.Dropout(drop_p)
         self.dropout2 = nn.Dropout(drop_p)
 
     def forward(self, input):
+        '''
         x = self.input(input)
         x = self.bn(x)
         x = F.relu(x)
@@ -187,5 +187,7 @@ class PredictSheerModel(nn.Module):
             x = self.dropout2(x)
 
         x = self.output(x)
+        '''
 
-        return x
+        x = self.bn(input)
+        return self.output(input)
