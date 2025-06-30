@@ -34,6 +34,8 @@ class Image_and_force(Dataset):
         self.img_timestamp = []
         self.force_timestamp = []
 
+        cap = []
+
         for label in os.listdir(path):
             for file_name in os.listdir(path + '/' + label): # 각 파일들에 대하여
                 if file_name.endswith('.csv'): # 파일 확장자가 csv인 경우만 처리
@@ -72,6 +74,7 @@ class Image_and_force(Dataset):
                             [0 if x >= 65000 else x for x in inner]
                             for inner in img
                         ]
+                        cap.extend([row for img2d in img for row in img2d])
                         self.img.append(np.array(img, dtype=np.float32).reshape((frame, 10, 8)))
                         self.label.append(int(label))
 
@@ -86,6 +89,7 @@ class Image_and_force(Dataset):
 
         if FLAG_RESIZE:
             self.img = self.resize_image(SIZE)
+
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
         self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
@@ -147,6 +151,23 @@ class Image_and_force(Dataset):
                 data.append(r)
 
             result.append(np.array(data).T)
+
+            '''
+            r = np.random.rand()
+            if r < 0.01:
+                b, a = signal.butter(2, 5 / nyq, 'low')
+                c_5 = filtfilt(b, a, temp_force[:, 2])
+                print(f"{index}, {self.label[index]}")
+
+                plt.plot(temp_force[:, 2], color='r', label='before')
+                plt.plot(data[2], color='blue', label='10 cutoff')
+                plt.plot(c_5, color='c', label='5 cutoff')
+                plt.xlabel('frame')
+                plt.ylabel('force (N)')
+                plt.legend()
+                plt.show()
+                plt.pause(5)
+            '''
         return result
 
     def rotate_image_and_force(self, image, force, angle_deg):

@@ -17,8 +17,8 @@ import albumentations as A
 from model_densenet import *
 
 epochs = 100000
-batch_size = 512
-learning_rate = 1e-3
+batch_size = 64
+learning_rate = 1e-4 * 5
 weight_decay = 0.005
 log_interval = 8
 
@@ -68,9 +68,10 @@ def prediction(input, model):
         X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
     else:
         X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
-    pred_force = encoder(X)
-    #X = X.reshape((size_x, -1))
-    #pred_force = regression_model(X)
+    X = encoder(X)
+    X = X.reshape((size_x, 10, -1))
+    X = decoder(X)
+    pred_force = regression_model(X)
 
     return pred_force
 
@@ -100,8 +101,7 @@ def train(log_interval, model, optimizer, scheduler):
         # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
         # CElosses.append(CEloss.item())
 
-        criterion = nn.MSELoss()
-        MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
+        MSEloss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
         MSElosses.append(MSEloss.item())
 
         # CEloss.backward(retain_graph=True)
@@ -140,7 +140,7 @@ def validation(model, optimizer, epoch):
             pred_force = prediction(X, model)
 
             # CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
-            MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+            MSEloss += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
 
             # y = torch.max(y, 1)[1]
             # y_pred = pred_class.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability

@@ -11,6 +11,33 @@ classification_FC_dim = 128
 num_hidden_of_regression = 0
 num_hidden_of_classification = 3
 
+class Encoder(nn.Module):
+    def __init__(self, in_channels=1, out_channels=[32, 32, 64], kernel_size=3, padding=0):
+        super(Encoder, self).__init__()
+
+        self.layer1 = nn.Conv2d(in_channels=in_channels,
+                                out_channels=out_channels[0],
+                                kernel_size=kernel_size,
+                                padding=padding)
+
+        self.layer2 = nn.Conv2d(in_channels=out_channels[0],
+                                out_channels=out_channels[1],
+                                kernel_size=kernel_size,
+                                padding=padding)
+
+
+        self.layer3 = nn.Conv2d(in_channels=out_channels[1],
+                               out_channels=out_channels[2],
+                               kernel_size=kernel_size,
+                               padding=padding)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        # x = x.flatten()
+        return x
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -98,7 +125,7 @@ def resnet_learning(**kwargs):
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, input_size=encoder_output, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
+    def __init__(self, input_size=32, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
         super(DecoderRNN, self).__init__()
 
         self.input_size = input_size
@@ -167,9 +194,9 @@ class PredictSheerModel(nn.Module):
 
         self.input = nn.Linear(input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
-        self.output = nn.Linear(10000, dim)
+        self.output = nn.Linear(64, dim)
 
-        self.bn = torch.nn.BatchNorm1d(10000)
+        self.bn = torch.nn.BatchNorm1d(64)
         self.dropout1 = nn.Dropout(drop_p)
         self.dropout2 = nn.Dropout(drop_p)
 
