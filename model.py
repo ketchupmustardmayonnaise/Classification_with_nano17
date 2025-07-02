@@ -2,14 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from data_load import TARGET_INDICES, SIZE
-
-encoder_output = 256
-decoder_output = 64
-regression_FC_dim = 64
-classification_FC_dim = 128
-
-num_hidden_of_regression = 0
-num_hidden_of_classification = 3
+from parameters import *
 
 class Encoder(nn.Module):
     def __init__(self, in_channels=1, out_channels=[32, 32, 64], kernel_size=3, padding=0):
@@ -86,7 +79,7 @@ class ResNet(nn.Module):
         self.stage4 = self.make_stage(block, 64, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(64 * 2, 4)
+        self.fc = nn.Linear(64 * 2, encoder_output)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -125,7 +118,7 @@ def resnet_learning(**kwargs):
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, input_size=32, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
+    def __init__(self, input_size=encoder_output, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
         super(DecoderRNN, self).__init__()
 
         self.input_size = input_size
@@ -194,9 +187,9 @@ class PredictSheerModel(nn.Module):
 
         self.input = nn.Linear(input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
-        self.output = nn.Linear(64, dim)
+        self.output = nn.Linear(decoder_output, dim)
 
-        self.bn = torch.nn.BatchNorm1d(64)
+        self.bn = torch.nn.BatchNorm1d(decoder_output)
         self.dropout1 = nn.Dropout(drop_p)
         self.dropout2 = nn.Dropout(drop_p)
 

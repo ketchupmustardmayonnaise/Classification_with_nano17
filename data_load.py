@@ -14,15 +14,9 @@ from scipy import signal, stats
 from scipy.signal import filtfilt
 import matplotlib.pyplot as plt
 from torchvision import transforms
-
+from parameters import *
 
 num_classes = 8
-
-TARGET_INDICES = 10
-STRIDE = 1
-SIZE = (28, 28)
-
-FLAG_RESIZE = False
 IMG_MAX = 512
 
 class Image_and_force(Dataset):
@@ -70,6 +64,8 @@ class Image_and_force(Dataset):
                         frame = int(lines[line_index][0])
                         self.img_timestamp.append(list(map(float, lines[line_index][1: 2 + 2 * (frame - 1): 2])))
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
+
+                        # underflow 된 데이터들 0으로 처리
                         img = [
                             [0 if x >= 65000 else x for x in inner]
                             for inner in img
@@ -95,6 +91,9 @@ class Image_and_force(Dataset):
         self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
         self.outlier_filter()
         self.preprocess()
+
+        if USE_RGB_IMG:
+            self.contour()
 
         # label
         self.label = torch.Tensor(self.label)
@@ -233,6 +232,48 @@ class Image_and_force(Dataset):
 
         return result
 
+    def contour(self):
+        multi_channel_img = []
+        for data in range(len(self.img)):
+            seq_img = []
+            for frame in range(len(self.img[data])):
+                img = np.array(self.img[data][frame])
+                img_copy = img.copy() * 255
+                img_copy = img_copy.astype(np.uint8)
+
+                # Sobel edge
+                sobelx = cv2.Sobel(img_copy, cv2.CV_64F, 1, 0, ksize=3)
+                sobely = cv2.Sobel(img_copy, cv2.CV_64F, 0, 1, ksize=3)
+                sobel_mag = np.sqrt(sobelx ** 2 + sobely ** 2)
+
+                blurred = cv2.GaussianBlur(img_copy, (5, 5), 0)
+                sharp = cv2.addWeighted(img_copy, 1.5, blurred, -0.5, 0)
+
+                img = np.stack([img, sobel_mag / 255, sharp / 255])
+                seq_img.append(img)
+                '''
+                if self.label[data] >1:
+                    # 결과 확인
+                    plt.figure(figsize=(10, 4))
+                    plt.subplot(1, 3, 1)
+                    plt.imshow(img, cmap="gray")
+                    plt.title("Original Image")
+
+                    plt.subplot(1, 3, 2)
+                    plt.imshow(sharp, cmap="gray")
+                    plt.title("Filled Mask from Contours")
+                    plt.tight_layout()
+
+                    plt.subplot(1, 3, 3)
+                    plt.imshow(sobel_mag, cmap="gray")
+                    plt.show()
+                '''
+            multi_channel_img.append(np.array(seq_img))
+        multi_channel_img = np.array(multi_channel_img)
+
+        self.img = multi_channel_img
+
+
 
     def break_images_smaller(self, original_img, original_force, original_label,
                              target_indices=TARGET_INDICES,
@@ -262,7 +303,7 @@ class Image_and_force(Dataset):
         return img, np.array(force), label
 
     def outlier_filter(self):
-        indices = np.where((self.force[:, 2] <= -35) | (self.force[:, 2] > 0.1))[0]
+        indices = np.where((self.force[:, 2] <= -35) | (self.force[:, 2] > 0.6) | (self.force[:, 2] < -6))[0]
 
         self.img = np.array(self.img)
         self.label = np.array(self.label)

@@ -15,63 +15,30 @@ from model import *
 from scheduler import *
 import albumentations as A
 from model_densenet import *
-
-epochs = 100000
-batch_size = 64
-learning_rate = 1e-4 * 5
-weight_decay = 0.005
-log_interval = 8
+from parameters import *
+from apply_img_augmentation import *
 
 train_path = './train'
 full_dataset = Image_and_force("./data/full_dataset")
-
-def apply_all_frames(X_batch):
-    """
-    X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
-    Returns: Tensor with same shape
-    """
-    batch_size, num_frames, H, W = X_batch.shape
-    X_out = []
-
-    # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
-    angle = np.random.uniform(-180, 180)
-    do_vflip = np.random.rand() < 0.5
-    do_hflip = np.random.rand() < 0.5
-
-    for b in range(batch_size):
-        sample_out = []
-        for f in range(num_frames):
-            img = np.array(X_batch[b, f])
-
-            # 회전
-            M = cv2.getRotationMatrix2D((W // 2, H // 2), angle, 1)
-            img = cv2.warpAffine(img, M, (W, H), borderMode=cv2.BORDER_REPLICATE)
-
-            # flip
-            if do_vflip:
-                img = cv2.flip(img, 0)
-            if do_hflip:
-                img = cv2.flip(img, 1)
-
-            sample_out.append(torch.from_numpy(img).float())
-
-        X_out.append(torch.stack(sample_out))  # (frame, H, W)
-
-    return torch.stack(X_out)  # (batch_size, frame, H, W)
-
 
 def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
 
     size_x = len(input)
     if FLAG_RESIZE:
-        X = input.reshape((size_x * TARGET_INDICES, 1, SIZE[0], SIZE[1]))
+        X = input.reshape((size_x * TARGET_INDICES, 3, SIZE[0], SIZE[1]))
     else:
-        X = input.reshape((size_x * TARGET_INDICES, 1, 10, 8))
-    X = encoder(X)
-    X = X.reshape((size_x, 10, -1))
-    X = decoder(X)
-    pred_force = regression_model(X)
+        X = input.reshape((size_x * TARGET_INDICES, 3, 10, 8))
+    pred_force = encoder(X)
+
+    """
+    if USE_RNN:
+        X = X.reshape((size_x, TARGET_INDICES, -1))
+        X = decoder(X)
+    else:
+        X = X.reshape((size_x, -1))
+
+    pred_force = regression_model(X)"""
 
     return pred_force
 
@@ -101,11 +68,14 @@ def train(log_interval, model, optimizer, scheduler):
         # CEloss = torch.nn.functional.cross_entropy(pred_class.float(), y.float())
         # CElosses.append(CEloss.item())
 
-        MSEloss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
+        MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
+        L1_loss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
         MSElosses.append(MSEloss.item())
 
+        loss = (MSEloss + L1_loss) / 2
+
         # CEloss.backward(retain_graph=True)
-        MSEloss.backward()
+        loss.backward()
 
         enc_dec_optim.step()
         regression_optim.step()
@@ -114,7 +84,7 @@ def train(log_interval, model, optimizer, scheduler):
         regression_scheduler.step()
         # classification_optim.step()
 
-    print("Train: \tMSE loss: {:.5f}".format( np.mean(MSElosses)))
+    print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(np.mean(MSElosses), L1_loss))
     return MSElosses
 
 
@@ -129,18 +99,20 @@ def validation(model, optimizer, epoch):
 
     CEloss = 0
     MSEloss = 0
+    L1_loss = 0
 
     all_y = []
     all_y_pred = []
 
     with torch.no_grad():
-        for X, y, force in test_loader:
+        for X, y, force in val_loader:
             X, y, force = X.to(device), y.to(device), force.to(device)
 
             pred_force = prediction(X, model)
 
             # CEloss += torch.nn.functional.cross_entropy(pred_class.float(), y.float()).item()
-            MSEloss += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+            MSEloss += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+            L1_loss += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
 
             # y = torch.max(y, 1)[1]
             # y_pred = pred_class.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
@@ -151,6 +123,7 @@ def validation(model, optimizer, epoch):
 
     # CEloss /= len(test_loader)
     MSEloss /= len(test_loader)
+    L1_loss /= len(test_loader)
 
     # compute accuracy
     # all_y = torch.stack(all_y, dim=0)
@@ -167,7 +140,7 @@ def validation(model, optimizer, epoch):
     torch.save(regression_optim.state_dict(), os.path.join(train_path + '/models/regression_optim.pth'))
 
     # print("({}) \t\t{:.5f}\t\t{:.5f}\t\t{:.5f}%".format(epoch, CEloss, MSEloss, test_score * 100))
-    print("({}) \t\t{:.5f}".format(epoch, MSEloss))
+    print("({}) \t\t{:.5f}\t\t{:.5f}".format(epoch, MSEloss, L1_loss))
     print()
 
     return MSEloss
@@ -197,7 +170,15 @@ if __name__ == '__main__':
     regression_model = PredictSheerModel()
     regression_model = regression_model.to(device)
 
-    summary(resnet, input_size=(batch_size * 10, 1, 10, 8))
+
+    C = 3 if USE_RGB_IMG else 1
+    # 입력
+    if FLAG_RESIZE:
+        INPUT_SIZE = (batch_size * TARGET_INDICES, C, SIZE[0], SIZE[1])
+    else:
+        INPUT_SIZE = (batch_size * TARGET_INDICES, C, 10, 8)
+
+    summary(resnet, input_size=INPUT_SIZE)
 
     # parameter
     enc_dec_params = list(resnet.parameters()) + list(decoder.parameters())

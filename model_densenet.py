@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
-
+from parameters import encoder_output, USE_RGB_IMG
+'''
+https://velog.io/@krec7748/DenseNet
+'''
 
 class Bottleneck(nn.Module):
     def __init__(self, in_channels, k):
@@ -38,36 +41,41 @@ class DenseNet(nn.Module):
     def __init__(self, block_list, growth_rate, n_classes=32):
         super().__init__()
 
-        assert len(block_list) == 3
+        assert len(block_list) == 4
 
         self.k = growth_rate
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 2 * self.k, 3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(2 * self.k),
-            nn.ReLU(),
-        )
+        if USE_RGB_IMG:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(3, 2 * self.k, 1, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(2 * self.k),
+                nn.ReLU(),
+            )
+        else:
+            self.conv1 = nn.Sequential(
+                nn.Conv2d(1, 2 * self.k, 1, stride=1, padding=1, bias=False),
+                nn.BatchNorm2d(2 * self.k),
+                nn.ReLU(),
+            )
         self.maxpool = nn.MaxPool2d(3, stride=1, padding=1)
 
         self.dense_channels = 2 * self.k
         dense_blocks = []
         dense_blocks.append(self.make_dense_block(block_list[0]))
         dense_blocks.append(self.make_dense_block(block_list[1]))
-        dense_blocks.append(self.make_dense_block(block_list[2], last_stage=True))
-        # dense_blocks.append(self.make_dense_block(block_list[3], last_stage=True))
+        dense_blocks.append(self.make_dense_block(block_list[2]))
+        dense_blocks.append(self.make_dense_block(block_list[3], last_stage=True))
         self.dense_blocks = nn.Sequential(*dense_blocks)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(self.dense_channels, n_classes)
+        self.fc = nn.Linear(self.dense_channels, encoder_output)
 
     def forward(self, x):
         x = self.conv1(x)
-        # x = self.maxpool(x)
+        x = self.maxpool(x)
         x = self.dense_blocks(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        assert x.shape[0] % 10 == 0
-        x = x.reshape((int(x.shape[0] / 10), 10, -1))
         x = self.fc(x)
         return x
 
@@ -89,4 +97,4 @@ class DenseNet(nn.Module):
         return nn.Sequential(*layers)
 
 def DenseNet121():
-    return DenseNet(block_list = [2, 2, 2], growth_rate = 12)
+    return DenseNet(block_list = [6, 12, 32, 32], growth_rate = 32)
