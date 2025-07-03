@@ -22,8 +22,6 @@ class Image_and_force():
         self.img_timestamp = []
         self.force_timestamp = []
 
-        cap = []
-
         self.index = -1
 
         for label in os.listdir(path):
@@ -66,7 +64,6 @@ class Image_and_force():
                             [0 if x >= 65000 else x for x in inner]
                             for inner in img
                         ]
-                        cap.extend([row for img2d in img for row in img2d])
 
                         try:
                             if any('fdx:' in item for item in lines[line_index]):
@@ -88,7 +85,7 @@ class Image_and_force():
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
-        # self.outlier_filter()
+        self.outlier_filter()
         self.preprocess()
 
         # label
@@ -149,11 +146,14 @@ class Image_and_force():
         return result
 
     def outlier_filter(self):
-        indices = np.where((self.force[:, 2] <= -35) | (self.force[:, 2] > 0.6) | (self.force[:, 2] < -6))[0]
+        for index in range(len(self.force)):
+            img = np.array(self.img[index])
+            force = np.array(self.force[index])
 
-        self.img = np.array(self.img)
-        self.label = np.array(self.label)
+            indices = np.where(force[:, 2] < -6)[0]
 
-        self.img = np.delete(self.img, indices, axis=0)
-        self.label = np.delete(self.label, indices, axis=0)
-        self.force = np.delete(self.force, indices, axis=0)
+            img = np.delete(img, indices, 0)
+            force = np.delete(force, indices, 0)
+
+            self.img[index] = img
+            self.force[index] = force

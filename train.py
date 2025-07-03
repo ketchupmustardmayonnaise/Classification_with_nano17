@@ -27,19 +27,18 @@ def prediction(input, model):
     size_x = len(input)
     C = 3 if USE_RGB_IMG else 1
     if FLAG_RESIZE:
-        X = input.reshape((size_x * TARGET_INDICES, C, SIZE[0], SIZE[1]))
+        X = input.reshape((input.shape[1], C, SIZE[0], SIZE[1]))
     else:
-        X = input.reshape((size_x * TARGET_INDICES, C, 10, 8))
-    pred_force = encoder(X)
+        X = input.reshape((input.shape[1], C, 10, 8))
+    X = encoder(X)
 
-    """
+
     if USE_RNN:
-        X = X.reshape((size_x, TARGET_INDICES, -1))
         X = decoder(X)
     else:
         X = X.reshape((size_x, -1))
 
-    pred_force = regression_model(X)"""
+    pred_force = regression_model(X)
 
     return pred_force
 
@@ -58,7 +57,7 @@ def train(log_interval, model, optimizer, scheduler):
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
         X = apply_all_frames_RGB_image(X) if USE_RGB_IMG else apply_all_frames(X)
-        X, y, force = X.float().to(device), y.to(device), force.to(device)
+        X, y, force = X.float().to(device), y.to(device), force.reshape((force.shape[1])).to(device)
 
         enc_dec_optim.zero_grad()
         classification_optim.zero_grad()
@@ -107,7 +106,7 @@ def validation(model, optimizer, epoch):
 
     with torch.no_grad():
         for X, y, force in val_loader:
-            X, y, force = X.float().to(device), y.to(device), force.to(device)
+            X, y, force = X.float().to(device), y.to(device), force.reshape((force.shape[1])).to(device)
 
             pred_force = prediction(X, model)
 

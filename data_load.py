@@ -67,10 +67,9 @@ class Image_and_force(Dataset):
 
                         # underflow 된 데이터들 0으로 처리
                         img = [
-                            [0 if x >= 65000 else x for x in inner]
+                            [0 if x >= 60000 else x for x in inner]
                             for inner in img
                         ]
-                        cap.extend([row for img2d in img for row in img2d])
 
                         try:
                             if any('fdx:' in item for item in lines[line_index]):
@@ -92,7 +91,7 @@ class Image_and_force(Dataset):
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
-        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label, TARGET_INDICES, STRIDE)
+
         self.outlier_filter()
         self.preprocess()
 
@@ -107,12 +106,13 @@ class Image_and_force(Dataset):
         return len(self.img)
 
     def __getitem__(self, index):
-        return self.img[index], self.label[index], self.force[index][2]
+        return self.img[index], self.label[index], self.force[index][:, 2]
 
     def preprocess(self):
-        self.img = self.img.astype(np.float32)
-        self.img = np.where(self.img >= IMG_MAX, 1.0, self.img / IMG_MAX)
-        self.img = torch.Tensor(self.img)
+        for index in range(len(self.img)):
+            self.img[index] = np.array(self.img[index]).astype(np.float32)
+            self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
+            self.img[index] = np.where(self.img[index] < 0, 0, self.img[index])
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
@@ -125,19 +125,6 @@ class Image_and_force(Dataset):
             result.append(r)
 
         return result
-
-    def augmentation(self):
-        self.flip()
-
-        '''
-        img_length = len(self.img)
-        for angle in range(0, 360, 90):
-           for index in range(0, img_length, 1):
-               img, force = self.rotate_image_and_force(self.img[index], self.force[index], angle)
-               self.img = torch.vstack((self.img, torch.Tensor(img).unsqueeze(0)))
-               self.force = np.vstack((np.array(self.force), force))
-               self.label = torch.vstack((self.label, self.label[index]))
-        '''
 
     def apply_butterworth_filter(self):
         result = []
@@ -173,57 +160,6 @@ class Image_and_force(Dataset):
             '''
         return result
 
-    def rotate_image_and_force(self, image, force, angle_deg):
-        rotated_image = []
-
-        for index in range(len(image)):
-            # 이미지 회전
-            if FLAG_RESIZE:
-                temp_img = np.float32(image[index]).reshape(SIZE)
-            else:
-                temp_img = np.float32(image[index]).reshape((10, 8))
-            (h, w) = temp_img.shape
-            center = (w // 2, h // 2)
-            M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
-            rotated = cv2.warpAffine(temp_img, M, (w, h),
-                                     borderMode=cv2.BORDER_REPLICATE)
-            rotated_image.append(rotated)
-
-        # 힘 벡터 회전
-        theta = np.radians(angle_deg)
-        rotation_matrix = np.array([
-            [np.cos(theta), -np.sin(theta)],
-            [np.sin(theta), np.cos(theta)]
-        ])
-        rotated_force = rotation_matrix @ np.array([force[0], force[1]])
-        rotated_torque = rotation_matrix @ np.array([force[4], force[5]])
-
-        new_force = np.vstack((rotated_force[0], rotated_force[1], force[2],
-                               rotated_torque[0], rotated_torque[1], force[5])).T
-
-        return rotated_image, new_force
-
-    def flip(self):
-        data_length = len(self.img)
-
-        for data_index in range(data_length):
-            augmentated_image = []
-            for image_index in range(len(self.img[data_index])):
-                augmentated_image.append([row[::-1] for row in np.array(self.img[data_index][image_index])]) # 좌우 flip
-                # augmentated_image[1].append(np.array(self.img[data_index][image_index])[::-1])  # 상하 flip
-                # augmentated_image[2].append([row[::-1] for row in np.array(self.img[data_index][image_index])[::-1]])  # 상하좌우 flip
-
-            augmentated_image = np.array(augmentated_image)
-
-            # augmentated_image[1] = np.array(augmentated_image[1])
-            # augmentated_image[2] = np.array(augmentated_image[2])
-
-            self.img = torch.vstack((self.img, torch.Tensor(augmentated_image.reshape((1, TARGET_INDICES, 10, 8)))))
-            self.force = np.append(self.force, [self.force[data_index]], axis=0)
-            self.label = torch.vstack((self.label, self.label[data_index]))
-            # self.label = torch.vstack((self.label, self.label[data_index]))
-            # self.label = torch.vstack((self.label, self.label[data_index]))
-
     def resize_image(self, size):
         result = []
         for data_index in range(len(self.img)):
@@ -235,6 +171,7 @@ class Image_and_force(Dataset):
             result.append(data)
 
         return result
+
 
     def contour(self):
         multi_channel_img = []
@@ -255,23 +192,7 @@ class Image_and_force(Dataset):
 
                 img = np.stack([img, sobel_mag / 255, sharp / 255])
                 seq_img.append(img)
-                '''
-                if self.label[data] >1:
-                    # 결과 확인
-                    plt.figure(figsize=(10, 4))
-                    plt.subplot(1, 3, 1)
-                    plt.imshow(img, cmap="gray")
-                    plt.title("Original Image")
 
-                    plt.subplot(1, 3, 2)
-                    plt.imshow(sharp, cmap="gray")
-                    plt.title("Filled Mask from Contours")
-                    plt.tight_layout()
-
-                    plt.subplot(1, 3, 3)
-                    plt.imshow(sobel_mag, cmap="gray")
-                    plt.show()
-                '''
             multi_channel_img.append(np.array(seq_img))
         multi_channel_img = np.array(multi_channel_img)
 
@@ -307,50 +228,14 @@ class Image_and_force(Dataset):
         return img, np.array(force), label
 
     def outlier_filter(self):
-        indices = np.where((self.force[:, 2] <= -35) | (self.force[:, 2] > 0.6) | (self.force[:, 2] < -6))[0]
+        for index in range(len(self.force)):
+            img = np.array(self.img[index])
+            force = np.array(self.force[index])
 
-        self.img = np.array(self.img)
-        self.label = np.array(self.label)
+            indices = np.where(force[:, 2] < -6)[0]
 
-        self.img = np.delete(self.img, indices, axis=0)
-        self.label = np.delete(self.label, indices, axis=0)
-        self.force = np.delete(self.force, indices, axis=0)
+            img = np.delete(img, indices, 0)
+            force = np.delete(force, indices, 0)
 
-        # self.force[:, 2] *= -1
-
-        # 몰려있는 데이터 삭제
-        # z_scores = np.abs(stats.zscore(self.force[:, 2]))
-        # 확률적으로 삭제할 데이터 범위 선택
-
-        # np.random.seed(0)
-        # too_many_datas_indices = np.where((self.force[:, 2] > -0.1) & (self.force[:, 2] < 0.1))[0]
-        # drop_prob = 0.5
-
-        # 확률적으로 삭제할 데이터들 선택
-        # delete_flags = np.random.rand(len(too_many_datas_indices)) < drop_prob
-        # indices_to_delete = too_many_datas_indices[delete_flags]
-
-        # self.img = np.delete(self.img, indices_to_delete, axis=0)
-        # self.label = np.delete(self.label, indices_to_delete, axis=0)
-        # self.force = np.delete(self.force, indices_to_delete, axis=0)
-
-        # self.img = self.img[self.force[:, 2] < 0]
-        # self.label = self.label[self.force[:, 2] < 0]
-        # self.force = self.force[self.force[:, 2] < 0]
-
-
-    def visualization(self, count):
-        import random, cv2
-
-        for i in range(count): # count: 몇 번 보여 줄 것인가
-            random_index = random.randint(0, len(self.img))
-            for frame in range(len(self.img[random_index])):
-                dst = cv2.resize(np.array(self.img[random_index][frame]), (224, 224), interpolation=cv2.INTER_AREA)
-                dst = cv2.cvtColor(dst, cv2.COLOR_GRAY2RGB)
-                cv2.putText(dst, str(self.label[random_index]), (15, 15), 1, 1.3, (255, 0, 0), 2)
-                cv2.line(dst, (200, 100),
-                         (200, 100 + int(self.force[random_index][2].item() * 50)),
-                         (0, 255, 0), 3)
-
-                cv2.imshow("image", dst)
-                cv2.waitKey(500)
+            self.img[index] = img
+            self.force[index] = force

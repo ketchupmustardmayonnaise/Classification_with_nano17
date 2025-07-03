@@ -14,6 +14,9 @@ if __name__ == '__main__':
 
     test_dataset = Image_and_force('./../data/two/test')
 
+    MSELoss = 0
+    L1Loss = 0
+
     for i in range(test_dataset.__len__()):
         X, y, _force = test_dataset.__getitem__()
         X = np.expand_dims(X, axis=1)
@@ -25,13 +28,19 @@ if __name__ == '__main__':
         pred_force = model(X)
         _pred_force = pred_force.detach().cpu().numpy()
 
-        MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
-        L1_loss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
+        _MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
+        _L1loss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
 
         plt.subplot(3, 4, i + 1)
-        plt.plot(_force)
-        plt.plot(_pred_force)
+        plt.plot(_force, color='r', label='Force')
+        plt.plot(_pred_force, color='b', label='Predicted Force')
 
-        print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSEloss, L1_loss))
+        print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(_MSEloss, _L1loss))
+        MSELoss += _MSEloss
+        L1Loss += _L1loss
 
+    MSELoss /= 12
+    L1Loss /= 12
+    print(MSELoss, L1Loss)
+    plt.legend()
     plt.show()
