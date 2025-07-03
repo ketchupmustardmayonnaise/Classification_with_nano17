@@ -25,10 +25,11 @@ def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
 
     size_x = len(input)
+    C = 3 if USE_RGB_IMG else 1
     if FLAG_RESIZE:
-        X = input.reshape((size_x * TARGET_INDICES, 3, SIZE[0], SIZE[1]))
+        X = input.reshape((size_x * TARGET_INDICES, C, SIZE[0], SIZE[1]))
     else:
-        X = input.reshape((size_x * TARGET_INDICES, 3, 10, 8))
+        X = input.reshape((size_x * TARGET_INDICES, C, 10, 8))
     pred_force = encoder(X)
 
     """
@@ -56,8 +57,8 @@ def train(log_interval, model, optimizer, scheduler):
     MSElosses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
-        X = apply_all_frames(X)
-        X, y, force = X.to(device), y.to(device), force.to(device)
+        X = apply_all_frames_RGB_image(X) if USE_RGB_IMG else apply_all_frames(X)
+        X, y, force = X.float().to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
         classification_optim.zero_grad()
@@ -84,7 +85,7 @@ def train(log_interval, model, optimizer, scheduler):
         regression_scheduler.step()
         # classification_optim.step()
 
-    print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(np.mean(MSElosses), L1_loss))
+    print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSEloss, L1_loss))
     return MSElosses
 
 
@@ -106,7 +107,7 @@ def validation(model, optimizer, epoch):
 
     with torch.no_grad():
         for X, y, force in val_loader:
-            X, y, force = X.to(device), y.to(device), force.to(device)
+            X, y, force = X.float().to(device), y.to(device), force.to(device)
 
             pred_force = prediction(X, model)
 
@@ -151,7 +152,8 @@ if __name__ == '__main__':
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    train_dataset = Image_and_force('./data/two/train')
+    train_dataset = Image_and_force('./'
+                                    'data/two/train')
     test_dataset = Image_and_force('./data/two/test')
     val_dataset = Image_and_force('./data/two/val')
 

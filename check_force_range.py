@@ -12,10 +12,10 @@ z_force = [ [] for i in range(8) ]
 img_timestamp = [[] for i in range(8)]
 force_timestamp = [[] for i in range(8)]
 
-path = './data/full_dataset'
+path = './data/f'
 
 def break_images_smaller(original_img, original_force,
-                         target_indices=8,
+                         target_indices=1,
                          stride=1):
     '''
     frame을 target_indices로 쪼갬 (image, shear 모두 적용됨)

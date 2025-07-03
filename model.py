@@ -79,7 +79,7 @@ class ResNet(nn.Module):
         self.stage4 = self.make_stage(block, 64, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(64 * 2, encoder_output)
+        self.fc = nn.Linear(64, encoder_output)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -107,14 +107,14 @@ class ResNet(nn.Module):
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        #x = self.avgpool(x)
+        x = self.avgpool(x)
         x = x.flatten(1)
         x = self.fc(x)
 
         return x
 
 def resnet_learning(**kwargs):
-    return ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
 class DecoderRNN(nn.Module):

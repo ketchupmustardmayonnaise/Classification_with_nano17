@@ -71,15 +71,19 @@ class Image_and_force(Dataset):
                             for inner in img
                         ]
                         cap.extend([row for img2d in img for row in img2d])
-                        self.img.append(np.array(img, dtype=np.float32).reshape((frame, 10, 8)))
-                        self.label.append(int(label))
 
-                        if any('fdx:' in item for item in lines[line_index]):
-                            self.force_timestamp.append(list(map(float, lines[line_index][1 + 2 * frame: -1: 2])))
-                            self.force.append(list(lines[line_index][2 + 2 * frame: -1: 2]))
-                        else:
-                            self.force_timestamp.append(list(map(float, lines[line_index][1 + 2 * frame:: 2])))
-                            self.force.append(list(lines[line_index][2 + 2 * frame:: 2]))
+                        try:
+                            if any('fdx:' in item for item in lines[line_index]):
+                                self.force_timestamp.append(list(map(float, lines[line_index][1 + 2 * frame: -1: 2])))
+                                self.force.append(list(lines[line_index][2 + 2 * frame: -1: 2]))
+                            else:
+                                self.force_timestamp.append(list(map(float, lines[line_index][1 + 2 * frame:: 2])))
+                                self.force.append(list(lines[line_index][2 + 2 * frame:: 2]))
+
+                            self.img.append(np.array(img, dtype=np.float32).reshape((frame, 10, 8)))
+                            self.label.append(int(label))
+                        except:
+                            print(file_name, line_index)
 
                         line_index += 1
 

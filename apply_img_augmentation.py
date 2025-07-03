@@ -68,9 +68,10 @@ def apply_all_frames_RGB_image(X_batch):
 
             # (H, W, C) → (C, H, W)
             img = torch.from_numpy(img).permute(2, 0, 1).float()
-            sample_out.append(torch.from_numpy(img).float())
+            sample_out.append(img)
 
         # stack per-frame tensors into one tensor for this sample
         X_out.append(torch.stack(sample_out))  # shape: (num_frames, C, H, W)
 
-    return torch.stack(X_out)  # (batch_size, frame, H, W)
+    X_out = torch.stack(X_out).to(dtype=torch.float32)
+    return X_out # (batch_size, frame, H, W)

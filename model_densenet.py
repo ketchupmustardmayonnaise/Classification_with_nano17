@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from parameters import encoder_output, USE_RGB_IMG
+from parameters import encoder_output, USE_RGB_IMG, batch_size, TARGET_INDICES
+
 '''
 https://velog.io/@krec7748/DenseNet
 '''
@@ -68,13 +69,14 @@ class DenseNet(nn.Module):
         self.dense_blocks = nn.Sequential(*dense_blocks)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(self.dense_channels, encoder_output)
+        self.fc = nn.Linear(self.dense_channels * TARGET_INDICES, encoder_output)
 
     def forward(self, x):
         x = self.conv1(x)
         x = self.maxpool(x)
         x = self.dense_blocks(x)
         x = self.avgpool(x)
+        x = x.reshape((int(x.shape[0] / TARGET_INDICES), -1))
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
@@ -97,4 +99,4 @@ class DenseNet(nn.Module):
         return nn.Sequential(*layers)
 
 def DenseNet121():
-    return DenseNet(block_list = [6, 12, 32, 32], growth_rate = 32)
+    return DenseNet(block_list = [6, 12, 24, 16], growth_rate = 16)
