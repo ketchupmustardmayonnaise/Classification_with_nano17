@@ -11,9 +11,9 @@ if __name__ == '__main__':
 
     # 모델
     cnn, rnn, fc = initialize_model(device, train=False)[0]
-    cnn.load_state_dict(torch.load('./train/models/encoder.pth'))
-    rnn.load_state_dict(torch.load('./train/models/decoder.pth'))
-    fc.load_state_dict(torch.load('./train/models/regression_model.pth'))
+    cnn.load_state_dict(torch.load('./train/models/cnn.pth'))
+    rnn.load_state_dict(torch.load('./train/models/rnn.pth'))
+    fc.load_state_dict(torch.load('./train/models/fc.pth'))
 
     cnn.eval()
     rnn.eval()

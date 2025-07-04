@@ -15,7 +15,6 @@ full_dataset = Image_and_force("./data/full_dataset")
 
 def train(model, optimizer, scheduler):
     encoder, decoder, regression_model = model[0], model[1], model[2]
-    enc_dec_optim, rnn_optim, regression_optim = optimizer[0], optimizer[1], optimizer[2]
 
     encoder.train()
     decoder.train()
@@ -28,9 +27,7 @@ def train(model, optimizer, scheduler):
         X = apply_all_frames_RGB_image(X) if USE_RGB_IMG else apply_all_frames(X)
         X, y, force = X.float().to(device), y.to(device), force.to(device)
 
-        enc_dec_optim.zero_grad()
-        rnn_optim.zero_grad()
-        regression_optim.zero_grad()
+        optimizer.zero_grad()
 
         pred_force = prediction(X, model)
 
@@ -47,9 +44,7 @@ def train(model, optimizer, scheduler):
 
         # CEloss.backward(retain_graph=True)
         MSEloss.backward()
-
-        enc_dec_optim.step()
-        regression_optim.step()
+        optimizer.step()
 
     scheduler.step()
     print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(np.mean(MSElosses), np.mean(L1losses)))
@@ -57,8 +52,7 @@ def train(model, optimizer, scheduler):
 
 
 def validation(model, optimizer, epoch):
-    encoder, decoder, regression_model = model[0], model[1], model[3]
-    enc_dec_optim, classification_optim, regression_optim = optimizer[0], optimizer[1], optimizer[2]
+    encoder, decoder, regression_model = model[0], model[1], model[2]
 
     encoder.eval()
     decoder.eval()
@@ -81,13 +75,11 @@ def validation(model, optimizer, epoch):
     MSEloss /= len(test_loader)
     L1_loss /= len(test_loader)
 
-    torch.save(encoder.state_dict(), os.path.join(train_path + '/models/encoder.pth'))
-    torch.save(decoder.state_dict(), os.path.join(train_path + '/models/decoder.pth'))
-    torch.save(regression_model.state_dict(), os.path.join(train_path + '/models/regression_model.pth'))
+    torch.save(encoder.state_dict(), os.path.join(train_path + '/models/cnn.pth'))
+    torch.save(decoder.state_dict(), os.path.join(train_path + '/models/rnn.pth'))
+    torch.save(regression_model.state_dict(), os.path.join(train_path + '/models/fc.pth'))
 
-    torch.save(enc_dec_optim.state_dict(), os.path.join(train_path + '/models/enc_dec_optim.pth'))
-    torch.save(classification_optim.state_dict(), os.path.join(train_path + '/models/classification_optim.pth'))
-    torch.save(regression_optim.state_dict(), os.path.join(train_path + '/models/regression_optim.pth'))
+    torch.save(optimizer.state_dict(), os.path.join(train_path + '/models/optim.pth'))
 
     # print("({}) \t\t{:.5f}\t\t{:.5f}\t\t{:.5f}%".format(epoch, CEloss, MSEloss, test_score * 100))
     print("({}) \t\t{:.5f}\t\t{:.5f}".format(epoch, MSEloss, L1_loss))

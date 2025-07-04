@@ -62,7 +62,7 @@ class Image_and_force(Dataset):
                             continue
 
                         frame = int(lines[line_index][0])
-                        print(frame)
+                        # print(frame)
                         self.img_timestamp.append(list(map(float, lines[line_index][1: 2 + 2 * (frame - 1): 2])))
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
 
@@ -144,7 +144,9 @@ class Image_and_force(Dataset):
                 r = filtfilt(b, a, temp_force[:, sig])
                 data.append(r)
 
-            result.append(np.array(data).T)
+            data = np.array(data).T
+            # data -= data[0]
+            result.append(data)
 
             '''
             r = np.random.rand()
@@ -233,7 +235,7 @@ class Image_and_force(Dataset):
 
     def outlier_filter(self):
         indices = np.where(self.force[:, 2] < -6)[0]
-        print(indices)
+        # print(indices)
 
         self.img = np.delete(self.img, indices, 0)
         self.force = np.delete(self.force, indices, 0)

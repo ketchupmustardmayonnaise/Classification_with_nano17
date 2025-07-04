@@ -4,19 +4,20 @@ from train.model_densenet import *
 from torchinfo import summary
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from train.scheduler import *
+from train.model_densenet import *
 
 class model(nn.Module):
     def __init__(self):
         super().__init__()
-        self.cnn = resnet_learning()
+        self.cnn = DenseNet121()
         self.rnn = DecoderRNN()
         self.fc = PredictSheerModel()
 
-    def forward(self, x):
-        x = self.cnn(x)
+    def forward(self, input):
+        x = self.cnn(input)
 
         if USE_RNN:
-            x = x.reshape((int(x.shape[0] / TARGET_INDICES), TARGET_INDICES, -1))
+            x = x.reshape((int(input.shape[0] / TARGET_INDICES), TARGET_INDICES, -1))
             x = self.rnn(x)
         else:
             x = x.reshape((x.shape[0], -1))
@@ -26,12 +27,12 @@ class model(nn.Module):
 
 def initialize_model(device, train=True):
     # 모델
-    resnet = resnet_learning()
-    resnet = resnet.to(device)
-    decoder = DecoderRNN()
-    decoder = decoder.to(device)
-    regression_model = PredictSheerModel()
-    regression_model = regression_model.to(device)
+    cnn = DenseNet121()
+    cnn = cnn.to(device)
+    rnn = DecoderRNN()
+    rnn = rnn.to(device)
+    fc = PredictSheerModel()
+    fc = fc.to(device)
 
     md = model()
 
@@ -45,9 +46,9 @@ def initialize_model(device, train=True):
     summary(md, input_size=INPUT_SIZE)
 
     # parameter
-    cnn_params = list(resnet.parameters())
-    rnn_params = list(decoder.parameters())
-    fc_params = list(regression_model.parameters())
+    cnn_params = list(cnn.parameters())
+    rnn_params = list(rnn.parameters())
+    fc_params = list(fc.parameters())
 
     # Optimizer
     optim = torch.optim.Adam(cnn_params + rnn_params + fc_params, learning_rate, weight_decay=weight_decay)
@@ -56,9 +57,9 @@ def initialize_model(device, train=True):
     scheduler = CosineAnnealingWarmUpRestarts(optim, T_0=150, eta_max=0.1, T_up=10, gamma=0.5)
 
     if train:
-        return [resnet, decoder, regression_model], [cnn_params, rnn_params, fc_params], optim, scheduler
+        return [cnn, rnn, fc], [cnn_params, rnn_params, fc_params], optim, scheduler
     else:
-        return [resnet, decoder, regression_model], [cnn_params, rnn_params, fc_params]
+        return [cnn, rnn, fc], [cnn_params, rnn_params, fc_params]
 
 
 def prediction(input, model, train=True):

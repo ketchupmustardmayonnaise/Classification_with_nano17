@@ -140,8 +140,8 @@ class DecoderRNN(nn.Module):
         )
 
     def forward(self, x_RNN):
-        self.LSTM.flatten_parameters()
-        RNN_out, _ = self.LSTM(x_RNN, None)
+        self.GRU.flatten_parameters()
+        RNN_out, _ = self.GRU(x_RNN, None)
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
@@ -179,7 +179,7 @@ class PredictLabelModel(nn.Module):
 Shear 값 예측 => Regression
 '''
 class PredictSheerModel(nn.Module):
-    def __init__(self, dim=1, input_size=decoder_output * 2, FCdim=regression_FC_dim, num_hidden_layer=num_hidden_of_regression, drop_p=0.3):
+    def __init__(self, dim=1, input_size=decoder_output, FCdim=regression_FC_dim, num_hidden_layer=num_hidden_of_regression, drop_p=0.3):
         super(PredictSheerModel, self).__init__()
         self.drop_p = None
         self.num_hidden_layer = num_hidden_layer
