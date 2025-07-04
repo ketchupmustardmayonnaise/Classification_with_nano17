@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data_load import TARGET_INDICES, SIZE
-from parameters import *
+from train.parameters import *
 
 class Encoder(nn.Module):
     def __init__(self, in_channels=1, out_channels=[32, 32, 64], kernel_size=3, padding=0):

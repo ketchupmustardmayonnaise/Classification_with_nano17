@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from parameters import encoder_output, USE_RGB_IMG, batch_size, TARGET_INDICES
+from train.parameters import encoder_output, USE_RGB_IMG, TARGET_INDICES
 
 '''
 https://velog.io/@krec7748/DenseNet

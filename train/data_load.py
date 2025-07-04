@@ -14,7 +14,7 @@ from scipy import signal, stats
 from scipy.signal import filtfilt
 import matplotlib.pyplot as plt
 from torchvision import transforms
-from parameters import *
+from train.parameters import *
 
 num_classes = 8
 IMG_MAX = 512
@@ -62,6 +62,7 @@ class Image_and_force(Dataset):
                             continue
 
                         frame = int(lines[line_index][0])
+                        print(frame)
                         self.img_timestamp.append(list(map(float, lines[line_index][1: 2 + 2 * (frame - 1): 2])))
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
 
@@ -232,6 +233,7 @@ class Image_and_force(Dataset):
 
     def outlier_filter(self):
         indices = np.where(self.force[:, 2] < -6)[0]
+        print(indices)
 
         self.img = np.delete(self.img, indices, 0)
         self.force = np.delete(self.force, indices, 0)
