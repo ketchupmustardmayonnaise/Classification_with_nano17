@@ -30,6 +30,10 @@ def apply_all_frames(X_batch):
             if do_hflip:
                 img = cv2.flip(img, 1)
 
+            # _img = img.copy()
+            # cv2.imshow('img', np.expand_dims(_img, axis=2))
+            # cv2.waitKey(1)
+
             sample_out.append(torch.from_numpy(img).float())
 
         X_out.append(torch.stack(sample_out))  # (frame, H, W)

@@ -5,6 +5,7 @@ import cv2
 import torch.cuda
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingLR
+import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchinfo import summary
 
@@ -24,19 +25,19 @@ full_dataset = Image_and_force("./data/full_dataset")
 def prediction(input, model):
     encoder, decoder, classification_model, regression_model = model[0], model[1], model[2], model[3]
 
-    size_x = len(input)
     C = 3 if USE_RGB_IMG else 1
     if FLAG_RESIZE:
-        X = input.reshape((input.shape[1], C, SIZE[0], SIZE[1]))
+        X = input.reshape((input.shape[0] * TARGET_INDICES, C, SIZE[0], SIZE[1]))
     else:
-        X = input.reshape((input.shape[1], C, 10, 8))
+        X = input.reshape((input.shape[0] * TARGET_INDICES, C, 10, 8))
     X = encoder(X)
 
 
     if USE_RNN:
+        X = X.reshape((input.shape[0], TARGET_INDICES, -1))
         X = decoder(X)
     else:
-        X = X.reshape((size_x, -1))
+        X = X.reshape((input.shape[0], -1))
 
     pred_force = regression_model(X)
 
@@ -54,10 +55,11 @@ def train(log_interval, model, optimizer, scheduler):
 
     CElosses = []
     MSElosses = []
+    L1losses = []
 
     for batch_idx, (X, y, force) in enumerate(train_loader):
         X = apply_all_frames_RGB_image(X) if USE_RGB_IMG else apply_all_frames(X)
-        X, y, force = X.float().to(device), y.to(device), force.reshape((force.shape[1])).to(device)
+        X, y, force = X.float().to(device), y.to(device), force.to(device)
 
         enc_dec_optim.zero_grad()
         classification_optim.zero_grad()
@@ -70,21 +72,23 @@ def train(log_interval, model, optimizer, scheduler):
 
         MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
         L1_loss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
+
         MSElosses.append(MSEloss.item())
+        L1losses.append(L1_loss.item())
 
         loss = (MSEloss + L1_loss) / 2
 
         # CEloss.backward(retain_graph=True)
-        loss.backward()
+        MSEloss.backward()
 
         enc_dec_optim.step()
         regression_optim.step()
 
-        enc_dec_scheduler.step()
-        regression_scheduler.step()
-        # classification_optim.step()
+    enc_dec_scheduler.step()
+    regression_scheduler.step()
+    # classification_optim.step()
 
-    print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSEloss, L1_loss))
+    print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(np.mean(MSElosses), np.mean(L1losses)))
     return MSElosses
 
 
@@ -106,7 +110,7 @@ def validation(model, optimizer, epoch):
 
     with torch.no_grad():
         for X, y, force in val_loader:
-            X, y, force = X.float().to(device), y.to(device), force.reshape((force.shape[1])).to(device)
+            X, y, force = X.float().to(device), y.to(device), force.to(device)
 
             pred_force = prediction(X, model)
 
@@ -162,7 +166,7 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # 모델
-    resnet = DenseNet121()
+    resnet = resnet_learning()
     resnet = resnet.to(device)
     decoder = DecoderRNN()
     decoder = decoder.to(device)
@@ -187,9 +191,9 @@ if __name__ == '__main__':
     regression_params = list(regression_model.parameters())
 
     # Optimizer
-    enc_dec_optim = torch.optim.RMSprop(enc_dec_params, learning_rate, weight_decay=weight_decay)
-    classification_optim = torch.optim.RMSprop(classification_params, learning_rate, weight_decay=weight_decay)
-    regression_optim = torch.optim.RMSprop(regression_params, learning_rate, weight_decay=weight_decay)
+    enc_dec_optim = torch.optim.Adam(enc_dec_params, learning_rate, weight_decay=weight_decay)
+    classification_optim = torch.optim.Adam(classification_params, learning_rate, weight_decay=weight_decay)
+    regression_optim = torch.optim.Adam(regression_params, learning_rate, weight_decay=weight_decay)
 
     # Scheduler
     enc_scheduler = CosineAnnealingWarmUpRestarts(enc_dec_optim, T_0=150, eta_max=0.1, T_up=10, gamma=0.5)

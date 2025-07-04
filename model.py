@@ -118,7 +118,7 @@ def resnet_learning(**kwargs):
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, input_size=encoder_output, h_RNN_layers=1, output_size=decoder_output, drop_p=0.3):
+    def __init__(self, input_size=encoder_output, h_RNN_layers=2, output_size=decoder_output, drop_p=0.3):
         super(DecoderRNN, self).__init__()
 
         self.input_size = input_size
@@ -137,16 +137,16 @@ class DecoderRNN(nn.Module):
             hidden_size=self.output_size,
             num_layers=h_RNN_layers,
             batch_first=True,   # input & output will has batch size as 1s dimension. e.g. (batch, time_step, input_size)
-            # bidirectional=True
+            bidirectional=True
         )
 
     def forward(self, x_RNN):
-        self.GRU.flatten_parameters()
-        RNN_out, _ = self.GRU(x_RNN, None)
+        self.LSTM.flatten_parameters()
+        RNN_out, _ = self.LSTM(x_RNN, None)
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
-        return RNN_out
+        return RNN_out[:, -1, :]
 
 
 '''
@@ -180,16 +180,16 @@ class PredictLabelModel(nn.Module):
 Shear 값 예측 => Regression
 '''
 class PredictSheerModel(nn.Module):
-    def __init__(self, dim=1, input_size=decoder_output, FCdim=regression_FC_dim, num_hidden_layer=num_hidden_of_regression, drop_p=0.3):
+    def __init__(self, dim=1, input_size=decoder_output * 2, FCdim=regression_FC_dim, num_hidden_layer=num_hidden_of_regression, drop_p=0.3):
         super(PredictSheerModel, self).__init__()
         self.drop_p = None
         self.num_hidden_layer = num_hidden_layer
 
         self.input = nn.Linear(input_size, FCdim)
         self.hidden_layer = nn.Linear(FCdim, FCdim)
-        self.output = nn.Linear(decoder_output, dim)
+        self.output = nn.Linear(input_size, dim)
 
-        self.bn = torch.nn.BatchNorm1d(decoder_output)
+        self.bn = torch.nn.BatchNorm1d(input_size)
         self.dropout1 = nn.Dropout(drop_p)
         self.dropout2 = nn.Dropout(drop_p)
 

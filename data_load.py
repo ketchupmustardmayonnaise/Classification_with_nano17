@@ -91,6 +91,9 @@ class Image_and_force(Dataset):
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
+        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label,
+                                        target_indices=TARGET_INDICES,
+                                        stride=STRIDE)
 
         self.outlier_filter()
         self.preprocess()
@@ -106,7 +109,7 @@ class Image_and_force(Dataset):
         return len(self.img)
 
     def __getitem__(self, index):
-        return self.img[index], self.label[index], self.force[index][:, 2]
+        return self.img[index], self.label[index], self.force[index][2]
 
     def preprocess(self):
         for index in range(len(self.img)):
@@ -228,14 +231,8 @@ class Image_and_force(Dataset):
         return img, np.array(force), label
 
     def outlier_filter(self):
-        for index in range(len(self.force)):
-            img = np.array(self.img[index])
-            force = np.array(self.force[index])
+        indices = np.where(self.force[:, 2] < -6)[0]
 
-            indices = np.where(force[:, 2] < -6)[0]
-
-            img = np.delete(img, indices, 0)
-            force = np.delete(force, indices, 0)
-
-            self.img[index] = img
-            self.force[index] = force
+        self.img = np.delete(self.img, indices, 0)
+        self.force = np.delete(self.force, indices, 0)
+        self.label = np.delete(self.label, indices, 0)
