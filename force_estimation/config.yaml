@@ -1,0 +1,35 @@
+target_indices: 5
+stride: 1
+
+encoder: resnet
+encoder_output: 256
+decoder: lstm
+rnn_layer: 2
+bidirectional: False
+use_only_output_layer: True
+fc_hidden_layer: 2
+fc_hidden_dim: 256
+
+image_type: RGB # RGB or GRAY
+image_resize: True
+image_size: !!python/tuple
+  - 28
+  - 28
+train_mode: True
+
+train_data_dir: ../dataset/two/train
+val_data_dir: ../dataset/two/val
+test_data_dir: ../dataset/two/test
+save_dir: ../saved_models
+
+optimizer: Adam
+
+use_all_sequence: True
+
+batch_size: 64
+num_epoch: 100000
+learning_rate: 0.00001
+weight_decay: 0
+dropout: 0.3
+
+loss: MSE
