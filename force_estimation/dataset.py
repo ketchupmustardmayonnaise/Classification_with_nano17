@@ -1,19 +1,13 @@
 import os
-from sys import exception
-
 import cv2
-import math
 import torch
 import ast
 import numpy as np
 import torch.nn.functional as F
 from scipy.interpolate import interp1d
 from torch.utils.data import Dataset
-from scipy.stats import pearsonr
 from scipy import signal, stats
 from scipy.signal import filtfilt
-import matplotlib.pyplot as plt
-from torchvision import transforms
 
 num_classes = 8
 IMG_MAX = 512

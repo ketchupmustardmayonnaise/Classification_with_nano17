@@ -1,0 +1,5 @@
+[default]
+entity = pinkmiro-kyung-hee-university
+project = force_estimation
+base_url = https://api.wandb.ai
+

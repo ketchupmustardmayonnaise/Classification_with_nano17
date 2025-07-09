@@ -1,11 +1,14 @@
 import os
+import sys
 import time
 import argparse
 import torchinfo
 import yaml
-
-from force_estimation.dataset import CFDataset
+import wandb
 from torch.utils.data import DataLoader
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
+from dataset import CFDataset
 from model import *
 from apply_img_augmentation import *
 
@@ -58,7 +61,7 @@ class ForceEstimation:
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
         encoder_output = args.encoder_output if args.encoder_output is not None else cfg['encoder_output']
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        bidirectional = args.bidirectional if args.bidirectional is not None else cfg['bidirectional']
+        bidirectional_lstm = args.bidirectional if args.bidirectional is not None else cfg['bidirectional_lstm']
         use_only_output_layer = args.use_only_output_layer if args.use_only_output_layer is not None else cfg['use_only_output_layer']
         fc_hidden_layer = args.fc_hidden_layer if args.fc_hidden_layer is not None else cfg['fc_hidden_layer']
         fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
@@ -72,7 +75,7 @@ class ForceEstimation:
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(encoder, encoder_output, decoder, rnn_layer, bidirectional,
+        self.model = CFModel(encoder, encoder_output, decoder, rnn_layer, bidirectional_lstm,
                              use_only_output_layer, dropout, target_indices, self.image_type,
                              fc_hidden_layer=fc_hidden_layer, fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
@@ -118,11 +121,57 @@ class ForceEstimation:
 
             # loss
             self.loss = torch.nn.MSELoss() if loss == "MSE" else torch.nn.L1Loss()
+            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, bidirectional_lstm, use_only_output_layer,
+                                         fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, self.image_type, batch_size, loss, self.learning_rate, weight_decay)
+
+            # wandb
+            wandb_config = {
+                "encoder": encoder,
+                "encoder_output": encoder_output,
+                "decoder": decoder,
+                "rnn_layer": rnn_layer,
+                "fc_hidden_layer": fc_hidden_layer,
+                "image_resize": image_resize,
+                "batch_size": batch_size,
+                "learning_rate": self.learning_rate,
+                "weight_decay": weight_decay,
+                "dropout": dropout,
+                "loss": loss,
+            }
+
+            run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{self.learning_rate:.4f}'
+            self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
+
             self.train()
 
         else:
             self.save_dir = cfg['save_dir']
             self.model.load_state_dict(torch.load(self.save_dir, model_location=self.device))
+
+    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, bidirectional_lstm, use_only_output_layer,
+                                fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, image_type, batch_size, loss, learning_rate, weight_decay):
+        basic_txt_path = self.save_dir + "/basic.txt"
+        basic_txt_file = open(basic_txt_path, 'a')
+        basic_txt_file.write(f"target_indices: {target_indices}\n")
+        basic_txt_file.write(f"stride: {stride}\n")
+        basic_txt_file.write(f"image_resize: {image_resize}\n")
+        basic_txt_file.write(f"image_size: {image_size}\n")
+        basic_txt_file.write(f"encoder: {encoder}\n")
+        basic_txt_file.write(f"encoder_output: {encoder_output}\n")
+        basic_txt_file.write(f"decoder: {decoder}\n")
+        basic_txt_file.write(f"bidirectional_lstm: {bidirectional_lstm}\n")
+        basic_txt_file.write(f"use_only_output_layer: {use_only_output_layer}\n")
+        basic_txt_file.write(f"fc_hidden_layer: {fc_hidden_layer}\n")
+        basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")
+        basic_txt_file.write(f"optimizer: {optimizer}\n")
+        basic_txt_file.write(f"dropout: {dropout}\n")
+        basic_txt_file.write(f"rnn_layer: {rnn_layer}\n")
+        basic_txt_file.write(f"image_type: {image_type}\n")
+        basic_txt_file.write(f"loss: {loss}\n")
+        basic_txt_file.write(f"batch_size: {batch_size}\n")
+        basic_txt_file.write(f"learning_rate: {learning_rate}\n")
+        basic_txt_file.write(f"weight_decay: {weight_decay}\n")
+        basic_txt_file.close()
 
     def test(self, dataloader):
         self.model.eval()
@@ -147,6 +196,8 @@ class ForceEstimation:
               ' Test MSE: {:.3f}, Test MAE: {:.3f}, {}'
 
         test_best_loss = 1e10
+        train_txt_path = self.save_dir + "/train.txt"
+        train_txt_file = open(train_txt_path, 'a')
 
         for epoch in range(self.num_epoch):
             self.model.train()
@@ -193,6 +244,22 @@ class ForceEstimation:
                 float(test_MAE),  # {:.3f}
                 improve
             ))
+
+            train_txt_file.write(msg.format(
+                epoch + 1,  # {}/{} 중 첫 번째
+                self.num_epoch,  # {}/{} 중 두 번째
+                float(self.learning_rate),
+                float(np.mean(MSE)),  # {:.3f}
+                float(np.mean(MAE)),  # {:.3f}
+                float(test_MSE),  # {:.3f}
+                float(test_MAE),  # {:.3f}
+                improve
+            ))
+
+            self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
+                              "test_MSE": test_MSE, "test_MAE": test_MAE})
+
+        self.run_log.finish()
 
 if __name__ == '__main__':
     f = open("config.yaml", 'r+', encoding='utf-8')

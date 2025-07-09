@@ -5,7 +5,7 @@ encoder: resnet
 encoder_output: 256
 decoder: lstm
 rnn_layer: 2
-bidirectional: False
+bidirectional_lstm: False
 use_only_output_layer: True
 fc_hidden_layer: 2
 fc_hidden_dim: 256
