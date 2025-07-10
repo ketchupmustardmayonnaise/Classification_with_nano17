@@ -1,11 +1,10 @@
 target_indices: 5
 stride: 1
 
-encoder: resnet
+encoder: resnet # [resnet, densenet]
 encoder_output: 256
-decoder: lstm
+decoder: lstm # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
-bidirectional_lstm: False
 use_only_output_layer: True
 fc_hidden_layer: 2
 fc_hidden_dim: 256
@@ -13,8 +12,8 @@ fc_hidden_dim: 256
 image_type: RGB # RGB or GRAY
 image_resize: True
 image_size: !!python/tuple
-  - 28
-  - 28
+  - 61
+  - 61
 train_mode: True
 
 train_data_dir: ../dataset/two/train

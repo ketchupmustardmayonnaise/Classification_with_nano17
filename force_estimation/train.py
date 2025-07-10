@@ -34,7 +34,6 @@ class ForceEstimation:
         parser.add_argument('--encoder_output', default=None, type=str)
         parser.add_argument('--decoder', default=None, type=str)
         parser.add_argument('--rnn_layer', default=2, type=int)
-        parser.add_argument('--bidirectional', default=False, type=str2bool)
 
         parser.add_argument('--use_only_output_layer', default=False, type=str2bool)
         parser.add_argument('--dropout', default=0.0, type=float)
@@ -61,7 +60,6 @@ class ForceEstimation:
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
         encoder_output = args.encoder_output if args.encoder_output is not None else cfg['encoder_output']
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        bidirectional_lstm = args.bidirectional if args.bidirectional is not None else cfg['bidirectional_lstm']
         use_only_output_layer = args.use_only_output_layer if args.use_only_output_layer is not None else cfg['use_only_output_layer']
         fc_hidden_layer = args.fc_hidden_layer if args.fc_hidden_layer is not None else cfg['fc_hidden_layer']
         fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
@@ -75,11 +73,11 @@ class ForceEstimation:
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(encoder, encoder_output, decoder, rnn_layer, bidirectional_lstm,
+        self.model = CFModel(encoder, encoder_output, decoder, rnn_layer,
                              use_only_output_layer, dropout, target_indices, self.image_type,
                              fc_hidden_layer=fc_hidden_layer, fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model)
+        torchinfo.summary(self.model, input_size=(batch_size, target_indices, 3 if self.image_type == "RGB" else 1, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = CFDataset(target_indices, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
@@ -121,7 +119,7 @@ class ForceEstimation:
 
             # loss
             self.loss = torch.nn.MSELoss() if loss == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, bidirectional_lstm, use_only_output_layer,
+            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer,
                                          fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, self.image_type, batch_size, loss, self.learning_rate, weight_decay)
 
             # wandb
@@ -148,7 +146,7 @@ class ForceEstimation:
             self.save_dir = cfg['save_dir']
             self.model.load_state_dict(torch.load(self.save_dir, model_location=self.device))
 
-    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, bidirectional_lstm, use_only_output_layer,
+    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer,
                                 fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, image_type, batch_size, loss, learning_rate, weight_decay):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
@@ -159,7 +157,6 @@ class ForceEstimation:
         basic_txt_file.write(f"encoder: {encoder}\n")
         basic_txt_file.write(f"encoder_output: {encoder_output}\n")
         basic_txt_file.write(f"decoder: {decoder}\n")
-        basic_txt_file.write(f"bidirectional_lstm: {bidirectional_lstm}\n")
         basic_txt_file.write(f"use_only_output_layer: {use_only_output_layer}\n")
         basic_txt_file.write(f"fc_hidden_layer: {fc_hidden_layer}\n")
         basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")

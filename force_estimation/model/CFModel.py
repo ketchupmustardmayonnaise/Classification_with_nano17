@@ -4,7 +4,7 @@ from force_estimation.model.gru import *
 from force_estimation.model.lstm import *
 
 class CFModel(nn.Module):
-    def __init__(self, encoder, encoder_output, decoder, rnn_layer, bidirectional,
+    def __init__(self, encoder, encoder_output, decoder, rnn_layer,
                  use_only_output_layer, drop_p, target_indices, image_type, fc_hidden_layer = None, fc_hidden_dim = None):
         super().__init__()
         self.fc_hidden_layer = fc_hidden_layer
@@ -15,15 +15,17 @@ class CFModel(nn.Module):
         if encoder == 'resnet':
             self.cnn = ResNet(BasicBlock, [2, 2, 2, 2], n_classes=encoder_output, image_type=image_type)
         else:
-            self.cnn = DenseNet(block_list = [6, 6, 6, 6], growth_rate = 16, n_classes=encoder_output, image_type=image_type)
+            self.cnn = DenseNet(block_list = [6, 12, 24, 16], growth_rate = 32, n_classes=encoder_output, image_type=image_type)
 
         # Decoder
         if decoder == 'lstm':
-            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=bidirectional)
-        else:
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=False)
+        elif decoder == 'gru':
             self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer)
+        elif decoder == 'bidirectional_lstm':
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
 
-        fc_input_size = encoder_output * 2 if bidirectional else encoder_output
+        fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' else encoder_output
         if not use_only_output_layer:
             assert fc_hidden_layer is not None and fc_hidden_dim is not None
             self.fc_hidden_layer = fc_hidden_layer

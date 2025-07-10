@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+'''
+https://velog.io/@krec7748/ResNet
+'''
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -36,21 +40,22 @@ class ResNet(nn.Module):
         super().__init__()
         assert len(num_block_list) == 4
 
+        in_channels = 3 if image_type == 'RGB' else 1
         self.conv1 = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
         )
         self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
-        self.in_channels = 3 if image_type == 'RGB' else 1
-        self.stage1 = self.make_stage(block, 8, num_block_list[0], stride=1)
-        self.stage2 = self.make_stage(block, 16, num_block_list[1], stride=2)
-        self.stage3 = self.make_stage(block, 32, num_block_list[2], stride=2)
-        self.stage4 = self.make_stage(block, 64, num_block_list[3], stride=2)
+        self.in_channels = 64
+        self.stage1 = self.make_stage(block, 64, num_block_list[0], stride=1)
+        self.stage2 = self.make_stage(block, 128, num_block_list[1], stride=2)
+        self.stage3 = self.make_stage(block, 256, num_block_list[2], stride=2)
+        self.stage4 = self.make_stage(block, 512, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(64, n_classes)
+        self.fc = nn.Linear(512 * block.expansion, n_classes)
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
@@ -72,14 +77,14 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        # x = self.conv1(x)
-        # x = self.maxpool(x)
+        x = self.conv1(x)
+        x = self.maxpool(x)
         x = self.stage1(x)
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
         x = self.avgpool(x)
-        x = x.flatten(1)
+        x = torch.flatten(x, 1)
         x = self.fc(x)
 
         return x

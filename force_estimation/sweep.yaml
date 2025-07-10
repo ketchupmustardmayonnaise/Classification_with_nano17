@@ -1,0 +1,21 @@
+program: train.py
+method: bayes
+name: train_sweep
+parameters:
+  encoder:
+    values: ["resnet", "densenet"]
+  decoder:
+    values: ["lstm", "gru", "bidirectional_lstm"]
+  rnn_layer:
+    values: [1, 2]
+  batch_size:
+    values: [64, 128, 256]
+  learning_rate:
+    min:0.000001
+    max:0.1
+  dropout:
+    min: 0.1
+    max: 0.5
+  weight_decay:
+    min: 0.0001
+    max: 0.1

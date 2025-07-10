@@ -47,17 +47,17 @@ class DenseNet(nn.Module):
 
         if image_type == 'RGB':
             self.conv1 = nn.Sequential(
-                nn.Conv2d(3, 2 * self.k, 1, stride=1, padding=1, bias=False),
+                nn.Conv2d(3, 2 * self.k, 7, stride=2, padding=3, bias=False),
                 nn.BatchNorm2d(2 * self.k),
                 nn.ReLU(),
             )
         else:
             self.conv1 = nn.Sequential(
-                nn.Conv2d(1, 2 * self.k, 1, stride=1, padding=1, bias=False),
+                nn.Conv2d(1, 2 * self.k, 7, stride=2, padding=3, bias=False),
                 nn.BatchNorm2d(2 * self.k),
                 nn.ReLU(),
             )
-        self.maxpool = nn.MaxPool2d(3, stride=1, padding=1)
+        self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
 
         self.dense_channels = 2 * self.k
         dense_blocks = []
