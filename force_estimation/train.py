@@ -137,7 +137,8 @@ class ForceEstimation:
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
             # loss
-            self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+            if self.loss_type != "MSE+MAE":
+                self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
             self.write_basic_information( self.use_all_sequence, target_indices, stride,
                                           self.image_type, image_resize, image_size,
                                          encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
@@ -195,9 +196,9 @@ class ForceEstimation:
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
         basic_txt_file.write(f"encoder: {encoder}\n")
-        basic_txt_file.write(f"resnet_block: {resnet_block}")
-        basic_txt_file.write(f"densenet_block: {densenet_block}")
-        basic_txt_file.write(f"densenet_growth: {densenet_growth}")
+        basic_txt_file.write(f"resnet_block: {resnet_block}\n")
+        basic_txt_file.write(f"densenet_block: {densenet_block}\n")
+        basic_txt_file.write(f"densenet_growth: {densenet_growth}\n")
         basic_txt_file.write(f"encoder_output: {encoder_output}\n")
 
         basic_txt_file.write(f"use_all_sequence: {use_all_sequence}\n")
@@ -268,13 +269,18 @@ class ForceEstimation:
                 pred_force = self.model(X)
 
                 if self.use_all_sequence:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.squeeze().float())
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.squeeze().float())
-                    loss = self.loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.squeeze().float(), reduction='mean')
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.squeeze().float(), reduction='mean')
+                    if self.loss_type == 'MSE+MAE':
+                        loss = (MSEloss + L1_loss) / 2
+                    else: loss = self.loss(pred_force.float(), force.squeeze().float())
                 else:
                     MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
                     L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
-                    loss = self.loss(pred_force.reshape((len(force))).float(), force.float())
+                    if self.loss_type == 'MSE+MAE':
+                        loss = (MSEloss + L1_loss) / 2
+                    else:
+                        loss = self.loss(pred_force.float(), force.squeeze().float())
 
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
@@ -294,6 +300,10 @@ class ForceEstimation:
                 improve = "******"
             elif self.loss_type == "MSE" and val_MSE < val_best_loss:
                 val_best_loss = val_MSE
+                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                improve = "******"
+            elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
+                val_best_loss = (val_MSE + val_MAE) / 2
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             else: improve = " "

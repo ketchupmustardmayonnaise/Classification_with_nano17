@@ -45,7 +45,7 @@ save_dir: ../saved_models
 optimizer: Adam
 batch_size: 64
 num_epoch: 100000
-learning_rate: 0.00001
-weight_decay: 0
+learning_rate: 0.0001
+weight_decay: 0.5
 dropout: 0.3
-loss: MSE # [MSE, MAE]
+loss: MSE+MAE # [MSE, MAE, MSE+MAE]
