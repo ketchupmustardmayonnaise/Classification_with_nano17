@@ -4,6 +4,8 @@ import time
 import argparse
 import torchinfo
 import yaml
+from torch.optim import lr_scheduler
+
 import wandb
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
@@ -50,6 +52,7 @@ class ForceEstimation:
         parser.add_argument('--image_size', default=None, type=tuple)
 
         parser.add_argument('--optimizer', default=None, type=str)
+        parser.add_argument('--scheduler', default=None, type=str)
         parser.add_argument('--batch_size', default=None, type=int)
         parser.add_argument("--num_epoch", default=None, type=int)
         parser.add_argument("--learning_rate", default=None, type=float)
@@ -81,9 +84,8 @@ class ForceEstimation:
         fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
 
         optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
+        scheduler = args.scheduler if args.scheduler is not None else cfg['scheduler']
         self.num_epoch = args.num_epoch if args.num_epoch else cfg['num_epoch']
-        self.learning_rate = args.learning_rate if args.learning_rate is not None else cfg['learning_rate']
-        weight_decay = args.weight_decay if args.weight_decay is not None else cfg['weight_decay']
         dropout = args.dropout if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
         self.batch_size = self.batch_size if self.use_all_sequence is False else 1
@@ -126,13 +128,19 @@ class ForceEstimation:
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             # optimizer
-            if optimizer == 'SGD':
-                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=float(self.learning_rate), weight_decay=weight_decay)
-            else:
+            if optimizer.lower() == 'adam':
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=float(self.learning_rate), betas=(0.9, 0.999),
                                             eps=1e-08, weight_decay=weight_decay, amsgrad=False)
+            elif optimizer.lower() == 'rmsprop':
+                self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=float(self.learning_rate), weight_decay=weight_decay)
+            else:
+                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=float(self.learning_rate),
+                                                 weight_decay=weight_decay)
 
             # scheduler
+            if scheduler.lower() == 'step':
+                self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
+
             #self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
@@ -144,7 +152,7 @@ class ForceEstimation:
                                          encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
                                          fc_num_layer, fc_hidden_dim,
                                          decoder, rnn_layer, decoder_output,
-                                         optimizer, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
+                                         optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
 
             # wandb
             wandb_config = {
@@ -170,6 +178,7 @@ class ForceEstimation:
                 "image_size": image_size,
 
                 "optimizer": optimizer,
+                "scheduler": scheduler,
                 "batch_size": self.batch_size,
                 "learning_rate": self.learning_rate,
                 "weight_decay": weight_decay,
@@ -192,7 +201,7 @@ class ForceEstimation:
                                 encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
                                 fc_num_layer, fc_hidden_dim,
                                 decoder, rnn_layer, decoder_output,
-                                optimizer, dropout, batch_size, loss, learning_rate, weight_decay):
+                                optimizer, scheduler, dropout, batch_size, loss, learning_rate, weight_decay):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
         basic_txt_file.write(f"encoder: {encoder}\n")
@@ -217,6 +226,7 @@ class ForceEstimation:
         basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")
 
         basic_txt_file.write(f"optimizer: {optimizer}\n")
+        basic_txt_file.write(f"scheduler: {scheduler}\n")
         basic_txt_file.write(f"dropout: {dropout}\n")
 
         basic_txt_file.write(f"loss: {loss}\n")
@@ -288,7 +298,7 @@ class ForceEstimation:
                 loss.backward()
                 self.optimizer.step()
 
-            #self.scheduler.step()
+            self.scheduler.step()
 
             # test the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)

@@ -200,8 +200,8 @@ class CFDataset(Dataset):
 
                 diff = current_frame - previous_frame
 
-                brighter = np.where(diff > 0, diff * current_frame, 0).reshape((1, 10, 8))
-                darker = np.where(diff < 0, -diff * current_frame, 0).reshape((1, 10, 8))
+                brighter = np.where(diff > 0, diff, 0).reshape((1, 10, 8))
+                darker = np.where(diff < 0, -diff, 0).reshape((1, 10, 8))
 
                 new_frame = np.vstack([current_frame.reshape((1, 10, 8)), brighter, darker])
                 if np.isnan(new_frame).any():

@@ -42,10 +42,11 @@ val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
 save_dir: ../saved_models
 
-optimizer: Adam
+optimizer: RMSprop # [Adam, SGD, rmsprop]
+scheduler: step
 batch_size: 64
 num_epoch: 100000
 learning_rate: 0.0001
 weight_decay: 0.5
 dropout: 0.3
-loss: MSE+MAE # [MSE, MAE, MSE+MAE]
+loss: MAE # [MSE, MAE, MSE+MAE]
