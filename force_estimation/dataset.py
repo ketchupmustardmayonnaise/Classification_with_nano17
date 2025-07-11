@@ -13,13 +13,16 @@ num_classes = 8
 IMG_MAX = 512
 
 class CFDataset(Dataset):
-    def __init__(self, target_indices, stride, image_resize='False', image_size=(28, 28), image_type='RGB', path='./data/origin'):
+    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize='False', image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_indices = target_indices
         self.stride = stride
+        self.use_all_sequence = use_all_sequence
 
         self.img = []
         self.force = []
         self.label = []
+
+        self.frame = []
 
         self.img_timestamp = []
         self.force_timestamp = []
@@ -56,6 +59,7 @@ class CFDataset(Dataset):
                             continue
 
                         frame = int(lines[line_index][0])
+                        self.frame.append(frame)
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
 
                         # underflow 된 데이터들 0으로 처리
@@ -94,7 +98,7 @@ class CFDataset(Dataset):
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
-        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label)
+        if not use_all_sequence: self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label)
 
         self.outlier_filter()
         self.preprocess()
@@ -107,7 +111,8 @@ class CFDataset(Dataset):
         return len(self.img)
 
     def __getitem__(self, index):
-        return self.img[index], self.label[index], self.force[index][2]
+        if self.use_all_sequence: return self.img[index], self.label[index], self.force[index][:, 2]
+        else: return self.img[index], self.label[index], self.force[index][2]
 
     def preprocess(self):
         for index in range(len(self.img)):
@@ -181,31 +186,6 @@ class CFDataset(Dataset):
         for idx in range(len(self.force)):
             self.force[idx] -= self.force[idx][0]
 
-    def RGB_image(self):
-        multi_channel_img = []
-        for data in range(len(self.img)):
-            seq_img = []
-            for frame in range(len(self.img[data])):
-                img = np.array(self.img[data][frame])
-                img_copy = img.copy() * 255
-                img_copy = img_copy.astype(np.uint8)
-
-                # Sobel edge
-                sobelx = cv2.Sobel(img_copy, cv2.CV_64F, 1, 0, ksize=3)
-                sobely = cv2.Sobel(img_copy, cv2.CV_64F, 0, 1, ksize=3)
-                sobel_mag = np.sqrt(sobelx ** 2 + sobely ** 2)
-
-                blurred = cv2.GaussianBlur(img_copy, (5, 5), 0)
-                sharp = cv2.addWeighted(img_copy, 1.5, blurred, -0.5, 0)
-
-                img = np.stack([img, sobel_mag / 255, sharp / 255])
-                seq_img.append(img)
-
-            multi_channel_img.append(np.array(seq_img))
-        multi_channel_img = np.array(multi_channel_img)
-
-        self.img = multi_channel_img
-
     def divide_3_channels(self):
         ''' 맨처음 프레임은 버리되, 나머지 프레임은 3 Chanenl 이미지로 '''
         for sequence_idx in range(len(self.img)):
@@ -228,6 +208,25 @@ class CFDataset(Dataset):
                     continue
                 new_seq.append(new_frame)
 
+
+            self.img[sequence_idx] = new_seq
+            self.img_timestamp[sequence_idx] = self.img_timestamp[sequence_idx][1:]
+            self.frame[sequence_idx] -= 1
+
+    def image_to_diff(self):
+        ''' 맨처음 프레임은 버리되, 나머지 프레임은 diff 이미지로 '''
+        for sequence_idx in range(len(self.img)):
+            new_seq = []
+            for frame_idx in range(len(self.img[sequence_idx])):
+                # 처음 프레임이라면 시행 X
+                if frame_idx == 0:
+                    continue
+
+                current_frame = self.img[sequence_idx][frame_idx]
+                previous_frame = self.img[sequence_idx][frame_idx - 1]
+
+                diff = current_frame - previous_frame
+                new_seq.append(diff)
 
             self.img[sequence_idx] = new_seq
             self.img_timestamp[sequence_idx] = self.img_timestamp[sequence_idx][1:]
@@ -259,9 +258,24 @@ class CFDataset(Dataset):
         return img, np.array(force), label
 
     def outlier_filter(self):
-        indices = np.where(self.force[:, 2] < -6)[0]
-        # print(indices)
+        if not self.use_all_sequence:
+            indices = np.where(self.force[:, 2] < -6)[0]
+            # print(indices)
 
-        self.img = np.delete(self.img, indices, 0)
-        self.force = np.delete(self.force, indices, 0)
-        self.label = np.delete(self.label, indices, 0)
+            self.img = np.delete(self.img, indices, 0)
+            self.force = np.delete(self.force, indices, 0)
+            self.label = np.delete(self.label, indices, 0)
+        else:
+            for sequence_idx in range(len(self.img)):
+                for index in range(len(self.force)):
+                    img = np.array(self.img[index])
+                    force = np.array(self.force[index])
+
+                    indices = np.where(force[:, 2] < -6)[0]
+                    force[indices, 2] = -6
+
+                    indices = np.where(force[:, 2] > 0)[0]
+                    force[indices, 2] = 0
+
+                    self.img[index] = img
+                    self.force[index] = force

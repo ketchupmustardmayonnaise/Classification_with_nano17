@@ -5,6 +5,7 @@ import argparse
 import torchinfo
 import yaml
 import wandb
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
@@ -25,24 +26,28 @@ def str2bool(v):
 class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--target_indices', default=5, type=int)
-        parser.add_argument('--stride', default=1, type=int)
-        parser.add_argument('--image_resize', default=False, type=str2bool)
+        parser.add_argument('--target_indices', default=None, type=int)
+        parser.add_argument('--stride', default=None, type=int)
+        parser.add_argument('--image_resize', default=None, type=str2bool)
         parser.add_argument('--image_size', default=None, type=tuple)
 
         parser.add_argument('--encoder', default=None, type=str)
+        parser.add_argument('--resnet_block', default=None, type=tuple)
+        parser.add_argument('--densenet_block', default=None, type=tuple)
+        parser.add_argument('--densenet_growth', default=None, type=int)
         parser.add_argument('--encoder_output', default=None, type=str)
         parser.add_argument('--decoder', default=None, type=str)
-        parser.add_argument('--rnn_layer', default=2, type=int)
+        parser.add_argument('--rnn_layer', default=None, type=int)
 
-        parser.add_argument('--use_only_output_layer', default=False, type=str2bool)
-        parser.add_argument('--dropout', default=0.0, type=float)
+        parser.add_argument('--use_only_output_layer', default=None, type=str2bool)
+        parser.add_argument('--dropout', default=None, type=float)
         parser.add_argument('--fc_hidden_layer', default=None, type=int)
         parser.add_argument('--fc_hidden_dim', default=None, type=int)
         parser.add_argument('--optimizer', default=None, type=str)
 
         parser.add_argument('--image_type', default=None, type=str)
-        parser.add_argument('--train_mode', default=True, type=str2bool)
+        parser.add_argument('--use_all_sequence', default=None, type=str2bool)
+        parser.add_argument('--train_mode', default=None, type=str2bool)
 
         parser.add_argument('--batch_size', default=None, type=int)
         parser.add_argument("--num_epoch", default=None, type=int)
@@ -58,9 +63,13 @@ class ForceEstimation:
         image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
         image_size = args.image_size if args.image_size is not None else cfg['image_size']
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
+        resnet_block = args.resnet_block if args.resnet_block is not None else cfg['resnet_block']
+        densenet_block = args.densenet_block if args.densenet_block is not None else cfg['densenet_block']
+        densenet_growth = args.densenet_growth if args.densenet_growth is not None else cfg['densenet_growth']
         encoder_output = args.encoder_output if args.encoder_output is not None else cfg['encoder_output']
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
         use_only_output_layer = args.use_only_output_layer if args.use_only_output_layer is not None else cfg['use_only_output_layer']
+        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
         fc_hidden_layer = args.fc_hidden_layer if args.fc_hidden_layer is not None else cfg['fc_hidden_layer']
         fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
         optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
@@ -68,20 +77,21 @@ class ForceEstimation:
         rnn_layer = args.rnn_layer if args.rnn_layer is not None else cfg['rnn_layer']
         self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
         train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
-        batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
+        self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
+        self.batch_size = self.batch_size if self.use_all_sequence is False else 1
         loss = args.loss if args.loss is not None else cfg['loss']
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = CFModel(encoder, encoder_output, decoder, rnn_layer,
-                             use_only_output_layer, dropout, target_indices, self.image_type,
+                             use_only_output_layer, self.use_all_sequence, dropout, target_indices, self.image_type, resnet_block, densenet_block, densenet_growth,
                              fc_hidden_layer=fc_hidden_layer, fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(batch_size, target_indices, 3 if self.image_type == "RGB" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type == "RGB" else 1, image_size[0], image_size[1]))
 
         # test dataset
-        self.test_dataset = CFDataset(target_indices, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False)
+        self.test_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
         if train_mode:
             self.num_epoch = args.num_epoch if args.num_epoch is not None else cfg['num_epoch']
@@ -99,12 +109,12 @@ class ForceEstimation:
                 os.makedirs(self.log_dir)
 
             # force_estimation dataset
-            self.train_dataset = CFDataset(target_indices, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
-            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=batch_size, shuffle=False)
+            self.train_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
+            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
             # force_estimation dataset
-            self.val_dataset = CFDataset(target_indices, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['val_data_dir'])
-            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=batch_size, shuffle=False)
+            self.val_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['val_data_dir'])
+            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             # optimizer
             if optimizer == 'SGD':
@@ -119,18 +129,23 @@ class ForceEstimation:
 
             # loss
             self.loss = torch.nn.MSELoss() if loss == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer,
-                                         fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, self.image_type, batch_size, loss, self.learning_rate, weight_decay)
+            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer, self.use_all_sequence,
+                                         fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, self.image_type, self.batch_size, loss, self.learning_rate, weight_decay, resnet_block, densenet_block, densenet_growth)
 
             # wandb
             wandb_config = {
                 "encoder": encoder,
+                "resnet_block": resnet_block,
+                "densenet_block": densenet_block,
+                "densenet_growth": densenet_growth,
                 "encoder_output": encoder_output,
                 "decoder": decoder,
                 "rnn_layer": rnn_layer,
                 "fc_hidden_layer": fc_hidden_layer,
                 "image_resize": image_resize,
-                "batch_size": batch_size,
+                "image_size": self.image_type,
+                "use_all_sequence": self.use_all_sequence,
+                "batch_size": self.batch_size,
                 "learning_rate": self.learning_rate,
                 "weight_decay": weight_decay,
                 "dropout": dropout,
@@ -144,10 +159,11 @@ class ForceEstimation:
 
         else:
             self.save_dir = cfg['save_dir']
-            self.model.load_state_dict(torch.load(self.save_dir, model_location=self.device))
+            self.model.load_state_dict(torch.load(self.save_dir))
+            self.test()
 
-    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer,
-                                fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, image_type, batch_size, loss, learning_rate, weight_decay):
+    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer, use_all_sequence,
+                                fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, image_type, batch_size, loss, learning_rate, weight_decay, resnet_block, densenet_block, densenet_growth):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
         basic_txt_file.write(f"target_indices: {target_indices}\n")
@@ -155,9 +171,13 @@ class ForceEstimation:
         basic_txt_file.write(f"image_resize: {image_resize}\n")
         basic_txt_file.write(f"image_size: {image_size}\n")
         basic_txt_file.write(f"encoder: {encoder}\n")
+        basic_txt_file.write(f"resnet_block: {resnet_block}")
+        basic_txt_file.write(f"densenet_block: {densenet_block}")
+        basic_txt_file.write(f"densenet_growth: {densenet_growth}")
         basic_txt_file.write(f"encoder_output: {encoder_output}\n")
         basic_txt_file.write(f"decoder: {decoder}\n")
         basic_txt_file.write(f"use_only_output_layer: {use_only_output_layer}\n")
+        basic_txt_file.write(f"use_all_sequence: {use_all_sequence}\n")
         basic_txt_file.write(f"fc_hidden_layer: {fc_hidden_layer}\n")
         basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")
         basic_txt_file.write(f"optimizer: {optimizer}\n")
@@ -170,7 +190,7 @@ class ForceEstimation:
         basic_txt_file.write(f"weight_decay: {weight_decay}\n")
         basic_txt_file.close()
 
-    def test(self, dataloader):
+    def validate(self, dataloader):
         self.model.eval()
         MSE = 0
         MAE = 0
@@ -181,8 +201,12 @@ class ForceEstimation:
 
                 pred_force = self.model(X)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
-                MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+                if self.use_all_sequence:
+                    MSE += torch.nn.functional.mse_loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                else:
+                    MSE += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+                    MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
 
         MSE /= len(dataloader)
         MAE /= len(dataloader)
@@ -192,7 +216,7 @@ class ForceEstimation:
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Test MSE: {:.3f}, Test MAE: {:.3f}, {}'
 
-        test_best_loss = 1e10
+        val_best_loss = 1e10
         train_txt_path = self.save_dir + "/train.txt"
         train_txt_file = open(train_txt_path, 'a')
 
@@ -209,24 +233,29 @@ class ForceEstimation:
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                MSEloss = torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float())
-                L1_loss = torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float())
+                if self.use_all_sequence:
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.squeeze().float())
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.squeeze().float())
+                    loss = self.loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                else:
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
+                    loss = self.loss(pred_force.reshape((len(force))).float(), force.float())
 
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
 
-                loss = self.loss(pred_force.reshape((len(force))).float(), force.float())
                 loss.backward()
                 self.optimizer.step()
 
             #self.scheduler.step()
 
             # test the model
-            test_MSE, test_MAE = self.test(self.val_dataloader)
+            val_MSE, val_MAE = self.validate(self.val_dataloader)
 
             # best model select
-            if test_MAE < test_best_loss:
-                test_best_loss = test_MAE
+            if val_MAE < val_best_loss:
+                val_best_loss = val_MAE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             else: improve = " "
@@ -237,8 +266,8 @@ class ForceEstimation:
                 float(self.learning_rate),
                 float(np.mean(MSE)),  # {:.3f}
                 float(np.mean(MAE)),  # {:.3f}
-                float(test_MSE),  # {:.3f}
-                float(test_MAE),  # {:.3f}
+                float(val_MSE),  # {:.3f}
+                float(val_MAE),  # {:.3f}
                 improve
             ))
 
@@ -248,15 +277,57 @@ class ForceEstimation:
                 float(self.learning_rate),
                 float(np.mean(MSE)),  # {:.3f}
                 float(np.mean(MAE)),  # {:.3f}
-                float(test_MSE),  # {:.3f}
-                float(test_MAE),  # {:.3f}
+                float(val_MSE),  # {:.3f}
+                float(val_MAE),  # {:.3f}
                 improve
-            ))
+            ) + '\n')
 
             self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                              "test_MSE": test_MSE, "test_MAE": test_MAE})
+                              "test_MSE": val_MSE, "test_MAE": val_MAE})
 
         self.run_log.finish()
+
+
+    def test(self):
+        self.model.eval()
+        MSE = 0
+        MAE = 0
+
+        f = []
+        pf = []
+
+        with torch.no_grad():
+            for X, y, force in self.test_dataloader:
+                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                _force = force.detach().cpu().numpy()[0].squeeze()
+                f.append(_force)
+
+                pred_force = self.model(X)
+                _pred_force = pred_force.detach().cpu().numpy().squeeze()
+                pf.append(_pred_force)
+
+                if self.use_all_sequence:
+                    MSE += torch.nn.functional.mse_loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                else:
+                    MSE += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(),
+                                                        reduction='mean').item()
+                    MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(),
+                                                       reduction='mean').item()
+
+        for index in range(12):
+            _f = f[index]
+            _pf = pf[index]
+            plt.subplot(3, 4, index + 1)
+            plt.plot(np.array(_f), color='r', label='Force')
+            plt.plot(np.array(_pf), color='b', label='Predicted Force')
+
+        MSE /= len(self.test_dataloader)
+        MAE /= len(self.test_dataloader)
+        print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+        plt.legend()
+        plt.show()
+        return MSE, MAE
 
 if __name__ == '__main__':
     f = open("config.yaml", 'r+', encoding='utf-8')

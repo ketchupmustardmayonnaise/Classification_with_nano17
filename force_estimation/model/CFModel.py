@@ -5,17 +5,19 @@ from force_estimation.model.lstm import *
 
 class CFModel(nn.Module):
     def __init__(self, encoder, encoder_output, decoder, rnn_layer,
-                 use_only_output_layer, drop_p, target_indices, image_type, fc_hidden_layer = None, fc_hidden_dim = None):
+                 use_only_output_layer, use_all_sequence, drop_p, target_indices, image_type, resnet_block, densenet_block, densenet_growth,
+                 fc_hidden_layer = None, fc_hidden_dim = None):
         super().__init__()
         self.fc_hidden_layer = fc_hidden_layer
         self.use_only_output_layer = use_only_output_layer
         self.target_indices = target_indices
+        self.use_all_sequence = use_all_sequence
 
         # Encoder
         if encoder == 'resnet':
-            self.cnn = ResNet(BasicBlock, [2, 2, 2, 2], n_classes=encoder_output, image_type=image_type)
+            self.cnn = ResNet(BasicBlock, resnet_block, n_classes=encoder_output, image_type=image_type)
         else:
-            self.cnn = DenseNet(block_list = [6, 12, 24, 16], growth_rate = 32, n_classes=encoder_output, image_type=image_type)
+            self.cnn = DenseNet(block_list = densenet_block, growth_rate = densenet_growth, n_classes=encoder_output, image_type=image_type)
 
         # Decoder
         if decoder == 'lstm':
@@ -45,26 +47,27 @@ class CFModel(nn.Module):
         x = input.reshape((input.shape[0] * input.shape[1], input.shape[2], input.shape[3], input.shape[4]))
 
         x = self.cnn(x)
-        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1))
+        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if self.use_all_sequence is False else x
         x = self.rnn(x)
 
-        if not self.use_only_output_layer:
-            x = self.input(x)
+        if not self.use_all_sequence:
+            if not self.use_only_output_layer:
+                x = self.input(x)
 
-            for index in range(self.fc_hidden_layer):
+                for index in range(self.fc_hidden_layer):
+                    x = self.bn(x)
+                    x = F.relu(x)
+                    x = self.dropout(x)
+                    x = self.hidden_layer(x)
+
                 x = self.bn(x)
                 x = F.relu(x)
                 x = self.dropout(x)
-                x = self.hidden_layer(x)
+                x = self.output(x)
 
-            x = self.bn(x)
-            x = F.relu(x)
-            x = self.dropout(x)
-            x = self.output(x)
-
-        else:
-            x = self.bn(x)
-            x = self.dropout(x)
-            x = self.output(x)
+            else:
+                x = self.bn(x)
+                x = self.dropout(x)
+                x = self.output(x)
 
         return x
