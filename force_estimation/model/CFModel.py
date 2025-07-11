@@ -2,6 +2,7 @@ from force_estimation.model.resnet import *
 from force_estimation.model.densenet import *
 from force_estimation.model.gru import *
 from force_estimation.model.lstm import *
+from torchvision import models
 
 class CFModel(nn.Module):
     def __init__(self, encoder, resnet_block, densenet_block, densenet_growth, encoder_output,

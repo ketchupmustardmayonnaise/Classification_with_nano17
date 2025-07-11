@@ -129,12 +129,12 @@ class ForceEstimation:
 
             # optimizer
             if optimizer.lower() == 'adam':
-                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=float(self.learning_rate), betas=(0.9, 0.999),
+                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
                                             eps=1e-08, weight_decay=weight_decay, amsgrad=False)
             elif optimizer.lower() == 'rmsprop':
-                self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=float(self.learning_rate), weight_decay=weight_decay)
+                self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate, weight_decay=weight_decay)
             else:
-                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=float(self.learning_rate),
+                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
                                                  weight_decay=weight_decay)
 
             # scheduler
@@ -192,8 +192,7 @@ class ForceEstimation:
             self.train()
 
         else:
-            self.save_dir = cfg['save_dir']
-            self.model.load_state_dict(torch.load(self.save_dir))
+            self.model.load_state_dict(torch.load(cfg['model_dir']))
             self.test()
 
     def write_basic_information(self, use_all_sequence, target_indices, stride,
