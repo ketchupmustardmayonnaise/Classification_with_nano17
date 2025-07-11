@@ -40,7 +40,7 @@ image_size: !!python/tuple
 train_data_dir: ../dataset/two/train
 val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
-save_dir: ../saved_models/resnet_gru_07-10_18-15-06/epoch_4338.pt
+save_dir: ../saved_models
 
 optimizer: Adam
 batch_size: 64

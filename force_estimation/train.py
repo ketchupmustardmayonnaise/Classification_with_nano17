@@ -87,7 +87,7 @@ class ForceEstimation:
         dropout = args.dropout if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
         self.batch_size = self.batch_size if self.use_all_sequence is False else 1
-        loss = args.loss if args.loss is not None else cfg['loss']
+        self.loss_type = args.loss if args.loss is not None else cfg['loss']
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -137,13 +137,13 @@ class ForceEstimation:
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
             # loss
-            self.loss = torch.nn.MSELoss() if loss == "MSE" else torch.nn.L1Loss()
+            self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
             self.write_basic_information( self.use_all_sequence, target_indices, stride,
                                           self.image_type, image_resize, image_size,
                                          encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
                                          fc_num_layer, fc_hidden_dim,
                                          decoder, rnn_layer, decoder_output,
-                                         optimizer, dropout, self.batch_size, loss, self.learning_rate, weight_decay)
+                                         optimizer, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
 
             # wandb
             wandb_config = {
@@ -173,7 +173,7 @@ class ForceEstimation:
                 "learning_rate": self.learning_rate,
                 "weight_decay": weight_decay,
                 "dropout": dropout,
-                "loss": loss,
+                "loss": self.loss_type,
             }
 
             run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{self.learning_rate:.4f}'
@@ -288,8 +288,12 @@ class ForceEstimation:
             val_MSE, val_MAE = self.validate(self.val_dataloader)
 
             # best model select
-            if val_MAE < val_best_loss:
+            if self.loss_type == "MAE" and val_MAE < val_best_loss:
                 val_best_loss = val_MAE
+                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                improve = "******"
+            elif self.loss_type == "MSE" and val_MSE < val_best_loss:
+                val_best_loss = val_MSE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             else: improve = " "
