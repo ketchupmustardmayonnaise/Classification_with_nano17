@@ -1,5 +1,6 @@
-train_mode: False
+train_mode: True
 
+# encoder
 encoder: resnet # [resnet, densenet]
 resnet_block: !!python/tuple
   - 2
@@ -12,13 +13,22 @@ densenet_block: !!python/tuple
   - 24
   - 16
 densenet_growth: 32
-encoder_output: 1 # Fz
+encoder_output: 256
 
+# decoder
 decoder: gru # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
-use_only_output_layer: False
-fc_hidden_layer: 2
+decoder_output: 128
+
+# fully connected layer
+# use_only_output_layer: True
+fc_num_layer: 2
 fc_hidden_dim: 256
+
+# image
+use_all_sequence: True # 하나의 시퀀스를 연속적으로 학습할 것인지
+target_indices: 5 # 몇 frame으로 자를 것인지
+stride: 1
 
 image_type: RGB # [origin, rgb, diff]
 image_resize: True
@@ -26,14 +36,11 @@ image_size: !!python/tuple
   - 61
   - 61
 
+# directory
 train_data_dir: ../dataset/two/train
 val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
 save_dir: ../saved_models/resnet_gru_07-10_18-15-06/epoch_4338.pt
-
-use_all_sequence: True # 하나의 시퀀스를 연속적으로 학습할 것인지
-target_indices: 5 # 몇 frame으로 자를 것인지
-stride: 1
 
 optimizer: Adam
 batch_size: 64

@@ -26,66 +26,75 @@ def str2bool(v):
 class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--target_indices', default=None, type=int)
-        parser.add_argument('--stride', default=None, type=int)
-        parser.add_argument('--image_resize', default=None, type=str2bool)
-        parser.add_argument('--image_size', default=None, type=tuple)
+        parser.add_argument('--train_mode', default=None, type=str2bool)
 
         parser.add_argument('--encoder', default=None, type=str)
         parser.add_argument('--resnet_block', default=None, type=tuple)
         parser.add_argument('--densenet_block', default=None, type=tuple)
         parser.add_argument('--densenet_growth', default=None, type=int)
         parser.add_argument('--encoder_output', default=None, type=str)
+
         parser.add_argument('--decoder', default=None, type=str)
         parser.add_argument('--rnn_layer', default=None, type=int)
+        parser.add_argument('--decoder_output', default=None, type=int)
 
-        parser.add_argument('--use_only_output_layer', default=None, type=str2bool)
-        parser.add_argument('--dropout', default=None, type=float)
-        parser.add_argument('--fc_hidden_layer', default=None, type=int)
+        parser.add_argument('--fc_num_layer', default=None, type=int)
         parser.add_argument('--fc_hidden_dim', default=None, type=int)
-        parser.add_argument('--optimizer', default=None, type=str)
+
+        parser.add_argument('--use_all_sequence', default=None, type=str2bool)
+        parser.add_argument('--target_indices', default=None, type=int)
+        parser.add_argument('--stride', default=None, type=int)
 
         parser.add_argument('--image_type', default=None, type=str)
-        parser.add_argument('--use_all_sequence', default=None, type=str2bool)
-        parser.add_argument('--train_mode', default=None, type=str2bool)
+        parser.add_argument('--image_resize', default=None, type=str2bool)
+        parser.add_argument('--image_size', default=None, type=tuple)
 
+        parser.add_argument('--optimizer', default=None, type=str)
         parser.add_argument('--batch_size', default=None, type=int)
         parser.add_argument("--num_epoch", default=None, type=int)
         parser.add_argument("--learning_rate", default=None, type=float)
         parser.add_argument("--weight_decay", default=None, type=float)
-
+        parser.add_argument('--dropout', default=None, type=float)
         parser.add_argument('--loss', default=None, type=str)
         args = parser.parse_args()
 
         # parameters
+        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
         target_indices = args.target_indices if args.target_indices is not None else cfg['target_indices']
         stride = args.stride if args.stride is not None else cfg['stride']
+        self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
         image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
         image_size = args.image_size if args.image_size is not None else cfg['image_size']
+
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
         resnet_block = args.resnet_block if args.resnet_block is not None else cfg['resnet_block']
         densenet_block = args.densenet_block if args.densenet_block is not None else cfg['densenet_block']
         densenet_growth = args.densenet_growth if args.densenet_growth is not None else cfg['densenet_growth']
         encoder_output = args.encoder_output if args.encoder_output is not None else cfg['encoder_output']
+
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        use_only_output_layer = args.use_only_output_layer if args.use_only_output_layer is not None else cfg['use_only_output_layer']
-        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
-        fc_hidden_layer = args.fc_hidden_layer if args.fc_hidden_layer is not None else cfg['fc_hidden_layer']
-        fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
-        optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
-        dropout = args.dropout if args.dropout is not None else cfg['dropout']
         rnn_layer = args.rnn_layer if args.rnn_layer is not None else cfg['rnn_layer']
-        self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
-        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
+        decoder_output = args.decoder_output if args.decoder_output is not None else cfg['decoder_output']
+
+        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
+        fc_num_layer = args.fc_num_layer if args.fc_num_layer is not None else cfg['fc_num_layer']
+        fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
+
+        optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
+        self.num_epoch = args.num_epoch if args.num_epoch else cfg['num_epoch']
+        self.learning_rate = args.learning_rate if args.learning_rate is not None else cfg['learning_rate']
+        weight_decay = args.weight_decay if args.weight_decay is not None else cfg['weight_decay']
+        dropout = args.dropout if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
         self.batch_size = self.batch_size if self.use_all_sequence is False else 1
         loss = args.loss if args.loss is not None else cfg['loss']
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(encoder, encoder_output, decoder, rnn_layer,
-                             use_only_output_layer, self.use_all_sequence, dropout, target_indices, self.image_type, resnet_block, densenet_block, densenet_growth,
-                             fc_hidden_layer=fc_hidden_layer, fc_hidden_dim=fc_hidden_dim)
+        self.model = CFModel(encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+                             decoder, rnn_layer, fc_num_layer,
+                             target_indices, self.image_type, dropout,
+                             fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type == "RGB" else 1, image_size[0], image_size[1]))
 
@@ -118,7 +127,7 @@ class ForceEstimation:
 
             # optimizer
             if optimizer == 'SGD':
-                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=float(self.learning_rate))
+                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=float(self.learning_rate), weight_decay=weight_decay)
             else:
                 self.optimizer = torch.optim.Adam(self.model.parameters(), lr=float(self.learning_rate), betas=(0.9, 0.999),
                                             eps=1e-08, weight_decay=weight_decay, amsgrad=False)
@@ -129,8 +138,12 @@ class ForceEstimation:
 
             # loss
             self.loss = torch.nn.MSELoss() if loss == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information(target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer, self.use_all_sequence,
-                                         fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, self.image_type, self.batch_size, loss, self.learning_rate, weight_decay, resnet_block, densenet_block, densenet_growth)
+            self.write_basic_information( self.use_all_sequence, target_indices, stride,
+                                          self.image_type, image_resize, image_size,
+                                         encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+                                         fc_num_layer, fc_hidden_dim,
+                                         decoder, rnn_layer, decoder_output,
+                                         optimizer, dropout, self.batch_size, loss, self.learning_rate, weight_decay)
 
             # wandb
             wandb_config = {
@@ -139,12 +152,23 @@ class ForceEstimation:
                 "densenet_block": densenet_block,
                 "densenet_growth": densenet_growth,
                 "encoder_output": encoder_output,
+
                 "decoder": decoder,
                 "rnn_layer": rnn_layer,
-                "fc_hidden_layer": fc_hidden_layer,
-                "image_resize": image_resize,
-                "image_size": self.image_type,
+                "decoder_output": decoder_output,
+
+                "fc_num_layer": fc_num_layer,
+                "fc_hidden_dim": fc_hidden_dim,
+
                 "use_all_sequence": self.use_all_sequence,
+                "target_indices": target_indices,
+                "stride": stride,
+
+                "image_type": self.image_type,
+                "image_resize": image_resize,
+                "image_size": image_size,
+
+                "optimizer": optimizer,
                 "batch_size": self.batch_size,
                 "learning_rate": self.learning_rate,
                 "weight_decay": weight_decay,
@@ -162,28 +186,38 @@ class ForceEstimation:
             self.model.load_state_dict(torch.load(self.save_dir))
             self.test()
 
-    def write_basic_information(self, target_indices, stride, image_resize, image_size, encoder, encoder_output, decoder, use_only_output_layer, use_all_sequence,
-                                fc_hidden_layer, fc_hidden_dim, optimizer, dropout, rnn_layer, image_type, batch_size, loss, learning_rate, weight_decay, resnet_block, densenet_block, densenet_growth):
+    def write_basic_information(self, use_all_sequence, target_indices, stride,
+                                image_type, image_resize, image_size,
+                                encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+                                fc_num_layer, fc_hidden_dim,
+                                decoder, rnn_layer, decoder_output,
+                                optimizer, dropout, batch_size, loss, learning_rate, weight_decay):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
-        basic_txt_file.write(f"target_indices: {target_indices}\n")
-        basic_txt_file.write(f"stride: {stride}\n")
-        basic_txt_file.write(f"image_resize: {image_resize}\n")
-        basic_txt_file.write(f"image_size: {image_size}\n")
         basic_txt_file.write(f"encoder: {encoder}\n")
         basic_txt_file.write(f"resnet_block: {resnet_block}")
         basic_txt_file.write(f"densenet_block: {densenet_block}")
         basic_txt_file.write(f"densenet_growth: {densenet_growth}")
         basic_txt_file.write(f"encoder_output: {encoder_output}\n")
-        basic_txt_file.write(f"decoder: {decoder}\n")
-        basic_txt_file.write(f"use_only_output_layer: {use_only_output_layer}\n")
+
         basic_txt_file.write(f"use_all_sequence: {use_all_sequence}\n")
-        basic_txt_file.write(f"fc_hidden_layer: {fc_hidden_layer}\n")
+        basic_txt_file.write(f"target_indices: {target_indices}\n")
+        basic_txt_file.write(f"stride: {stride}\n")
+
+        basic_txt_file.write(f"image_type: {image_type}\n")
+        basic_txt_file.write(f"image_resize: {image_resize}\n")
+        basic_txt_file.write(f"image_size: {image_size}\n")
+
+        basic_txt_file.write(f"decoder: {decoder}\n")
+        basic_txt_file.write(f"rnn_layer: {rnn_layer}\n")
+        basic_txt_file.write(f"decoder_output: {decoder_output}\n")
+
+        basic_txt_file.write(f"fc_num_layer: {fc_num_layer}\n")
         basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")
+
         basic_txt_file.write(f"optimizer: {optimizer}\n")
         basic_txt_file.write(f"dropout: {dropout}\n")
-        basic_txt_file.write(f"rnn_layer: {rnn_layer}\n")
-        basic_txt_file.write(f"image_type: {image_type}\n")
+
         basic_txt_file.write(f"loss: {loss}\n")
         basic_txt_file.write(f"batch_size: {batch_size}\n")
         basic_txt_file.write(f"learning_rate: {learning_rate}\n")
