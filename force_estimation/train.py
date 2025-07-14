@@ -247,11 +247,11 @@ class ForceEstimation:
                 pred_force = self.model(X)
 
                 if self.use_all_sequence:
-                    MSE += torch.nn.functional.mse_loss(pred_force.float(), force.reshape((force.shape[1])).float())
-                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.reshape((force.shape[1])).float())
+                    MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float())
+                    MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float())
                 else:
-                    MSE += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
-                    MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(), reduction='mean').item()
+                    MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
+                    MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
 
         MSE /= len(dataloader)
         MAE /= len(dataloader)
