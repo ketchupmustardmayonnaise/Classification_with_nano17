@@ -347,8 +347,8 @@ class ForceEstimation:
                 improve
             ) + '\n')
 
-            self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                              "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+            #self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
+            #                  "validation_MSE": val_MSE, "validation_MAE": val_MAE})
 
         self.run_log.finish()
 
