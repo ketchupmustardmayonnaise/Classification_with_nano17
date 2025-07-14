@@ -90,8 +90,10 @@ class CFDataset(Dataset):
         if image_type == 'RGB': self.divide_3_channels()
         else:
             for idx in range(len(self.img)):
+                img = []
                 for frame in range(len(self.img[idx])):
-                    self.img[idx][frame] = np.expand_dims(self.img[idx][frame], axis=0)
+                    img.append(np.expand_dims(self.img[idx][frame], axis=0))
+                self.img[idx] = np.array(img, dtype=np.float32)
 
         if image_resize:
             self.img = self.resize_image(image_size)
@@ -175,6 +177,7 @@ class CFDataset(Dataset):
                 img = np.transpose(self.img[data_index][frame_index], (1, 2, 0))
                 resized_img = cv2.resize(img, size,
                                          interpolation=cv2.INTER_CUBIC)
+                if len(resized_img.shape) == 2: resized_img = np.expand_dims(resized_img, axis=2)
                 # 이미지를 (H, W, C)에서 (C, H, W)로 변경
                 resized_img = np.transpose(resized_img, (2, 0, 1))
                 data.append(resized_img)

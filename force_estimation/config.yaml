@@ -1,4 +1,4 @@
-train_mode: False
+train_mode: True
 
 # encoder
 encoder: resnet # [resnet, densenet]
@@ -29,7 +29,7 @@ use_all_sequence: False # 하나의 시퀀스를 연속적으로 학습할 것�
 target_indices: 5 # 몇 frame으로 자를 것인지
 stride: 1
 
-image_type: RGB # [origin, rgb, diff]
+image_type: origin # [origin, rgb, diff]
 image_resize: True
 image_size: !!python/tuple
   - 61

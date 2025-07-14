@@ -7,15 +7,16 @@ def apply_all_frames(X_batch):
     X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
     Returns: Tensor with same shape
     """
-    batch_size, num_frames, H, W = X_batch.shape
+    batch_size, num_frames, C, H, W = X_batch.shape
+    X_batch = X_batch.view(batch_size, num_frames * C, H, W)
     X_out = []
 
-    # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
-    angle = np.random.uniform(-20, 20)
-    do_vflip = np.random.rand() < 0.5
-    do_hflip = np.random.rand() < 0.5
-
     for b in range(batch_size):
+        # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
+        angle = np.random.uniform(-20, 20)
+        do_vflip = np.random.rand() < 0.5
+        do_hflip = np.random.rand() < 0.5
+
         sample_out = []
         for f in range(num_frames):
             img = np.array(X_batch[b, f])
@@ -34,6 +35,7 @@ def apply_all_frames(X_batch):
             # cv2.imshow('img', np.expand_dims(_img, axis=2))
             # cv2.waitKey(1)
 
+            img = np.expand_dims(img, axis=0)
             sample_out.append(torch.from_numpy(img).float())
 
         X_out.append(torch.stack(sample_out))  # (frame, H, W)
@@ -55,6 +57,11 @@ def apply_all_frames_RGB_image(X_batch):
     do_hflip = np.random.rand() < 0.5
 
     for b in range(batch_size):
+        # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
+        angle = np.random.uniform(-180, 180)
+        do_vflip = np.random.rand() < 0.5
+        do_hflip = np.random.rand() < 0.5
+
         sample_out = []
         for f in range(num_frames):
             # (C, H, W) → (H, W, C) for OpenCV
