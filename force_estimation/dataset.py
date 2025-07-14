@@ -255,16 +255,18 @@ class CFDataset(Dataset):
                 label.append(original_label[index])
                 frame += self.stride
 
+            self.frame[index] = int((self.frame[index] - self.target_indices) / self.stride)
+
         return img, np.array(force), label
 
     def outlier_filter(self):
         if not self.use_all_sequence:
-            indices = np.where(self.force[:, 2] < -6)[0]
-            # print(indices)
+            force = np.array(self.force)
 
-            self.img = np.delete(self.img, indices, 0)
-            self.force = np.delete(self.force, indices, 0)
-            self.label = np.delete(self.label, indices, 0)
+            indices = np.where(self.force[:, 2] < -6)[0]
+            force[indices, 2] = -6
+
+            self.force = force
         else:
             for sequence_idx in range(len(self.img)):
                 for index in range(len(self.force)):

@@ -22,7 +22,6 @@ class GRU(nn.Module):
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
-        #if self.input_size == 1:
-        #    return RNN_out
-        #else: return RNN_out[:, -1, :]
-        return RNN_out
+        if self.input_size == 1:
+            return RNN_out
+        else: return RNN_out[:, -1, :]

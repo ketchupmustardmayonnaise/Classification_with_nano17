@@ -94,7 +94,7 @@ class ForceEstimation:
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = CFModel(encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
-                             decoder, rnn_layer, fc_num_layer,
+                             decoder, rnn_layer, fc_num_layer, self.use_all_sequence,
                              target_indices, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
@@ -140,6 +140,7 @@ class ForceEstimation:
             # scheduler
             if scheduler.lower() == 'step':
                 self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
+            else: self.scheduler = None
 
             #self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
@@ -284,8 +285,8 @@ class ForceEstimation:
                         loss = (MSEloss + L1_loss) / 2
                     else: loss = self.loss(pred_force.float(), force.squeeze().float())
                 else:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean').item()
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
                     if self.loss_type == 'MSE+MAE':
                         loss = (MSEloss + L1_loss) / 2
                     else:
@@ -297,7 +298,7 @@ class ForceEstimation:
                 loss.backward()
                 self.optimizer.step()
 
-            self.scheduler.step()
+            if self.scheduler is not None: self.scheduler.step()
 
             # test the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)
@@ -340,7 +341,7 @@ class ForceEstimation:
             ) + '\n')
 
             self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                              "test_MSE": val_MSE, "test_MAE": val_MAE})
+                              "validation_MSE": val_MSE, "validation_MAE": val_MAE})
 
         self.run_log.finish()
 
@@ -356,11 +357,11 @@ class ForceEstimation:
         with torch.no_grad():
             for X, y, force in self.test_dataloader:
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
-                _force = force.detach().cpu().numpy()[0].squeeze()
+                _force = force.detach().cpu().numpy().squeeze().tolist()
                 f.append(_force)
 
                 pred_force = self.model(X)
-                _pred_force = pred_force.detach().cpu().numpy().squeeze()
+                _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
                 pf.append(_pred_force)
 
                 if self.use_all_sequence:
@@ -372,12 +373,17 @@ class ForceEstimation:
                     MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(),
                                                        reduction='mean').item()
 
+        f = sum(f, [])
+        pf = sum(pf, [])
+
+        i = 0
         for index in range(12):
-            _f = f[index]
-            _pf = pf[index]
+            _f = f[i : i + self.test_dataset.frame[index]]
+            _pf = pf[i : i + self.test_dataset.frame[index]]
             plt.subplot(3, 4, index + 1)
             plt.plot(np.array(_f), color='r', label='Force')
             plt.plot(np.array(_pf), color='b', label='Predicted Force')
+            i += self.test_dataset.frame[index]
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)

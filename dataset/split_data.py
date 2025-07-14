@@ -53,5 +53,5 @@ def split_csv_files(folder_path):
 
 
 # 특정 폴더 경로 지정
-folder_path = "./data/split"
+folder_path = "./"
 split_csv_files(folder_path)

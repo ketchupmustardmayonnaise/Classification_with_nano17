@@ -6,7 +6,7 @@ from torchvision import models
 
 class CFModel(nn.Module):
     def __init__(self, encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
-                 decoder, rnn_layer, fc_num_layer,
+                 decoder, rnn_layer, fc_num_layer, use_all_sequence,
                  target_indices, image_type, drop_p,
                  fc_hidden_dim = None):
         assert fc_num_layer > 0
@@ -47,7 +47,7 @@ class CFModel(nn.Module):
         x = input.reshape((input.shape[0] * input.shape[1], input.shape[2], input.shape[3], input.shape[4]))
 
         x = self.cnn(x)
-        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if x.shape[0] != 1 is False else x
+        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if input.shape[0] != 1 else x
         x = self.rnn(x)
 
         if self.fc_num_layer > 1:
