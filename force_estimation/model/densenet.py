@@ -45,7 +45,7 @@ class DenseNet(nn.Module):
 
         self.k = growth_rate
 
-        if image_type == 'RGB':
+        if image_type.lower() == 'rgb':
             self.conv1 = nn.Sequential(
                 nn.Conv2d(3, 2 * self.k, 7, stride=2, padding=3, bias=False),
                 nn.BatchNorm2d(2 * self.k),

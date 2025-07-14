@@ -40,7 +40,7 @@ class ResNet(nn.Module):
         super().__init__()
         assert len(num_block_list) == 4
 
-        in_channels = 3 if image_type == 'RGB' else 1
+        in_channels = 3 if image_type.lower() == 'rgb' else 1
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64),
