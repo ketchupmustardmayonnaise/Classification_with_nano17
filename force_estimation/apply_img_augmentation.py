@@ -13,7 +13,7 @@ def apply_all_frames(X_batch):
 
     for b in range(batch_size):
         # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
-        angle = np.random.uniform(-20, 20)
+        angle = np.random.uniform(-90, 90)
         do_vflip = np.random.rand() < 0.5
         do_hflip = np.random.rand() < 0.5
 

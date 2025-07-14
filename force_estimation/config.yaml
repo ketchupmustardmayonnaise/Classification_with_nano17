@@ -1,7 +1,7 @@
 train_mode: True
 
 # encoder
-encoder: resnet # [resnet, densenet]
+encoder: densenet # [resnet, densenet]
 resnet_block: !!python/tuple
   - 2
   - 2
@@ -25,11 +25,11 @@ fc_num_layer: 1
 fc_hidden_dim: 128
 
 # image
-use_all_sequence: False # 하나의 시퀀스를 연속적으로 학습할 것인지
+use_all_sequence: True # 하나의 시퀀스를 연속적으로 학습할 것인지
 target_indices: 5 # 몇 frame으로 자를 것인지
 stride: 1
 
-image_type: origin # [origin, rgb, diff]
+image_type: diff # [origin, rgb, diff]
 image_resize: True
 image_size: !!python/tuple
   - 61
@@ -40,13 +40,13 @@ train_data_dir: ../dataset/two/train
 val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
 save_dir: ../saved_models
-model_dir: ../saved_models/resnet_lstm_07-14_15-44-11/epoch_235.pt
+model_dir: ../saved_models/densenet_lstm_07-14_17-58-52/epoch_65.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
-scheduler: step
-batch_size: 256
+scheduler: None
+batch_size: 64
 num_epoch: 100000
 learning_rate: 0.0001
-weight_decay: 0.1
+weight_decay: 0.01
 dropout: 0.3
 loss: MSE # [MSE, MAE, MSE+MAE]

@@ -279,18 +279,18 @@ class ForceEstimation:
                 pred_force = self.model(X)
 
                 if self.use_all_sequence:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.squeeze().float(), reduction='mean')
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.squeeze().float(), reduction='mean')
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
                     if self.loss_type == 'MSE+MAE':
                         loss = (MSEloss + L1_loss) / 2
-                    else: loss = self.loss(pred_force.float(), force.squeeze().float())
+                    else: loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
                 else:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
+                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
                     if self.loss_type == 'MSE+MAE':
                         loss = (MSEloss + L1_loss) / 2
                     else:
-                        loss = self.loss(pred_force.float(), force.squeeze().float())
+                        loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
 
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())

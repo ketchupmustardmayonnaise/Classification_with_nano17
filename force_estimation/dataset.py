@@ -8,15 +8,18 @@ from scipy.interpolate import interp1d
 from torch.utils.data import Dataset
 from scipy import signal, stats
 from scipy.signal import filtfilt
+import matplotlib.pyplot as plt
 
 num_classes = 8
 IMG_MAX = 512
+IMG_MAX_DIFF = 60
 
 class CFDataset(Dataset):
     def __init__(self, target_indices, stride, use_all_sequence=True, image_resize='False', image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_indices = target_indices
         self.stride = stride
         self.use_all_sequence = use_all_sequence
+        self.image_type = image_type
 
         self.img = []
         self.force = []
@@ -86,8 +89,44 @@ class CFDataset(Dataset):
 
                         line_index += 1
 
+        print(sum(self.frame))
         self.force_zero_calibration()
-        if image_type == 'RGB': self.divide_3_channels()
+
+        if image_type.lower() == 'rgb':
+            self.divide_3_channels()
+        elif image_type.lower() == 'diff':
+            self.image_to_diff()
+            for idx in range(len(self.img)):
+                img = []
+                for frame in range(len(self.img[idx])):
+                    img.append(np.expand_dims(self.img[idx][frame], axis=0))
+                self.img[idx] = np.array(img, dtype=np.float32)
+
+            '''
+            flattened = np.concatenate([arr.flatten() for arr in self.img])
+
+            indices = np.where(abs(flattened) < 10)[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where((abs(flattened) >= 10) & (abs(flattened) < 20))[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where((abs(flattened) >= 20) & (abs(flattened) < 30))[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where((abs(flattened) >= 30) & (abs(flattened) < 40))[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where((abs(flattened) >= 40) & (abs(flattened) < 50))[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where((abs(flattened) >= 50) & (abs(flattened) < 60))[0]
+            print(len(indices) / len(flattened))
+
+            indices = np.where(abs(flattened) >= 60)[0]
+            print(len(indices) / len(flattened))
+            '''
+
         else:
             for idx in range(len(self.img)):
                 img = []
@@ -117,10 +156,17 @@ class CFDataset(Dataset):
         else: return self.img[index], self.label[index], self.force[index][2]
 
     def preprocess(self):
-        for index in range(len(self.img)):
-            self.img[index] = np.array(self.img[index]).astype(np.float32)
-            self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
-            self.img[index] = np.where(self.img[index] < 0, 0, self.img[index])
+        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray':
+            for index in range(len(self.img)):
+                self.img[index] = np.array(self.img[index]).astype(np.float32)
+                self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
+                self.img[index] = np.where(self.img[index] < 0, 0, self.img[index])
+
+        elif self.image_type.lower() == 'diff':
+            for index in range(len(self.img)):
+                self.img[index] = np.array(self.img[index]).astype(np.float32)
+                self.img[index] = np.where(self.img[index] >= IMG_MAX_DIFF, 1.0, self.img[index] / IMG_MAX_DIFF)
+
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
         result = []
@@ -233,6 +279,7 @@ class CFDataset(Dataset):
 
             self.img[sequence_idx] = new_seq
             self.img_timestamp[sequence_idx] = self.img_timestamp[sequence_idx][1:]
+            self.frame[sequence_idx] -= 1
 
 
     def break_images_smaller(self, original_img, original_force, original_label):
@@ -266,8 +313,11 @@ class CFDataset(Dataset):
         if not self.use_all_sequence:
             force = np.array(self.force)
 
-            indices = np.where(self.force[:, 2] < -6)[0]
+            indices = np.where(force[:, 2] < -6)[0]
             force[indices, 2] = -6
+
+            indices = np.where(force[:, 2] > 0)[0]
+            force[indices, 2] = 0
 
             self.force = force
         else:

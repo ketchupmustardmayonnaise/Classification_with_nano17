@@ -14,6 +14,7 @@ class CFModel(nn.Module):
         super().__init__()
         self.fc_num_layer = fc_num_layer
         self.target_indices = target_indices
+        self.use_all_sequence = use_all_sequence
 
         # Encoder
         if encoder == 'resnet':
@@ -23,9 +24,9 @@ class CFModel(nn.Module):
 
         # Decoder
         if decoder == 'lstm':
-            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=False)
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence, bidirectional=False)
         elif decoder == 'gru':
-            self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer)
+            self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
         elif decoder == 'bidirectional_lstm':
             self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
 
@@ -54,18 +55,18 @@ class CFModel(nn.Module):
             x = self.input(x)
 
             for index in range(self.fc_num_layer - 1):
-                x = self.bn(x)
+                if self.use_all_sequence: x = self.bn(x)
                 x = F.relu(x)
                 x = self.dropout(x)
                 x = self.hidden_layer(x)
 
-            x = self.bn(x)
+            if self.use_all_sequence: x = self.bn(x)
             x = F.relu(x)
             x = self.dropout(x)
             x = self.output(x)
 
         else:
-            x = self.bn(x)
+            if self.use_all_sequence: x = self.bn(x)
             x = self.dropout(x)
             x = self.output(x)
 
