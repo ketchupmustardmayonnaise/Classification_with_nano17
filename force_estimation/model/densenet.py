@@ -68,7 +68,7 @@ class DenseNet(nn.Module):
         self.dense_blocks = nn.Sequential(*dense_blocks)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(self.dense_channels, n_classes)
+        self.fc = nn.Linear(int(self.dense_channels), int(n_classes))
 
     def forward(self, input):
         x = self.conv1(input)

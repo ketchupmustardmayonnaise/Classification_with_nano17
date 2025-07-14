@@ -4,6 +4,7 @@ import time
 import argparse
 import torchinfo
 import yaml
+import ast
 from torch.optim import lr_scheduler
 
 import wandb
@@ -31,8 +32,8 @@ class ForceEstimation:
         parser.add_argument('--train_mode', default=None, type=str2bool)
 
         parser.add_argument('--encoder', default=None, type=str)
-        parser.add_argument('--resnet_block', default=None, type=tuple)
-        parser.add_argument('--densenet_block', default=None, type=tuple)
+        parser.add_argument('--resnet_block', default=None, type=ast.literal_eval)
+        parser.add_argument('--densenet_block', default=None, type=ast.literal_eval)
         parser.add_argument('--densenet_growth', default=None, type=int)
         parser.add_argument('--encoder_output', default=None, type=str)
 
@@ -49,7 +50,12 @@ class ForceEstimation:
 
         parser.add_argument('--image_type', default=None, type=str)
         parser.add_argument('--image_resize', default=None, type=str2bool)
-        parser.add_argument('--image_size', default=None, type=tuple)
+        parser.add_argument('--image_size', default=None, type=ast.literal_eval)
+
+        parser.add_argument('--save_dir', default=None, type=str)
+        parser.add_argument('--test_data_dir', default=None, type=str)
+        parser.add_argument('--train_data_dir', default=None, type=str)
+        parser.add_argument('--val_data_dir', default=None, type=str)
 
         parser.add_argument('--optimizer', default=None, type=str)
         parser.add_argument('--scheduler', default=None, type=str)
@@ -62,33 +68,34 @@ class ForceEstimation:
         args = parser.parse_args()
 
         # parameters
-        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
-        target_indices = args.target_indices if args.target_indices is not None else cfg['target_indices']
-        stride = args.stride if args.stride is not None else cfg['stride']
+        train_mode = bool(args.train_mode) if args.train_mode is not None else cfg['train_mode']
+        target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices']
+        stride = int(args.stride) if args.stride is not None else cfg['stride']
         self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
-        image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
+        image_resize = bool(args.image_resize) if args.image_resize is not None else cfg['image_resize']
         image_size = args.image_size if args.image_size is not None else cfg['image_size']
+        image_size = [int(image_size[0]), int(image_size[1])]
 
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
         resnet_block = args.resnet_block if args.resnet_block is not None else cfg['resnet_block']
         densenet_block = args.densenet_block if args.densenet_block is not None else cfg['densenet_block']
-        densenet_growth = args.densenet_growth if args.densenet_growth is not None else cfg['densenet_growth']
-        encoder_output = args.encoder_output if args.encoder_output is not None else cfg['encoder_output']
+        densenet_growth = int(args.densenet_growth) if args.densenet_growth is not None else cfg['densenet_growth']
+        encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output']
 
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        rnn_layer = args.rnn_layer if args.rnn_layer is not None else cfg['rnn_layer']
-        decoder_output = args.decoder_output if args.decoder_output is not None else cfg['decoder_output']
+        rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer']
+        decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output']
 
-        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
-        fc_num_layer = args.fc_num_layer if args.fc_num_layer is not None else cfg['fc_num_layer']
-        fc_hidden_dim = args.fc_hidden_dim if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
+        self.use_all_sequence = bool(args.use_all_sequence) if args.use_all_sequence is not None else cfg['use_all_sequence']
+        fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer']
+        fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
 
         optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
         scheduler = args.scheduler if args.scheduler is not None else cfg['scheduler']
-        self.num_epoch = args.num_epoch if args.num_epoch else cfg['num_epoch']
-        dropout = args.dropout if args.dropout is not None else cfg['dropout']
+        self.num_epoch = int(args.num_epoch) if args.num_epoch else cfg['num_epoch']
+        dropout = float(args.dropout) if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
-        self.batch_size = self.batch_size if self.use_all_sequence is False else 1
+        self.batch_size = int(self.batch_size) if self.use_all_sequence is False else 1
         self.loss_type = args.loss if args.loss is not None else cfg['loss']
 
         # model configuration
@@ -187,7 +194,7 @@ class ForceEstimation:
                 "loss": self.loss_type,
             }
 
-            run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{self.learning_rate:.4f}'
+            run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
             self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
 
             self.train()
@@ -377,12 +384,16 @@ class ForceEstimation:
         pf = sum(pf, [])
 
         i = 0
-        for index in range(12):
+        start = 24
+        end = start + 12
+
+        for index in range(40):
             _f = f[i : i + self.test_dataset.frame[index]]
             _pf = pf[i : i + self.test_dataset.frame[index]]
-            plt.subplot(3, 4, index + 1)
-            plt.plot(np.array(_f), color='r', label='Force')
-            plt.plot(np.array(_pf), color='b', label='Predicted Force')
+            if index > start and index <= end:
+                plt.subplot(3, 4, index - start)
+                plt.plot(np.array(_f), color='r', label='Force')
+                plt.plot(np.array(_pf), color='b', label='Predicted Force')
             i += self.test_dataset.frame[index]
 
         MSE /= len(self.test_dataloader)
@@ -395,4 +406,5 @@ class ForceEstimation:
 if __name__ == '__main__':
     f = open("config.yaml", 'r+', encoding='utf-8')
     config = yaml.load(f, Loader=yaml.FullLoader)
+
     force_estimation = ForceEstimation(config)

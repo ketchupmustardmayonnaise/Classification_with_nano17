@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 
 # encoder
 encoder: densenet # [resnet, densenet]
@@ -40,7 +40,7 @@ train_data_dir: ../dataset/two/train
 val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
 save_dir: ../saved_models
-model_dir: ../saved_models/densenet_lstm_07-14_17-58-52/epoch_65.pt
+model_dir: ../saved_models/★ densenet_lstm_07-14_22-43-36/epoch_24.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None

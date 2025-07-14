@@ -4,15 +4,15 @@ class GRU(nn.Module):
     def __init__(self, input_size=256, h_RNN_layers=2, drop_p=0.3, use_all_sequence=False):
         super(GRU, self).__init__()
 
-        self.input_size = input_size
-        self.h_RNN_layers = h_RNN_layers  # RNN hidden layers
-        self.output_size = input_size  # RNN hidden nodes
-        self.drop_p = drop_p
-        self.use_all_sequence = use_all_sequence
+        self.input_size = int(input_size)
+        self.h_RNN_layers = int(h_RNN_layers)  # RNN hidden layers
+        self.output_size = int(input_size)  # RNN hidden nodes
+        self.drop_p = float(drop_p)
+        self.use_all_sequence = bool(use_all_sequence)
 
         self.GRU = nn.GRU(
             input_size=self.input_size,
-            hidden_size=self.output_size,
+            hidden_size=int(self.output_size),
             num_layers=h_RNN_layers,
             batch_first=True,  # input & output will has batch size as 1s dimension. e.g. (batch, time_step, input_size)
         )

@@ -55,7 +55,7 @@ class ResNet(nn.Module):
         self.stage4 = self.make_stage(block, 512, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, n_classes)
+        self.fc = nn.Linear(int(512 * block.expansion), int(n_classes))
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
         if stride != 1 or self.in_channels != inner_channels * block.expansion:
