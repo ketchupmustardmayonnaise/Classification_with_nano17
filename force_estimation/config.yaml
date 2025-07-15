@@ -13,7 +13,7 @@ encoder_output: 256
 
 # decoder
 decoder: !!python/tuple
-  - False
+  - False # 하나의 시퀀스를 연속적으로 학습할 것인지?
   - lstm # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
 decoder_output: 128
@@ -23,12 +23,11 @@ fc_num_layer: 1
 fc_hidden_dim: 128
 
 # image
-use_all_sequence: False # 하나의 시퀀스를 연속적으로 학습할 것인지
 target_indices: 1 # 몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 90
 
-image_type: exp # [origin, rgb, diff, exp]
+image_type: rgb # [origin, rgb, diff, exp]
 image_resize: True
 image_size: !!python/tuple
   - 64

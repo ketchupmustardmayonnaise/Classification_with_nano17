@@ -155,8 +155,8 @@ class CFDataset(Dataset):
         return len(self.img)
 
     def __getitem__(self, index):
-        if self.use_all_sequence: return self.img[index], self.label[index], self.force[index][:, 2]
-        else: return self.img[index], self.label[index], self.force[index][2]
+        if self.use_all_sequence: return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
+        else: return np.array(self.img[index]), self.label[index], self.force[index][2]
 
     def preprocess(self):
         if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray' or self.image_type.lower() == 'exp':
