@@ -49,7 +49,6 @@ def apply_all_frames_RGB_image(X_batch):
     X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
     Returns: Tensor with same shape
     """
-    X_batch = np.array(X_batch, dtype=np.float32)
     batch_size, num_frames, C, H, W = X_batch.shape
     X_batch = X_batch.reshape((batch_size, num_frames * C, H, W))
     X_out = []

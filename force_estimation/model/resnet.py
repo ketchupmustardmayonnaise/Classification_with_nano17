@@ -10,7 +10,6 @@ class BasicBlock(nn.Module):
     expansion = 1
     def __init__(self, in_channels, inner_channels, stride=1, projection=None):
         super().__init__()
-        self.expansion = 1
 
         self.residual = nn.Sequential(
             nn.Conv2d(in_channels, inner_channels, 3, stride=stride, padding=1, bias=False),
@@ -39,7 +38,6 @@ class Bottleneck(nn.Module):
     expansion = 4
     def __init__(self, in_channels, inner_channels, stride=1, projection=None):
         super().__init__()
-        self.expansion = 4
 
         self.residual = nn.Sequential(
             nn.Conv2d(in_channels, inner_channels, 1, stride=stride, bias=False),
@@ -71,6 +69,7 @@ class ResNet(nn.Module):
     def __init__(self, block, num_block_list, n_classes=1000, image_type='RGB'):
         super().__init__()
         assert len(num_block_list) == 4
+        self.expansion = 1 if block.__name__ == "BasicBlock" else 4
 
         in_channels = 3 if image_type.lower() == 'rgb' else 1
         self.conv1 = nn.Sequential(
@@ -87,13 +86,13 @@ class ResNet(nn.Module):
         self.stage4 = self.make_stage(block, 512, num_block_list[3], stride=2)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(int(512 * block.expansion), int(n_classes))
+        self.fc = nn.Linear(int(512 * self.expansion), int(n_classes))
 
     def make_stage(self, block, inner_channels, num_blocks, stride=1):
-        if stride != 1 or self.in_channels != inner_channels * block.expansion:
+        if stride != 1 or self.in_channels != inner_channels * self.expansion:
             projection = nn.Sequential(
-                nn.Conv2d(self.in_channels, inner_channels * block.expansion, 1, stride=stride, bias=False),
-                nn.BatchNorm2d(inner_channels * block.expansion),
+                nn.Conv2d(self.in_channels, inner_channels * self.expansion, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(inner_channels * self.expansion),
             )
         else:
             projection = None
@@ -101,8 +100,8 @@ class ResNet(nn.Module):
         layers = []
         for idx in range(num_blocks):
             if idx == 0:
-                layers.append(block(self.in_channels, inner_channels, stride, projection))
-                self.in_channels = inner_channels * block.expansion
+                layers.append(block(self.in_channels, inner_channels, stride=stride, projection=projection))
+                self.in_channels = inner_channels * self.expansion
             else:
                 layers.append(block(self.in_channels, inner_channels))
 

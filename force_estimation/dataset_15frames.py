@@ -22,12 +22,11 @@ class CFDataset(Dataset):
         self.image_type = image_type
 
         self.img = []
-
-        img_temp = []
         self.force = []
         self.label = []
 
         self.frame = []
+        img_temp = []
 
         self.img_timestamp = []
         self.force_timestamp = []
@@ -90,8 +89,8 @@ class CFDataset(Dataset):
 
                         line_index += 1
 
-        '''
-        이미지 보여주기
+        #self.image_exponential_filter(0.9)
+
         for data in range(len(img_temp)):
             one_img = img_temp[data]
             filtered_img = np.copy(one_img)
@@ -133,7 +132,6 @@ class CFDataset(Dataset):
                     break
 
         cv2.destroyAllWindows()
-        '''
 
         self.force_zero_calibration()
 
@@ -173,6 +171,14 @@ class CFDataset(Dataset):
     def __getitem__(self, index):
         if self.use_all_sequence: return self.img[index], self.label[index], self.force[index][:, 2]
         else: return self.img[index], self.label[index], self.force[index][2]
+
+    def image_exponential_filter(self, a):
+        assert a > 0 and a < 1
+        for data_idx in range(len(self.img)):
+            img = self.img[data_idx][:, 0]
+            for frame in range(1, 14, 1):
+                img = a * self.img[data_idx][:, frame] + (1 - a) * img
+            self.img[data_idx] = img
 
     def preprocess(self):
         if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray':

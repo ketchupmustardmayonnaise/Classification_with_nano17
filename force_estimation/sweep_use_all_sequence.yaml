@@ -48,7 +48,7 @@ parameters:
   encoder_output:
     values: [64, 128, 256]
   image_type:
-    values: ["origin", "rgb", "diff"]
+    values: ["origin", "rgb", "diff", "exp"]
 
   decoder:
     values: ["lstm", "gru", "bidirectional_lstm"]

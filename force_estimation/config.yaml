@@ -1,18 +1,13 @@
-train_mode: False
+train_mode: True
 
 # encoder
-encoder: densenet # [resnet, densenet]
-resnet_block: !!python/tuple
-  - 2
-  - 2
-  - 2
-  - 2
-densenet_block: !!python/tuple
-  - 6
-  - 12
-  - 24
-  - 16
-densenet_growth: 32
+encoder: ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
+# ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
+# ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
+# ["resnet", "Bottleneck", [3, 4, 6, 3]] # resnet-50
+# ["resnet", "Bottleneck", [3, 4, 23, 3]] # resnet-101
+# ["resnet", "Bottleneck", [3, 8, 36, 3]] # resnet-152
+# ["densenet", 32, [6, 12, 24, 16]] # densenet
 encoder_output: 256
 
 # decoder
@@ -29,7 +24,7 @@ use_all_sequence: True # 하나의 시퀀스를 연속적으로 학습할 것인
 target_indices: 5 # 몇 frame으로 자를 것인지
 stride: 1
 
-image_type: diff # [origin, rgb, diff]
+image_type: rgb # [origin, rgb, diff, exp]
 image_resize: True
 image_size: !!python/tuple
   - 61

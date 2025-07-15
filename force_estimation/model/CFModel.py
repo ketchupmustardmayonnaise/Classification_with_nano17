@@ -1,7 +1,8 @@
-from force_estimation.model.resnet import *
+import force_estimation.model.resnet as resnet
 from force_estimation.model.densenet import *
 from force_estimation.model.gru import *
 from force_estimation.model.lstm import *
+import torch.nn.functional as F
 from torchvision import models
 
 class CFModel(nn.Module):
@@ -19,9 +20,9 @@ class CFModel(nn.Module):
         # Encoder
         if encoder[0].lower() == 'resnet':
             if encoder[1].lower() == "basicblock":
-                self.cnn = ResNet(BasicBlock, encoder[2], n_classes=encoder_output, image_type=image_type)
+                self.cnn = resnet.ResNet(resnet.BasicBlock, encoder[2], n_classes=encoder_output, image_type=image_type)
             elif encoder[1].lower() == "bottleneck":
-                self.cnn = ResNet(Bottleneck, encoder[2], n_classes=encoder_output, image_type=image_type)
+                self.cnn = resnet.ResNet(resnet.Bottleneck, encoder[2], n_classes=encoder_output, image_type=image_type)
         elif encoder[0].lower() == 'densenet':
             self.cnn = DenseNet(block_list = encoder[2], growth_rate = int(encoder[1]), n_classes=encoder_output, image_type=image_type)
 
@@ -31,9 +32,11 @@ class CFModel(nn.Module):
         elif decoder == 'gru':
             self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
         elif decoder == 'bidirectional_lstm':
-            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
+            if self.use_all_sequence:
+                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
+            else: self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence, bidirectional=True)
 
-        fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' else encoder_output
+        fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' and not self.use_all_sequence else encoder_output
         if fc_num_layer > 1:
             assert fc_hidden_dim is not None
             self.input = nn.Linear(fc_input_size, fc_hidden_dim)

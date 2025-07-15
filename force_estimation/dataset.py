@@ -127,7 +127,10 @@ class CFDataset(Dataset):
             print(len(indices) / len(flattened))
             '''
 
-        else:
+        elif image_type.lower() == 'exp':
+            self.exponential_filter(0.7)
+
+        else: # origin
             for idx in range(len(self.img)):
                 img = []
                 for frame in range(len(self.img[idx])):
@@ -213,6 +216,15 @@ class CFDataset(Dataset):
                 plt.pause(5)
             '''
         return result
+
+    def exponential_filter(self, alpha):
+        for data_idx in range(len(self.img)):
+            img = alpha * self.img[data_idx][0]
+            self.img[data_idx][0] = img
+
+            for frame in range(1, len(self.img[data_idx])):
+                img = alpha * self.img[data_idx][frame] + (1 - alpha) * img
+                self.img[data_idx][frame] = np.expand_dims(img, axis=0)
 
     def resize_image(self, size):
         result = []

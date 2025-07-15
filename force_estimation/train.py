@@ -65,11 +65,11 @@ class ForceEstimation:
         args = parser.parse_args()
 
         # parameters
-        train_mode = bool(args.train_mode) if args.train_mode is not None else cfg['train_mode']
+        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
         target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices']
         stride = int(args.stride) if args.stride is not None else cfg['stride']
         self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
-        image_resize = bool(args.image_resize) if args.image_resize is not None else cfg['image_resize']
+        image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
         image_size = args.image_size if args.image_size is not None else cfg['image_size']
         image_size = [int(image_size[0]), int(image_size[1])]
 
@@ -80,7 +80,7 @@ class ForceEstimation:
         rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer']
         decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output']
 
-        self.use_all_sequence = bool(args.use_all_sequence) if args.use_all_sequence is not None else cfg['use_all_sequence']
+        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
         fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer']
         fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
 
@@ -99,7 +99,7 @@ class ForceEstimation:
                              target_indices, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type == "RGB" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
@@ -185,9 +185,9 @@ class ForceEstimation:
                 "loss": self.loss_type,
             }
 
-            run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
+            run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
             self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
-            wandb.watch(self, log='all')
+            # wandb.watch(self, log='all')
 
             self.train()
 
@@ -268,7 +268,7 @@ class ForceEstimation:
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
                 self.model.train()
 
-                X = apply_all_frames_RGB_image(X) if self.image_type == 'RGB' else apply_all_frames(X)
+                X = apply_all_frames_RGB_image(X) if self.image_type.lower() == 'rgb' else apply_all_frames(X)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
