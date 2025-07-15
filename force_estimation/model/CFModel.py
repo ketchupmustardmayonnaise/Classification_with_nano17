@@ -1,7 +1,9 @@
 import force_estimation.model.resnet as resnet
+from force_estimation.model import fsnet
 from force_estimation.model.densenet import *
 from force_estimation.model.gru import *
 from force_estimation.model.lstm import *
+from force_estimation.model.fsnet import *
 import torch.nn.functional as F
 from torchvision import models
 
@@ -25,6 +27,8 @@ class CFModel(nn.Module):
                 self.cnn = resnet.ResNet(resnet.Bottleneck, encoder[2], n_classes=encoder_output, image_type=image_type)
         elif encoder[0].lower() == 'densenet':
             self.cnn = DenseNet(block_list = encoder[2], growth_rate = int(encoder[1]), n_classes=encoder_output, image_type=image_type)
+        elif encoder[0].lower() == 'fsnet':
+            self.cnn = FSNet(n_classes=encoder_output, image_type=image_type)
 
         # Decoder
         if decoder == 'lstm':
@@ -54,7 +58,7 @@ class CFModel(nn.Module):
         x = input.reshape((input.shape[0] * input.shape[1], input.shape[2], input.shape[3], input.shape[4]))
 
         x = self.cnn(x)
-        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if input.shape[0] != 1 else x
+        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if not self.use_all_sequence else x
         x = self.rnn(x)
 
         if self.fc_num_layer > 1:

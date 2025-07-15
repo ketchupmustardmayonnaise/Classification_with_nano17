@@ -61,7 +61,7 @@ def wandb_sweep():
     model = ForceEstimation(cfg)
 
 if __name__ == '__main__':
-    f = open("sweep_use_all_sequence.yaml", 'r+', encoding='utf-8')
+    f = open("sweep_exp.yaml", 'r+', encoding='utf-8')
     config = yaml.load(f, Loader=yaml.FullLoader)
 
     sweep_id = wandb.sweep(sweep=config)

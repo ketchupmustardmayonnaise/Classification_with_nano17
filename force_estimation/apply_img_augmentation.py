@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import torch
 
-def apply_all_frames(X_batch):
+def apply_all_frames(X_batch, angle):
     """
     X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
     Returns: Tensor with same shape
@@ -44,13 +44,12 @@ def apply_all_frames(X_batch):
     return torch.stack(X_out)  # (batch_size, frame, H, W)
 
 
-def apply_all_frames_RGB_image(X_batch):
+def apply_all_frames_RGB_image(X_batch, angle):
     """
     X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
     Returns: Tensor with same shape
     """
     batch_size, num_frames, C, H, W = X_batch.shape
-    X_batch = X_batch.reshape((batch_size, num_frames * C, H, W))
     X_out = []
 
     # 하나의 augmentation 파라미터 세트를 전체 batch에 적용

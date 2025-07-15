@@ -1,7 +1,8 @@
 train_mode: True
 
 # encoder
-encoder: ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
+encoder: ["fsnet"]
+# ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
 # ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
 # ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
 # ["resnet", "Bottleneck", [3, 4, 6, 3]] # resnet-50
@@ -11,7 +12,9 @@ encoder: ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
 encoder_output: 256
 
 # decoder
-decoder: lstm # [lstm, gru, bidirectional_lstm]
+decoder: !!python/tuple
+  - False
+  - lstm # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
 decoder_output: 128
 
@@ -20,15 +23,16 @@ fc_num_layer: 1
 fc_hidden_dim: 128
 
 # image
-use_all_sequence: True # 하나의 시퀀스를 연속적으로 학습할 것인지
-target_indices: 5 # 몇 frame으로 자를 것인지
+use_all_sequence: False # 하나의 시퀀스를 연속적으로 학습할 것인지
+target_indices: 1 # 몇 frame으로 자를 것인지
 stride: 1
+augmentation_angle: 90
 
-image_type: rgb # [origin, rgb, diff, exp]
+image_type: exp # [origin, rgb, diff, exp]
 image_resize: True
 image_size: !!python/tuple
-  - 61
-  - 61
+  - 64
+  - 64
 
 # directory
 train_data_dir: ../dataset/two/train
@@ -39,7 +43,7 @@ model_dir: ../saved_models/★ densenet_lstm_07-14_22-43-36/epoch_24.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
-batch_size: 64
+batch_size: 1
 num_epoch: 100000
 learning_rate: 0.0001
 weight_decay: 0.01

@@ -41,9 +41,9 @@ class ForceEstimation:
         parser.add_argument('--fc_num_layer', default=None, type=int)
         parser.add_argument('--fc_hidden_dim', default=None, type=int)
 
-        parser.add_argument('--use_all_sequence', default=None, type=str2bool)
         parser.add_argument('--target_indices', default=None, type=int)
         parser.add_argument('--stride', default=None, type=int)
+        parser.add_argument('--augmentation_angle', default=None, type=int)
 
         parser.add_argument('--image_type', default=None, type=str)
         parser.add_argument('--image_resize', default=None, type=str2bool)
@@ -72,6 +72,7 @@ class ForceEstimation:
         image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
         image_size = args.image_size if args.image_size is not None else cfg['image_size']
         image_size = [int(image_size[0]), int(image_size[1])]
+        self.angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle']
 
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
         encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output']
@@ -80,7 +81,8 @@ class ForceEstimation:
         rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer']
         decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output']
 
-        self.use_all_sequence = args.use_all_sequence if args.use_all_sequence is not None else cfg['use_all_sequence']
+        self.use_all_sequence = decoder[0]
+        decoder = decoder[1]
         fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer']
         fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
 
@@ -268,7 +270,7 @@ class ForceEstimation:
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
                 self.model.train()
 
-                X = apply_all_frames_RGB_image(X) if self.image_type.lower() == 'rgb' else apply_all_frames(X)
+                X = apply_all_frames_RGB_image(X, self.angle) if self.image_type.lower() == 'rgb' else apply_all_frames(X, self.angle)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()

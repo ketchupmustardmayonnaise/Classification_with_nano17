@@ -28,7 +28,7 @@ parameters:
   densenet_block:
     value: [6, 12, 24, 16]
   image_size:
-    value: [61, 61]
+    value: [64, 64]
   train_mode:
     value: True
 
@@ -41,13 +41,27 @@ parameters:
     values: ["origin", "rgb", "exp", "diff"]
   use_all_sequence:
     values: [True, False]
+  augmentation_angle:
+    values: [20, 45, 90, 180]
 
   encoder:
-    values: ["resnet", "densenet"]
+    values:
+      - ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
+      - ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
+      - ["resnet", "Bottleneck", [3, 4, 6, 3]] # resnet-50
+      - ["resnet", "Bottleneck", [3, 4, 23, 3]] # resnet-101
+      - ["resnet", "Bottleneck", [3, 8, 36, 3]] # resnet-152
+      - ["densenet", 32, [6, 12, 24, 16]] # densenet
+      - ["fsnet"]
   encoder_output:
     values: [64, 128, 256]
   decoder:
-    values: ["lstm", "gru", "bidirectional_lstm"]
+    values:
+      - [True, "lstm"],
+      - [True, "gru"],
+      - [False, "bidirectional_lstm"],
+      - [False, "lstm"],
+      - [False, "gru"],
   decoder_output:
     values: [64, 128, 256]
   rnn_layer:

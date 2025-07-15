@@ -159,7 +159,7 @@ class CFDataset(Dataset):
         else: return self.img[index], self.label[index], self.force[index][2]
 
     def preprocess(self):
-        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray':
+        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray' or self.image_type.lower() == 'exp':
             for index in range(len(self.img)):
                 self.img[index] = np.array(self.img[index]).astype(np.float32)
                 self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
@@ -224,7 +224,9 @@ class CFDataset(Dataset):
 
             for frame in range(1, len(self.img[data_idx])):
                 img = alpha * self.img[data_idx][frame] + (1 - alpha) * img
-                self.img[data_idx][frame] = np.expand_dims(img, axis=0)
+                self.img[data_idx][frame] = img
+
+            self.img[data_idx] = np.expand_dims(self.img[data_idx], axis=1)
 
     def resize_image(self, size):
         result = []
