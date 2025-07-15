@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 
 # encoder
 encoder: densenet # [resnet, densenet]

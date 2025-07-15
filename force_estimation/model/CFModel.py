@@ -5,7 +5,7 @@ from force_estimation.model.lstm import *
 from torchvision import models
 
 class CFModel(nn.Module):
-    def __init__(self, encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+    def __init__(self, encoder, encoder_output,
                  decoder, rnn_layer, fc_num_layer, use_all_sequence,
                  target_indices, image_type, drop_p,
                  fc_hidden_dim = None):
@@ -17,10 +17,13 @@ class CFModel(nn.Module):
         self.use_all_sequence = use_all_sequence
 
         # Encoder
-        if encoder == 'resnet':
-            self.cnn = ResNet(BasicBlock, resnet_block, n_classes=encoder_output, image_type=image_type)
-        else:
-            self.cnn = DenseNet(block_list = densenet_block, growth_rate = densenet_growth, n_classes=encoder_output, image_type=image_type)
+        if encoder[0].lower() == 'resnet':
+            if encoder[1].lower() == "basicblock":
+                self.cnn = ResNet(BasicBlock, encoder[2], n_classes=encoder_output, image_type=image_type)
+            elif encoder[1].lower() == "bottleneck":
+                self.cnn = ResNet(Bottleneck, encoder[2], n_classes=encoder_output, image_type=image_type)
+        elif encoder[0].lower() == 'densenet':
+            self.cnn = DenseNet(block_list = encoder[2], growth_rate = int(encoder[1]), n_classes=encoder_output, image_type=image_type)
 
         # Decoder
         if decoder == 'lstm':

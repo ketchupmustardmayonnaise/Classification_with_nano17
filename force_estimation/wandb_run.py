@@ -1,6 +1,8 @@
 import argparse
 import ast
+import yaml
 from train import ForceEstimation
+import wandb
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -17,10 +19,7 @@ def parse_args():
 
     parser.add_argument('--train_mode', default=None, type=str2bool)
 
-    parser.add_argument('--encoder', default=None, type=str)
-    parser.add_argument('--resnet_block', default=None, type=ast.literal_eval)
-    parser.add_argument('--densenet_block', default=None, type=ast.literal_eval)
-    parser.add_argument('--densenet_growth', default=None, type=int)
+    parser.add_argument('--encoder', default=None, type=ast.literal_eval)
     parser.add_argument('--encoder_output', default=None, type=str)
 
     parser.add_argument('--decoder', default=None, type=str)
@@ -55,16 +54,15 @@ def parse_args():
 
     return args
 
+def wandb_sweep():
+    wandb.init(config=config)
+    cfg = wandb.config
 
-def main():
-    args = parse_args()
-
-    # argparse.Namespace → dict
-    config = vars(args)
-
-    # 실행
-    model = ForceEstimation(config)
-    model.train()
+    model = ForceEstimation(cfg)
 
 if __name__ == '__main__':
-    main()
+    f = open("sweep_use_all_sequence.yaml", 'r+', encoding='utf-8')
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+    sweep_id = wandb.sweep(sweep=config)
+    wandb.agent(sweep_id, wandb_sweep, count=25)

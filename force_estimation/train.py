@@ -32,9 +32,6 @@ class ForceEstimation:
         parser.add_argument('--train_mode', default=None, type=str2bool)
 
         parser.add_argument('--encoder', default=None, type=str)
-        parser.add_argument('--resnet_block', default=None, type=ast.literal_eval)
-        parser.add_argument('--densenet_block', default=None, type=ast.literal_eval)
-        parser.add_argument('--densenet_growth', default=None, type=int)
         parser.add_argument('--encoder_output', default=None, type=str)
 
         parser.add_argument('--decoder', default=None, type=str)
@@ -77,9 +74,6 @@ class ForceEstimation:
         image_size = [int(image_size[0]), int(image_size[1])]
 
         encoder = args.encoder if args.encoder is not None else cfg['encoder']
-        resnet_block = args.resnet_block if args.resnet_block is not None else cfg['resnet_block']
-        densenet_block = args.densenet_block if args.densenet_block is not None else cfg['densenet_block']
-        densenet_growth = int(args.densenet_growth) if args.densenet_growth is not None else cfg['densenet_growth']
         encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output']
 
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
@@ -100,7 +94,7 @@ class ForceEstimation:
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+        self.model = CFModel(encoder, encoder_output,
                              decoder, rnn_layer, fc_num_layer, self.use_all_sequence,
                              target_indices, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
@@ -119,7 +113,7 @@ class ForceEstimation:
 
             # create directories
             time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + encoder + "_" + decoder + time_suffix
+            self.save_dir = cfg['save_dir'] + "/" + encoder[0] + "_" + decoder + time_suffix
             self.log_dir = self.save_dir + '/log'
             if not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir)
@@ -157,7 +151,7 @@ class ForceEstimation:
                 self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
             self.write_basic_information( self.use_all_sequence, target_indices, stride,
                                           self.image_type, image_resize, image_size,
-                                         encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+                                         encoder, encoder_output,
                                          fc_num_layer, fc_hidden_dim,
                                          decoder, rnn_layer, decoder_output,
                                          optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
@@ -165,9 +159,6 @@ class ForceEstimation:
             # wandb
             wandb_config = {
                 "encoder": encoder,
-                "resnet_block": resnet_block,
-                "densenet_block": densenet_block,
-                "densenet_growth": densenet_growth,
                 "encoder_output": encoder_output,
 
                 "decoder": decoder,
@@ -196,6 +187,7 @@ class ForceEstimation:
 
             run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
             self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
+            wandb.watch(self, log='all')
 
             self.train()
 
@@ -205,16 +197,13 @@ class ForceEstimation:
 
     def write_basic_information(self, use_all_sequence, target_indices, stride,
                                 image_type, image_resize, image_size,
-                                encoder, resnet_block, densenet_block, densenet_growth, encoder_output,
+                                encoder, encoder_output,
                                 fc_num_layer, fc_hidden_dim,
                                 decoder, rnn_layer, decoder_output,
                                 optimizer, scheduler, dropout, batch_size, loss, learning_rate, weight_decay):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
         basic_txt_file.write(f"encoder: {encoder}\n")
-        basic_txt_file.write(f"resnet_block: {resnet_block}\n")
-        basic_txt_file.write(f"densenet_block: {densenet_block}\n")
-        basic_txt_file.write(f"densenet_growth: {densenet_growth}\n")
         basic_txt_file.write(f"encoder_output: {encoder_output}\n")
 
         basic_txt_file.write(f"use_all_sequence: {use_all_sequence}\n")
@@ -346,11 +335,13 @@ class ForceEstimation:
                 float(val_MAE),  # {:.3f}
                 improve
             ) + '\n')
-
-            self.run_log.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
+            try:
+                wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
                               "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+            except:
+                wandb.finish()
 
-        self.run_log.finish()
+        wandb.finish()
 
 
     def test(self):

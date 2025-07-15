@@ -8,15 +8,47 @@ https://velog.io/@krec7748/ResNet
 
 class BasicBlock(nn.Module):
     expansion = 1
-
     def __init__(self, in_channels, inner_channels, stride=1, projection=None):
         super().__init__()
+        self.expansion = 1
 
         self.residual = nn.Sequential(
             nn.Conv2d(in_channels, inner_channels, 3, stride=stride, padding=1, bias=False),
             nn.BatchNorm2d(inner_channels),
             nn.ReLU(),
             nn.Conv2d(inner_channels, inner_channels * self.expansion, 3, padding=1, bias=False),
+            nn.BatchNorm2d(inner_channels * self.expansion),
+        )
+
+        self.projection = projection
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        residual = self.residual(x)
+
+        if self.projection is not None:
+            skip_connection = self.projection(x)
+        else:
+            skip_connection = x
+
+        out = self.relu(residual + skip_connection)
+        return out
+
+
+class Bottleneck(nn.Module):
+    expansion = 4
+    def __init__(self, in_channels, inner_channels, stride=1, projection=None):
+        super().__init__()
+        self.expansion = 4
+
+        self.residual = nn.Sequential(
+            nn.Conv2d(in_channels, inner_channels, 1, stride=stride, bias=False),
+            nn.BatchNorm2d(inner_channels),
+            nn.ReLU(),
+            nn.Conv2d(inner_channels, inner_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(inner_channels),
+            nn.ReLU(),
+            nn.Conv2d(inner_channels, inner_channels * self.expansion, 1, bias=False),
             nn.BatchNorm2d(inner_channels * self.expansion),
         )
 
