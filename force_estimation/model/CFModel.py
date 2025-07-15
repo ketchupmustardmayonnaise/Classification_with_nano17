@@ -41,17 +41,39 @@ class CFModel(nn.Module):
             else: self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence, bidirectional=True)
 
         fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' and not self.use_all_sequence else encoder_output
-        if fc_num_layer > 1:
+
+        if fc_num_layer == 1:
+            self.bn = torch.nn.BatchNorm1d(fc_input_size)
+            self.dropout = nn.Dropout(drop_p)
+            self.output = nn.Linear(fc_input_size, 1)
+        elif fc_num_layer == 2:
             assert fc_hidden_dim is not None
             self.input = nn.Linear(fc_input_size, fc_hidden_dim)
             self.hidden_layer = nn.Linear(fc_hidden_dim, fc_hidden_dim)
             self.bn = torch.nn.BatchNorm1d(fc_hidden_dim)
             self.dropout = nn.Dropout(drop_p)
             self.output = nn.Linear(fc_hidden_dim, 1)
-        elif fc_num_layer == 1:
-            self.bn = torch.nn.BatchNorm1d(fc_input_size)
-            self.dropout = nn.Dropout(drop_p)
-            self.output = nn.Linear(fc_input_size, 1)
+        elif fc_num_layer == 3:
+            assert fc_hidden_dim is not None
+            self.input = nn.Linear(fc_input_size, fc_hidden_dim)
+            self.hidden_layer = nn.Linear(fc_hidden_dim, fc_hidden_dim)
+            self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            self.dropout1 = nn.Dropout(drop_p)
+            self.dropout2 = nn.Dropout(drop_p)
+            self.output = nn.Linear(fc_hidden_dim, 1)
+        elif fc_num_layer == 4:
+            assert fc_hidden_dim is not None
+            self.input = nn.Linear(fc_input_size, fc_hidden_dim)
+            self.hidden_layer1 = nn.Linear(fc_hidden_dim, fc_hidden_dim)
+            self.hidden_layer2 = nn.Linear(fc_hidden_dim, fc_hidden_dim)
+            self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            self.bn3 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            self.dropout1 = nn.Dropout(drop_p)
+            self.dropout2 = nn.Dropout(drop_p)
+            self.dropout3 = nn.Dropout(drop_p)
+            self.output = nn.Linear(fc_hidden_dim, 1)
 
     def forward(self, input):
         # input size = (batch, frame, channel, height, width)
@@ -61,23 +83,42 @@ class CFModel(nn.Module):
         x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if not self.use_all_sequence else x
         x = self.rnn(x)
 
-        if self.fc_num_layer > 1:
+        if self.fc_num_layer == 1:
+            if not self.use_all_sequence: x = self.bn(x)
+            x = self.dropout(x)
+            x = self.output(x)
+
+        elif self.fc_num_layer == 2:
             x = self.input(x)
-
-            for index in range(self.fc_num_layer - 1):
-                if self.use_all_sequence: x = self.bn(x)
-                x = F.relu(x)
-                x = self.dropout(x)
-                x = self.hidden_layer(x)
-
-            if self.use_all_sequence: x = self.bn(x)
+            if not self.use_all_sequence: x = self.bn(x)
             x = F.relu(x)
             x = self.dropout(x)
             x = self.output(x)
 
-        else:
-            if self.use_all_sequence: x = self.bn(x)
-            x = self.dropout(x)
+        elif self.fc_num_layer == 3:
+            x = self.input(x)
+            if not self.use_all_sequence: x = self.bn1(x)
+            x = F.relu(x)
+            x = self.dropout1(x)
+            x = self.hidden_layer(x)
+            if not self.use_all_sequence: x = self.bn2(x)
+            x = F.relu(x)
+            x = self.dropout2(x)
+            x = self.output(x)
+
+        elif self.fc_num_layer == 4:
+            x = self.input(x)
+            if not self.use_all_sequence: x = self.bn1(x)
+            x = F.relu(x)
+            x = self.dropout1(x)
+            x = self.hidden_layer1(x)
+            if not self.use_all_sequence: x = self.bn2(x)
+            x = F.relu(x)
+            x = self.dropout2(x)
+            x = self.hidden_layer2(x)
+            if not self.use_all_sequence: x = self.bn3(x)
+            x = F.relu(x)
+            x = self.dropout3(x)
             x = self.output(x)
 
         return x

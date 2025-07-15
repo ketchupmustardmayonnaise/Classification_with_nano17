@@ -19,14 +19,8 @@ parameters:
     value: "../dataset/two/test"
   save_dir:
     value: "../saved_models"
-  densenet_growth:
-    value: 32
   scheduler:
     value: None
-  resnet_block: 
-    value: [2, 2, 2, 2]
-  densenet_block:
-    value: [6, 12, 24, 16]
   image_resize:
     value: True
   image_size:
@@ -68,7 +62,7 @@ parameters:
     values: [1, 2, 3]
 
   fc_num_layer:
-    values: [1, 2, 3]
+    values: [1, 2, 3, 4]
   fc_hidden_dim:
     values: [64, 128, 256]  
 
