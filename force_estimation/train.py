@@ -5,6 +5,7 @@ import argparse
 import torchinfo
 import yaml
 import ast
+import shutil
 from torch.optim import lr_scheduler
 
 import wandb
@@ -26,10 +27,23 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def copy_config(dir):
+    # 현재 파일 위치 기준으로 config.yaml 경로 설정
+    current_dir = os.getcwd()  # 또는 원하는 기준 경로
+    src_path = os.path.join(current_dir, "config.yaml")
+
+    # 복사할 대상 경로
+    dst_dir = dir
+    dst_path = os.path.join(dst_dir, "config.yaml")
+
+    # 복사 실행
+    shutil.copy(src_path, dst_path)
+
 class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
         parser.add_argument('--train_mode', default=None, type=str2bool)
+        # parser.add_argument('--use_wandb', default=None, type=str2bool)
 
         parser.add_argument('--encoder', default=None, type=str)
         parser.add_argument('--encoder_output', default=None, type=str)
@@ -66,6 +80,7 @@ class ForceEstimation:
 
         # parameters
         train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
+        # self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb']
         target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices']
         stride = int(args.stride) if args.stride is not None else cfg['stride']
         self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
@@ -108,6 +123,7 @@ class ForceEstimation:
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
         if train_mode:
+            self.best_epoch = 0
             self.num_epoch = args.num_epoch if args.num_epoch is not None else cfg['num_epoch']
             self.learning_rate = args.learning_rate if args.learning_rate is not None else cfg['learning_rate']
             self.learning_rate = float(self.learning_rate)
@@ -121,6 +137,7 @@ class ForceEstimation:
                 os.makedirs(self.save_dir)
             if not os.path.exists(self.log_dir):
                 os.makedirs(self.log_dir)
+            copy_config(self.save_dir)
 
             # force_estimation dataset
             self.train_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
@@ -158,6 +175,7 @@ class ForceEstimation:
                                          decoder, rnn_layer, decoder_output,
                                          optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
 
+            #if self.use_wandb:
             # wandb
             wandb_config = {
                 "encoder": encoder,
@@ -189,13 +207,14 @@ class ForceEstimation:
 
             run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
             self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
-            # wandb.watch(self, log='all')
 
             self.train()
 
         else:
+            self.save_dir = cfg['model_dir']
             self.model.load_state_dict(torch.load(cfg['model_dir']))
-            self.test()
+            epoch_idx = cfg['model_dir'].find("epoch")
+            self.test(cfg['model_dir'][:epoch_idx-1])
 
     def write_basic_information(self, use_all_sequence, target_indices, stride,
                                 image_type, image_resize, image_size,
@@ -260,8 +279,6 @@ class ForceEstimation:
               ' Test MSE: {:.3f}, Test MAE: {:.3f}, {}'
 
         val_best_loss = 1e10
-        train_txt_path = self.save_dir + "/train.txt"
-        train_txt_file = open(train_txt_path, 'a')
 
         for epoch in range(self.num_epoch):
             self.model.train()
@@ -303,14 +320,17 @@ class ForceEstimation:
 
             # best model select
             if self.loss_type == "MAE" and val_MAE < val_best_loss:
+                self.best_epoch = epoch + 1
                 val_best_loss = val_MAE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE" and val_MSE < val_best_loss:
+                self.best_epoch = epoch + 1
                 val_best_loss = val_MSE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
+                self.best_epoch = epoch + 1
                 val_best_loss = (val_MSE + val_MAE) / 2
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
@@ -327,26 +347,33 @@ class ForceEstimation:
                 improve
             ))
 
-            train_txt_file.write(msg.format(
-                epoch + 1,  # {}/{} 중 첫 번째
-                self.num_epoch,  # {}/{} 중 두 번째
-                float(self.learning_rate),
-                float(np.mean(MSE)),  # {:.3f}
-                float(np.mean(MAE)),  # {:.3f}
-                float(val_MSE),  # {:.3f}
-                float(val_MAE),  # {:.3f}
-                improve
-            ) + '\n')
+            train_txt_path = self.save_dir + "/train.txt"
+            with open(train_txt_path, 'a') as train_txt_file:
+                train_txt_file.write(msg.format(
+                    epoch + 1,
+                    self.num_epoch,
+                    float(self.learning_rate),
+                    float(np.mean(MSE)),
+                    float(np.mean(MAE)),
+                    float(val_MSE),
+                    float(val_MAE),
+                    improve
+                ) + '\n')
+
+            #if self.use_wandb:
             try:
                 wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
                               "validation_MSE": val_MSE, "validation_MAE": val_MAE})
             except:
                 wandb.finish()
 
+        self.model.load_state_dict(torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch)))
+        self.test(self.save_dir)
+        #if self.use_wandb: wandb.finish()
         wandb.finish()
 
 
-    def test(self):
+    def test(self, save_dir):
         self.model.eval()
         MSE = 0
         MAE = 0
@@ -373,27 +400,31 @@ class ForceEstimation:
                     MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(),
                                                        reduction='mean').item()
 
-        #f = sum(f, [])
-        #pf = sum(pf, [])
+        if self.use_all_sequence:
+            f = sum(f, [])
+            pf = sum(pf, [])
 
-        i = 0
-        start = 12
-        end = start + 12
+        for start in range(0, 40, 12):
+            i = 0
+            end = start + 12
 
-        for index in range(40):
-            _f = f[i : i + self.test_dataset.frame[index]]
-            _pf = pf[i : i + self.test_dataset.frame[index]]
-            if index > start and index <= end:
-                plt.subplot(3, 4, index - start)
-                plt.plot(np.array(_f), color='r', label='Force')
-                plt.plot(np.array(_pf), color='b', label='Predicted Force')
-            i += self.test_dataset.frame[index]
+            for index in range(40):
+                _f = f[i : i + self.test_dataset.frame[index]]
+                _pf = pf[i : i + self.test_dataset.frame[index]]
+                if index > start and index <= end:
+                    plt.subplot(3, 4, index - start)
+                    plt.plot(np.array(_f), color='r', label='Force')
+                    plt.plot(np.array(_pf), color='b', label='Predicted Force')
+                i += self.test_dataset.frame[index]
+
+            plt.legend()
+            plt.savefig(save_dir + f'/test_{int(start / 12) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
+                format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
+            plt.show()
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
         print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
-        plt.legend()
-        plt.show()
         return MSE, MAE
 
 if __name__ == '__main__':

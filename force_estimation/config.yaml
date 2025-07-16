@@ -1,7 +1,8 @@
-train_mode: False
+train_mode: True
+use_wandb: True
 
 # encoder
-encoder: ['resnet', 'Bottleneck', [3, 4, 6, 3]]
+encoder: ["densenet", 32, [6, 12, 24, 16]]
 # ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
 # ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
 # ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
@@ -13,37 +14,37 @@ encoder_output: 256
 
 # decoder
 decoder: !!python/tuple
-  - False # 하나의 시퀀스를 연속적으로 학습할 것인지?
-  - bidirectional_lstm # [lstm, gru, bidirectional_lstm]
-rnn_layer: 1
-decoder_output: 64
+  - True # 하나의 시퀀스를 연속적으로 학습할 것인지?
+  - lstm # [lstm, gru, bidirectional_lstm]
+rnn_layer: 2
+decoder_output: 128
 
 # fully connected layer
 fc_num_layer: 1
-fc_hidden_dim: 64
+fc_hidden_dim: 128
 
 # image
 target_indices: 5 # 몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 90
 
-image_type: rgb # [origin, rgb, diff, exp]
+image_type: diff # [origin, rgb, diff, exp, exp_diff, exp_rgb]
 image_resize: True
 image_size: !!python/tuple
-  - 64
-  - 64
+  - 61
+  - 61
 
 # directory
 train_data_dir: ../dataset/two/train
 val_data_dir: ../dataset/two/val
 test_data_dir: ../dataset/two/test
 save_dir: ../saved_models
-model_dir: ../saved_models/resnet_bidirectional_lstm_07-16_03-19-54/epoch_18.pt
+model_dir: ../saved_models/★ densenet_lstm_07-14_22-43-36/epoch_24.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
 batch_size: 1
-num_epoch: 100000
+num_epoch: 1
 learning_rate: 0.0001
 weight_decay: 0.01
 dropout: 0.3

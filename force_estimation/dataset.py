@@ -335,5 +335,3 @@ class CFDataset(Dataset):
 
                     self.img[index] = img
                     self.force[index] = force
-
-CFDataset(5, 1, image_type='exp_diff', path='./../dataset/15frame')

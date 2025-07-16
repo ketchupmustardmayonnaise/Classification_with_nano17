@@ -34,7 +34,7 @@ parameters:
   stride:
     values: [1, 3, 5]
   image_type:
-    values: ["origin", "rgb", "exp", "diff"]
+    values: ["origin", "rgb", "exp", "diff", "exp_diff", "exp_rgb"]
   augmentation_angle:
     values: [20, 45, 90, 180]
 
