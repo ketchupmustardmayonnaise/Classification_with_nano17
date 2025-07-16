@@ -373,11 +373,11 @@ class ForceEstimation:
                     MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(),
                                                        reduction='mean').item()
 
-        # f = sum(f, [])
-        # pf = sum(pf, [])
+        #f = sum(f, [])
+        #pf = sum(pf, [])
 
         i = 0
-        start = 24
+        start = 12
         end = start + 12
 
         for index in range(40):
