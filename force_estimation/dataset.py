@@ -15,7 +15,7 @@ IMG_MAX = 512
 IMG_MAX_DIFF = 60
 
 class CFDataset(Dataset):
-    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize='False', image_size=(28, 28), image_type='RGB', path='./data/origin'):
+    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_indices = target_indices
         self.stride = stride
         self.use_all_sequence = use_all_sequence
@@ -102,33 +102,16 @@ class CFDataset(Dataset):
                     img.append(np.expand_dims(self.img[idx][frame], axis=0))
                 self.img[idx] = np.array(img, dtype=np.float32)
 
-            '''
-            flattened = np.concatenate([arr.flatten() for arr in self.img])
-
-            indices = np.where(abs(flattened) < 10)[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where((abs(flattened) >= 10) & (abs(flattened) < 20))[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where((abs(flattened) >= 20) & (abs(flattened) < 30))[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where((abs(flattened) >= 30) & (abs(flattened) < 40))[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where((abs(flattened) >= 40) & (abs(flattened) < 50))[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where((abs(flattened) >= 50) & (abs(flattened) < 60))[0]
-            print(len(indices) / len(flattened))
-
-            indices = np.where(abs(flattened) >= 60)[0]
-            print(len(indices) / len(flattened))
-            '''
-
         elif image_type.lower() == 'exp':
-            self.exponential_filter(0.7)
+            self.img = self.exponential_filter(0.5)
+
+        elif image_type.lower() == 'exp_rgb':
+            self.img = self.exponential_filter(0.5)
+            self.divide_3_channels()
+
+        elif image_type.lower() == 'exp_diff':
+            self.img = self.exponential_filter(0.5)
+            self.image_to_diff()
 
         else: # origin
             for idx in range(len(self.img)):
@@ -218,15 +201,19 @@ class CFDataset(Dataset):
         return result
 
     def exponential_filter(self, alpha):
+        result = []
         for data_idx in range(len(self.img)):
+            one_data_result = []
             img = alpha * self.img[data_idx][0]
-            self.img[data_idx][0] = img
+            one_data_result.append(img)
 
             for frame in range(1, len(self.img[data_idx])):
                 img = alpha * self.img[data_idx][frame] + (1 - alpha) * img
-                self.img[data_idx][frame] = img
+                one_data_result.append(img)
 
-            self.img[data_idx] = np.expand_dims(self.img[data_idx], axis=1)
+            result.append(np.expand_dims(np.array(one_data_result), axis=1))
+
+        return result
 
     def resize_image(self, size):
         result = []
@@ -348,3 +335,5 @@ class CFDataset(Dataset):
 
                     self.img[index] = img
                     self.force[index] = force
+
+CFDataset(5, 1, image_type='exp_diff', path='./../dataset/15frame')

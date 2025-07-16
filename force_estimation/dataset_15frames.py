@@ -15,7 +15,7 @@ IMG_MAX = 512
 IMG_MAX_DIFF = 60
 
 class CFDataset(Dataset):
-    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize='False', image_size=(28, 28), image_type='RGB', path='./data/origin'):
+    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_indices = target_indices
         self.stride = stride
         self.use_all_sequence = use_all_sequence
@@ -26,7 +26,6 @@ class CFDataset(Dataset):
         self.label = []
 
         self.frame = []
-        img_temp = []
 
         self.img_timestamp = []
         self.force_timestamp = []
@@ -67,8 +66,10 @@ class CFDataset(Dataset):
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
 
                         # underflow 된 데이터들 0으로 처리
-                        img = np.array(img)
-                        img[img >= 65000] = 0
+                        img = [
+                            [0 if x >= 60000 else x for x in inner]
+                            for inner in img
+                        ]
 
                         try:
                             # force 저장
@@ -80,8 +81,7 @@ class CFDataset(Dataset):
                                 self.force.append(np.array(list(lines[line_index][2 + 2 * frame:: 2])))
 
                             # img 및 label 저장
-                            self.img.append(np.array(img, dtype=np.float32).reshape((frame, 15, 10, 8)))
-                            img_temp.append(np.array(img, dtype=np.float32).reshape((frame, 15, 10, 8))[:, -1:, :, :])
+                            self.img.append(np.array(img, dtype=np.float32).reshape((frame, 10, 8)))
                             self.img_timestamp.append(list(map(float, lines[line_index][1: 2 + 2 * (frame - 1): 2])))
                             self.label.append(int(label))
                         except:
@@ -89,50 +89,7 @@ class CFDataset(Dataset):
 
                         line_index += 1
 
-        #self.image_exponential_filter(0.9)
-
-        for data in range(len(img_temp)):
-            one_img = img_temp[data]
-            filtered_img = np.copy(one_img)
-            sums = filtered_img.sum(axis=(1, 2, 3))
-            valid_indices = np.where(sums < 500)[0]
-            filtered_img[valid_indices] = np.zeros((1, 10, 8))
-
-            # 프레임 수
-            n_frames = len(one_img)
-            n_filtered = len(filtered_img)
-            max_frames = max(n_frames, n_filtered)
-
-            for i in range(max_frames):
-                # 원본 이미지 준비
-                original = one_img[i].squeeze().astype(np.uint8)
-                filtered = filtered_img[i].squeeze().astype(np.uint8)
-
-                # 이미지 크기 맞추기 (회색조 → 컬러)
-                original_color = cv2.cvtColor(original, cv2.COLOR_GRAY2BGR)
-                original_color = cv2.resize(original_color, (500, 500))
-                filtered_color = cv2.cvtColor(filtered, cv2.COLOR_GRAY2BGR)
-                filtered_color = cv2.resize(filtered_color, (500, 500))
-
-                # 텍스트 추가
-                cv2.putText(original_color, f"{data}th data, 100 upper {i}", (5, 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-                cv2.putText(filtered_color, f"{data}th data, 500 upper {i}", (5, 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-
-                # 좌우로 붙이기
-                combined = np.hstack((original_color, filtered_color))
-
-                # 보여주기
-                cv2.imshow("Original vs Filtered", combined)
-                key = cv2.waitKey(50)  # 1000ms 동안 보여줌 (1초)
-
-                # ESC 누르면 중단
-                if key == 27:
-                    break
-
-        cv2.destroyAllWindows()
-
+        print(sum(self.frame))
         self.force_zero_calibration()
 
         if image_type.lower() == 'rgb':
@@ -144,7 +101,19 @@ class CFDataset(Dataset):
                 for frame in range(len(self.img[idx])):
                     img.append(np.expand_dims(self.img[idx][frame], axis=0))
                 self.img[idx] = np.array(img, dtype=np.float32)
-        else:
+
+
+        elif image_type.lower() == 'exp':
+
+            img_3 = self.exponential_filter(0.3)
+
+            img_5 = self.exponential_filter(0.5)
+
+            img_7 = self.exponential_filter(0.7)
+
+            img_9 = self.exponential_filter(0.9)
+
+        else: # origin
             for idx in range(len(self.img)):
                 img = []
                 for frame in range(len(self.img[idx])):
@@ -153,6 +122,22 @@ class CFDataset(Dataset):
 
         if image_resize:
             self.img = self.resize_image(image_size)
+
+        origin_center = self.img[5][:, 5, 4]
+        filtered_center3 = img_3[5][:, :, 5, 4]
+        filtered_center5 = img_5[5][:, :, 5, 4]
+        filtered_center7 = img_7[5][:, :, 5, 4]
+        filtered_center9 = img_9[5][:, :, 5, 4]
+
+        plt.plot(origin_center, label='origin')
+        plt.plot(filtered_center3, label='exp_filter_0.3')
+        plt.plot(filtered_center5, label='exp_filter_0.5')
+        plt.plot(filtered_center7, label='exp_filter_0.7')
+        plt.plot(filtered_center9, label='exp_filter_0.9')
+        plt.xlabel('frame')
+        plt.ylabel('capacitance')
+        plt.legend()
+        plt.show()
 
         self.force = self.apply_butterworth_filter()
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
@@ -169,19 +154,11 @@ class CFDataset(Dataset):
         return len(self.img)
 
     def __getitem__(self, index):
-        if self.use_all_sequence: return self.img[index], self.label[index], self.force[index][:, 2]
-        else: return self.img[index], self.label[index], self.force[index][2]
-
-    def image_exponential_filter(self, a):
-        assert a > 0 and a < 1
-        for data_idx in range(len(self.img)):
-            img = self.img[data_idx][:, 0]
-            for frame in range(1, 14, 1):
-                img = a * self.img[data_idx][:, frame] + (1 - a) * img
-            self.img[data_idx] = img
+        if self.use_all_sequence: return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
+        else: return np.array(self.img[index]), self.label[index], self.force[index][2]
 
     def preprocess(self):
-        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray':
+        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray' or self.image_type.lower() == 'exp':
             for index in range(len(self.img)):
                 self.img[index] = np.array(self.img[index]).astype(np.float32)
                 self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
@@ -237,6 +214,21 @@ class CFDataset(Dataset):
                 plt.show()
                 plt.pause(5)
             '''
+        return result
+
+    def exponential_filter(self, alpha):
+        result = []
+        for data_idx in range(len(self.img)):
+            one_data_result = []
+            img = alpha * self.img[data_idx][0]
+            one_data_result.append(img)
+
+            for frame in range(1, len(self.img[data_idx])):
+                img = alpha * self.img[data_idx][frame] + (1 - alpha) * img
+                one_data_result.append(img)
+
+            result.append(np.expand_dims(np.array(one_data_result), axis=1))
+
         return result
 
     def resize_image(self, size):
@@ -360,4 +352,4 @@ class CFDataset(Dataset):
                     self.img[index] = img
                     self.force[index] = force
 
-CFDataset(5, 1, path='./../dataset/15frame')
+CFDataset(5, 1, image_type='exp', path='./../dataset/15frame')
