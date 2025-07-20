@@ -7,6 +7,11 @@ from force_estimation.model.fsnet import *
 import torch.nn.functional as F
 from torchvision import models
 
+# encoder(cnn), lstm, fully-connected layer 모두를 합한 모델
+
+# encoder의 종류: resnet-18, resnet-34, resnet-50, resnet-101, resnet-121, densenet-121, FS-Net
+# decoder(rnn)의 종류: lstm, bidirectional-lstm, gru
+# fully-connected layer는, fc_num_layer 개수만큼 stacking (최소 1, 최대 4)
 class CFModel(nn.Module):
     def __init__(self, encoder, encoder_output,
                  decoder, rnn_layer, fc_num_layer, use_all_sequence,
@@ -84,39 +89,39 @@ class CFModel(nn.Module):
         x = self.rnn(x)
 
         if self.fc_num_layer == 1:
-            if not self.use_all_sequence: x = self.bn(x)
+            if x.shape[0] != 1: x = self.bn(x)
             x = self.dropout(x)
             x = self.output(x)
 
         elif self.fc_num_layer == 2:
             x = self.input(x)
-            if not self.use_all_sequence: x = self.bn(x)
+            if x.shape[0] != 1: x = self.bn(x)
             x = F.relu(x)
             x = self.dropout(x)
             x = self.output(x)
 
         elif self.fc_num_layer == 3:
             x = self.input(x)
-            if not self.use_all_sequence: x = self.bn1(x)
+            if x.shape[0] != 1: x = self.bn1(x)
             x = F.relu(x)
             x = self.dropout1(x)
             x = self.hidden_layer(x)
-            if not self.use_all_sequence: x = self.bn2(x)
+            if x.shape[0] != 1: x = self.bn2(x)
             x = F.relu(x)
             x = self.dropout2(x)
             x = self.output(x)
 
         elif self.fc_num_layer == 4:
             x = self.input(x)
-            if not self.use_all_sequence: x = self.bn1(x)
+            if x.shape[0] != 1: x = self.bn1(x)
             x = F.relu(x)
             x = self.dropout1(x)
             x = self.hidden_layer1(x)
-            if not self.use_all_sequence: x = self.bn2(x)
+            if x.shape[0] != 1: x = self.bn2(x)
             x = F.relu(x)
             x = self.dropout2(x)
             x = self.hidden_layer2(x)
-            if not self.use_all_sequence: x = self.bn3(x)
+            if x.shape[0] != 1: x = self.bn3(x)
             x = F.relu(x)
             x = self.dropout3(x)
             x = self.output(x)

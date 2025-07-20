@@ -65,7 +65,7 @@ class CFDataset(Dataset):
                         self.frame.append(frame)
                         img = list(lines[line_index][2: 2 + 2 * frame: 2])
 
-                        # underflow 된 데이터들 0으로 처리
+                        # capacitive image에서 underflow 된 데이터들 0으로 처리
                         img = [
                             [0 if x >= 60000 else x for x in inner]
                             for inner in img
@@ -90,8 +90,14 @@ class CFDataset(Dataset):
                         line_index += 1
 
         print(sum(self.frame))
+        # force data에서, 첫 번째 force로 나머지를 뺌 (초기값 보정)
         self.force_zero_calibration()
 
+        # 설정한 image_type에 맞게 이미지를 바꿈
+
+        # origin: 그냥 원본 capacitance 이미지 그대로 씀
+        # diff: 현재 이미지에서, 이전 t-1시점의 이미지를 뺀 이미지를 씀
+        # rgb: 원본 이미지는 R 채널로, diff 이미지에서 양수는 G 채널로, diff 이미지에서 음수는 부호 바꿔서 B 채널로
         if image_type.lower() == 'rgb':
             self.divide_3_channels()
         elif image_type.lower() == 'diff':
@@ -101,33 +107,28 @@ class CFDataset(Dataset):
                 for frame in range(len(self.img[idx])):
                     img.append(np.expand_dims(self.img[idx][frame], axis=0))
                 self.img[idx] = np.array(img, dtype=np.float32)
-
-        elif image_type.lower() == 'exp':
-            self.img = self.exponential_filter(0.5)
-
-        elif image_type.lower() == 'exp_rgb':
-            self.img = self.exponential_filter(0.5)
-            self.divide_3_channels()
-
-        elif image_type.lower() == 'exp_diff':
-            self.img = self.exponential_filter(0.5)
-            self.image_to_diff()
-
-        else: # origin
+        elif image_type.lower() == 'origin':
             for idx in range(len(self.img)):
                 img = []
                 for frame in range(len(self.img[idx])):
                     img.append(np.expand_dims(self.img[idx][frame], axis=0))
                 self.img[idx] = np.array(img, dtype=np.float32)
+        else: raise Exception('Unknown image type')
 
+        # cap 이미지가 (10, 8)이기 때문에 너무 작아서 확대
         if image_resize:
             self.img = self.resize_image(image_size)
 
+        # force data에 low-pass filter를 걺
         self.force = self.apply_butterworth_filter()
+        # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
+        # use_all_sequence가 아니라면, 이미지를 target_index 씩 자름
         if not use_all_sequence: self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label)
 
+        # force값을 clipping함. 0 이상인 것은 0으로, -6 이하인 것은 -6으로.
         self.outlier_filter()
+        # capacitance 각각을 IMG_MAX로 나눔 (origin, rgb의 경우 512, diff의 경우 60)
         self.preprocess()
 
         # label
@@ -142,7 +143,7 @@ class CFDataset(Dataset):
         else: return np.array(self.img[index]), self.label[index], self.force[index][2]
 
     def preprocess(self):
-        if self.image_type.lower == 'rgb' or self.image_type.lower() == 'gray' or self.image_type.lower() == 'exp':
+        if self.image_type.lower() == 'rgb' or self.image_type.lower() == 'origin':
             for index in range(len(self.img)):
                 self.img[index] = np.array(self.img[index]).astype(np.float32)
                 self.img[index] = np.where(self.img[index] >= IMG_MAX, 1.0, self.img[index] / IMG_MAX)
@@ -152,6 +153,9 @@ class CFDataset(Dataset):
             for index in range(len(self.img)):
                 self.img[index] = np.array(self.img[index]).astype(np.float32)
                 self.img[index] = np.where(self.img[index] >= IMG_MAX_DIFF, 1.0, self.img[index] / IMG_MAX_DIFF)
+
+        else:
+            raise Exception('Unknown image type')
 
 
     def interpolate_nano_to_capacitance(self, capacitance_data, force_data, capacitance_timestamp, force_timestamp):
@@ -296,6 +300,7 @@ class CFDataset(Dataset):
         force = []
         label = []
 
+        previous_frame = 0
         for index in range(len(original_img)):
             frame = 0
             while frame + self.target_indices < len(original_img[index]):
@@ -306,7 +311,8 @@ class CFDataset(Dataset):
                 label.append(original_label[index])
                 frame += self.stride
 
-            self.frame[index] = int((self.frame[index] - self.target_indices) / self.stride)
+            self.frame[index] = len(img) - previous_frame
+            previous_frame = len(img)
 
         return img, np.array(force), label
 

@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--train_mode', default=None, type=str2bool)
-    # parser.add_argument('--use_wandb', default=None, type=str2bool)
+    parser.add_argument('--use_wandb', default=None, type=str2bool)
 
     parser.add_argument('--encoder', default=None, type=ast.literal_eval)
     parser.add_argument('--encoder_output', default=None, type=str)
@@ -65,5 +65,5 @@ if __name__ == '__main__':
     f = open("sweep.yaml", 'r+', encoding='utf-8')
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-    # sweep_id = wandb.sweep(sweep=config)
-    wandb.agent('dgzvjo57', wandb_sweep, count=30)
+    sweep_id = wandb.sweep(sweep=config)
+    wandb.agent(sweep_id, wandb_sweep, count=30)

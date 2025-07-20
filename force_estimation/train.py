@@ -43,7 +43,7 @@ class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
         parser.add_argument('--train_mode', default=None, type=str2bool)
-        # parser.add_argument('--use_wandb', default=None, type=str2bool)
+        parser.add_argument('--use_wandb', default=None, type=str2bool)
 
         parser.add_argument('--encoder', default=None, type=str)
         parser.add_argument('--encoder_output', default=None, type=str)
@@ -79,33 +79,38 @@ class ForceEstimation:
         args = parser.parse_args()
 
         # parameters
-        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode']
-        # self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb']
-        target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices']
-        stride = int(args.stride) if args.stride is not None else cfg['stride']
-        self.image_type = args.image_type if args.image_type is not None else cfg['image_type']
-        image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize']
-        image_size = args.image_size if args.image_size is not None else cfg['image_size']
+        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode'] # true일 때만 학습 (bool)
+        self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb'] # wandb에 올릴 것인지 (bool)
+        target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices'] # 몇 frame으로 자를 것인지 (bool)
+        stride = int(args.stride) if args.stride is not None else cfg['stride'] # 몇 frame만큼 띄워서 학습할 것인지 (int)
+        self.image_type = args.image_type if args.image_type is not None else cfg['image_type'] # origin, rgb, diff (str)
+        image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize'] # 이미지를 확대할 것인지 (bool)
+        image_size = args.image_size if args.image_size is not None else cfg['image_size'] # 확대한다면, 이미지를 얼마나 확대할 것인지 (int, int)
         image_size = [int(image_size[0]), int(image_size[1])]
-        self.angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle']
+        self.augmentation_angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle'] # online augmentation 시, 각도 최대치 (int)
 
-        encoder = args.encoder if args.encoder is not None else cfg['encoder']
-        encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output']
+        encoder = args.encoder if args.encoder is not None else cfg['encoder'] # 어떤 cnn을 쓸 것인지 (str)
+        encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output'] # cnn에서 결과적으로 나온 embedding_vector의 차원 (int)
 
+        # decoder: (bool, str)
+        # 첫 번째 parameter: use_all_sequence (하나의 데이터 시퀀스를 모두 순차적으로 학습할 것인지) (bool)
+        # 두 번째 parameter: 어떤 시계열 모델을 사용할 것인지 (str)
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer']
-        decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output']
+        rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer'] # 시계열 모델 내 layer의 개수 (int)
+        decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output'] # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
 
-        self.use_all_sequence = decoder[0]
-        decoder = decoder[1]
-        fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer']
-        fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim']
+        self.use_all_sequence = decoder[0] # 하나의 데이터 시퀀스를 모두 순차적으로 학습할 것인지 (bool)
+        decoder = decoder[1] # 어떤 시계열 모델을 사용할 것인지
+
+        fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer'] # fully-connected layer의 개수 (int)
+        fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim'] # fully-connected layer의 hidden layer의 dimension 개수
 
         optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
         scheduler = args.scheduler if args.scheduler is not None else cfg['scheduler']
         self.num_epoch = int(args.num_epoch) if args.num_epoch else cfg['num_epoch']
         dropout = float(args.dropout) if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
+        # use_all_sequence = True라면 batch_size=1로 고정됨. 각 시퀀스마다 길이가 다른데, tensor는 같은 크기의 데이터만 담을 수 있기 때문
         self.batch_size = int(self.batch_size) if self.use_all_sequence is False else 1
         self.loss_type = args.loss if args.loss is not None else cfg['loss']
 
@@ -139,11 +144,11 @@ class ForceEstimation:
                 os.makedirs(self.log_dir)
             copy_config(self.save_dir)
 
-            # force_estimation dataset
+            # train dataset
             self.train_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
-            # force_estimation dataset
+            # validation dataset
             self.val_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['val_data_dir'])
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
@@ -168,45 +173,46 @@ class ForceEstimation:
             # loss
             if self.loss_type != "MSE+MAE":
                 self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information( self.use_all_sequence, target_indices, stride,
-                                          self.image_type, image_resize, image_size,
+            self.write_basic_information( self.use_wandb, self.use_all_sequence, target_indices, stride,
+                                          self.image_type, image_resize, image_size, self.augmentation_angle,
                                          encoder, encoder_output,
                                          fc_num_layer, fc_hidden_dim,
                                          decoder, rnn_layer, decoder_output,
                                          optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
 
-            #if self.use_wandb:
-            # wandb
-            wandb_config = {
-                "encoder": encoder,
-                "encoder_output": encoder_output,
+            if self.use_wandb:
+                # wandb
+                wandb_config = {
+                    "encoder": encoder,
+                    "encoder_output": encoder_output,
 
-                "decoder": decoder,
-                "rnn_layer": rnn_layer,
-                "decoder_output": decoder_output,
+                    "decoder": decoder,
+                    "rnn_layer": rnn_layer,
+                    "decoder_output": decoder_output,
 
-                "fc_num_layer": fc_num_layer,
-                "fc_hidden_dim": fc_hidden_dim,
+                    "fc_num_layer": fc_num_layer,
+                    "fc_hidden_dim": fc_hidden_dim,
 
-                "use_all_sequence": self.use_all_sequence,
-                "target_indices": target_indices,
-                "stride": stride,
+                    "use_all_sequence": self.use_all_sequence,
+                    "target_indices": target_indices,
+                    "stride": stride,
 
-                "image_type": self.image_type,
-                "image_resize": image_resize,
-                "image_size": image_size,
+                    "image_type": self.image_type,
+                    "image_resize": image_resize,
+                    "image_size": image_size,
+                    "augmentation_angle": self.augmentation_angle,
 
-                "optimizer": optimizer,
-                "scheduler": scheduler,
-                "batch_size": self.batch_size,
-                "learning_rate": self.learning_rate,
-                "weight_decay": weight_decay,
-                "dropout": dropout,
-                "loss": self.loss_type,
-            }
+                    "optimizer": optimizer,
+                    "scheduler": scheduler,
+                    "batch_size": self.batch_size,
+                    "learning_rate": self.learning_rate,
+                    "weight_decay": weight_decay,
+                    "dropout": dropout,
+                    "loss": self.loss_type,
+                }
 
-            run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
-            self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
+                run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
+                self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
 
             self.train()
 
@@ -216,40 +222,42 @@ class ForceEstimation:
             epoch_idx = cfg['model_dir'].find("epoch")
             self.test(cfg['model_dir'][:epoch_idx-1])
 
-    def write_basic_information(self, use_all_sequence, target_indices, stride,
-                                image_type, image_resize, image_size,
+    def write_basic_information(self, use_wandb, use_all_sequence, target_indices, stride,
+                                image_type, image_resize, image_size, augmentation_angle,
                                 encoder, encoder_output,
                                 fc_num_layer, fc_hidden_dim,
                                 decoder, rnn_layer, decoder_output,
                                 optimizer, scheduler, dropout, batch_size, loss, learning_rate, weight_decay):
         basic_txt_path = self.save_dir + "/basic.txt"
         basic_txt_file = open(basic_txt_path, 'a')
+        basic_txt_file.write(f"use_wandb: {use_wandb}\n\n") # wandb를 사용할 것인지?
         basic_txt_file.write(f"encoder: {encoder}\n")
-        basic_txt_file.write(f"encoder_output: {encoder_output}\n")
+        basic_txt_file.write(f"encoder_output: {encoder_output}\n\n")
 
         basic_txt_file.write(f"use_all_sequence: {use_all_sequence}\n")
         basic_txt_file.write(f"target_indices: {target_indices}\n")
-        basic_txt_file.write(f"stride: {stride}\n")
+        basic_txt_file.write(f"stride: {stride}\n\n")
 
         basic_txt_file.write(f"image_type: {image_type}\n")
         basic_txt_file.write(f"image_resize: {image_resize}\n")
         basic_txt_file.write(f"image_size: {image_size}\n")
+        basic_txt_file.write(f"augmentation_angle: {augmentation_angle}\n\n")
 
         basic_txt_file.write(f"decoder: {decoder}\n")
         basic_txt_file.write(f"rnn_layer: {rnn_layer}\n")
-        basic_txt_file.write(f"decoder_output: {decoder_output}\n")
+        basic_txt_file.write(f"decoder_output: {decoder_output}\n\n")
 
         basic_txt_file.write(f"fc_num_layer: {fc_num_layer}\n")
-        basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n")
+        basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n\n")
 
         basic_txt_file.write(f"optimizer: {optimizer}\n")
         basic_txt_file.write(f"scheduler: {scheduler}\n")
-        basic_txt_file.write(f"dropout: {dropout}\n")
+        basic_txt_file.write(f"dropout: {dropout}\n\n")
 
         basic_txt_file.write(f"loss: {loss}\n")
         basic_txt_file.write(f"batch_size: {batch_size}\n")
         basic_txt_file.write(f"learning_rate: {learning_rate}\n")
-        basic_txt_file.write(f"weight_decay: {weight_decay}\n")
+        basic_txt_file.write(f"weight_decay: {weight_decay}\n\n")
         basic_txt_file.close()
 
     def validate(self, dataloader):
@@ -287,7 +295,7 @@ class ForceEstimation:
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
                 self.model.train()
 
-                X = apply_all_frames_RGB_image(X, self.angle) if self.image_type.lower() == 'rgb' else apply_all_frames(X, self.angle)
+                X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
@@ -360,17 +368,16 @@ class ForceEstimation:
                     improve
                 ) + '\n')
 
-            #if self.use_wandb:
-            try:
-                wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                              "validation_MSE": val_MSE, "validation_MAE": val_MAE})
-            except:
-                wandb.finish()
+            if self.use_wandb:
+                try:
+                    wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
+                                  "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+                except:
+                    wandb.finish()
 
         self.model.load_state_dict(torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch)))
         self.test(self.save_dir)
-        #if self.use_wandb: wandb.finish()
-        wandb.finish()
+        if self.use_wandb: wandb.finish()
 
 
     def test(self, save_dir):
@@ -404,7 +411,7 @@ class ForceEstimation:
             f = sum(f, [])
             pf = sum(pf, [])
 
-        for start in range(0, 40, 12):
+        for start in range(0, 36, 12):
             i = 0
             end = start + 12
 
