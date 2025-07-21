@@ -14,6 +14,8 @@ num_classes = 8
 IMG_MAX = 512
 IMG_MAX_DIFF = 60
 
+clipping_per_label = np.array([0.0, 0.0, 0.0, -6.0, 0.0, 0.0, 0.0, 0.0])
+
 class CFDataset(Dataset):
     def __init__(self, target_index, stride, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_index = target_index
@@ -88,11 +90,12 @@ class CFDataset(Dataset):
 
                         line_index += 1
 
-        print(sum(self.frame))
-        # img_timestamp와 force_timestamp 기반으로, 동시에 수집한 데이터들인지 확인함
+        # img_timestamp와 force_timestamp 기반으로, 동시에 수집한 데이터들인지 확인함 (아니라면 지움)
         self.check_overlap_percentage()
         # force data에서, 첫 번째 force로 나머지를 뺌 (초기값 보정)
         self.force_zero_calibration()
+
+        print(sum(self.frame))
 
         # 설정한 image_type에 맞게 이미지를 바꿈
 
@@ -206,37 +209,6 @@ class CFDataset(Dataset):
 
             result.append(np.array(data).T)
 
-            '''
-            r = np.random.rand()
-            if r < 0.01:
-                b, a = signal.butter(2, 5 / nyq, 'low')
-                c_5 = filtfilt(b, a, temp_force[:, 2])
-                print(f"{index}, {self.label[index]}")
-
-                plt.plot(temp_force[:, 2], color='r', label='before')
-                plt.plot(data[2], color='blue', label='10 cutoff')
-                plt.plot(c_5, color='c', label='5 cutoff')
-                plt.xlabel('frame')
-                plt.ylabel('force (N)')
-                plt.legend()
-                plt.show()
-                plt.pause(5)
-            '''
-        return result
-
-    def exponential_filter(self, alpha):
-        result = []
-        for data_idx in range(len(self.img)):
-            one_data_result = []
-            img = alpha * self.img[data_idx][0]
-            one_data_result.append(img)
-
-            for frame in range(1, len(self.img[data_idx])):
-                img = alpha * self.img[data_idx][frame] + (1 - alpha) * img
-                one_data_result.append(img)
-
-            result.append(np.expand_dims(np.array(one_data_result), axis=1))
-
         return result
 
     def resize_image(self, size):
@@ -339,8 +311,11 @@ class CFDataset(Dataset):
 
     def outlier_filter(self):
         force = np.array(self.force)
+        label = np.array(self.label)
 
-        indices = np.where(force[:, 2] < -6)[0]
+        threshold = clipping_per_label[label]
+
+        indices = np.where(force[:, 2] < threshold)[0]
         force[indices, 2] = -6
 
         indices = np.where(force[:, 2] > 0)[0]

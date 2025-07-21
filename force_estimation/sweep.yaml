@@ -53,11 +53,9 @@ parameters:
     values: [64, 128, 256]
   decoder:
     values:
-      - [True, "lstm"]
-      - [True, "gru"]
-      - [False, "bidirectional_lstm"]
-      - [False, "lstm"]
-      - [False, "gru"]
+      - "lstm"]
+      - "gru"]
+      - "bidirectional_lstm"]
   decoder_output:
     values: [64, 128, 256]
   rnn_layer:

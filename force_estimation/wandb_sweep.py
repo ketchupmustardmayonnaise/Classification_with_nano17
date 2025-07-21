@@ -30,7 +30,6 @@ def parse_args():
     parser.add_argument('--fc_num_layer', default=None, type=int)
     parser.add_argument('--fc_hidden_dim', default=None, type=int)
 
-    parser.add_argument('--use_all_sequence', default=None, type=str2bool)
     parser.add_argument('--target_indices', default=None, type=int)
     parser.add_argument('--stride', default=None, type=int)
 
