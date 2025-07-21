@@ -1,4 +1,4 @@
-train_mode: True
+mode: Train
 use_wandb: False
 
 # encoder

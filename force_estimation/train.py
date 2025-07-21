@@ -7,37 +7,16 @@ import yaml
 import ast
 import shutil
 from torch.optim import lr_scheduler
-
+import numpy as np
 import wandb
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from dataset import CFDataset
+from util import *
+from Classification_with_nano17.force_estimation.dataPreprocessing import CFDataset
 from model import *
 from apply_img_augmentation import *
 
-def str2bool(v):
-    if isinstance(v, bool):
-       return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-def copy_config(dir):
-    # 현재 파일 위치 기준으로 config.yaml 경로 설정
-    current_dir = os.getcwd()  # 또는 원하는 기준 경로
-    src_path = os.path.join(current_dir, "config.yaml")
-
-    # 복사할 대상 경로
-    dst_dir = dir
-    dst_path = os.path.join(dst_dir, "config.yaml")
-
-    # 복사 실행
-    shutil.copy(src_path, dst_path)
 
 class ForceEstimation:
     def __init__(self, cfg):
@@ -79,7 +58,7 @@ class ForceEstimation:
         args = parser.parse_args()
 
         # parameters
-        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode'] # true일 때만 학습 (bool)
+        self.mode = args.train_mode if args.train_mode is not None else cfg['train_mode'] # true일 때만 학습 (bool)
         self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb'] # wandb에 올릴 것인지 (bool)
         target_indices = int(args.target_indices) if args.target_indices is not None else cfg['target_indices'] # 몇 frame으로 자를 것인지 (bool)
         stride = int(args.stride) if args.stride is not None else cfg['stride'] # 몇 frame만큼 띄워서 학습할 것인지 (int)
@@ -214,13 +193,7 @@ class ForceEstimation:
                 run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
                 self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
 
-            self.train()
 
-        else:
-            self.save_dir = cfg['model_dir']
-            self.model.load_state_dict(torch.load(cfg['model_dir']))
-            epoch_idx = cfg['model_dir'].find("epoch")
-            self.test(cfg['model_dir'][:epoch_idx-1])
 
     def write_basic_information(self, use_wandb, use_all_sequence, target_indices, stride,
                                 image_type, image_resize, image_size, augmentation_angle,
@@ -260,7 +233,7 @@ class ForceEstimation:
         basic_txt_file.write(f"weight_decay: {weight_decay}\n\n")
         basic_txt_file.close()
 
-    def validate(self, dataloader):
+    def validation(self, dataloader):
         self.model.eval()
         MSE = 0
         MAE = 0
@@ -281,6 +254,8 @@ class ForceEstimation:
         MSE /= len(dataloader)
         MAE /= len(dataloader)
         return MSE, MAE
+    
+    
 
     def train(self):
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
@@ -433,9 +408,42 @@ class ForceEstimation:
         MAE /= len(self.test_dataloader)
         print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
         return MSE, MAE
+    
+    def setup_run(self) : 
+        time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
+        self.save_dir = self.cfg['save_dir'] + "/" + self.encoder[0] + "_" + self.decoder + time_suffix
+        self.log_dir = self.save_dir + '/log'
+        
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
+        
+        copy_config(self.save_dir)
+        self.write_basic_information(...) # self에 저장된 파라미터 사용
+
+        if self.use_wandb:
+            wandb_config = { ... } # self에 저장된 파라미터로 config 생성
+            run_name = ...
+            self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
+
+    
+    def run(self) :
+        if self.mode == 'Train':
+            self.setup_run() # 훈련 전 준비 작업 실행
+            self.train()
+        elif self.mode == 'test' :
+            self.test()
+        else:
+            model_path = self.cfg['model_dir']
+            self.model.load_state_dict(torch.load(model_path))
+            epoch_idx = model_path.find("epoch")
+            self.test(model_path[:epoch_idx-1])
 
 if __name__ == '__main__':
-    f = open("config.yaml", 'r+', encoding='utf-8')
-    config = yaml.load(f, Loader=yaml.FullLoader)
+    with open("config.yaml", 'r+', encoding='utf-8') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
     force_estimation = ForceEstimation(config)
+    
+    force_estimation.run()
