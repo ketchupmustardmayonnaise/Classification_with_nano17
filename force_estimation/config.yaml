@@ -13,9 +13,7 @@ encoder: ["resnet", "BasicBlock", [2, 2, 2, 2]]
 encoder_output: 256
 
 # decoder
-decoder: !!python/tuple
-  - False # 하나의 시퀀스를 연속적으로 학습할 것인지?
-  - bidirectional_lstm # [lstm, gru, bidirectional_lstm]
+decoder: bidirectional_lstm # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
 decoder_output: 128
 
@@ -24,7 +22,7 @@ fc_num_layer: 2
 fc_hidden_dim: 64
 
 # image
-target_indices: 5 #몇 frame으로 자를 것인지
+target_index: 5 #몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 45
 
@@ -43,7 +41,7 @@ model_dir: C:\Users\user\PycharmProjects\Classification_with_nano17\saved_models
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
-batch_size: 1
+batch_size: 128
 num_epoch: 500
 learning_rate: 0.0001
 weight_decay: 0.005

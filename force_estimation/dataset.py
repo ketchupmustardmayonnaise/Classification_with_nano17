@@ -15,10 +15,9 @@ IMG_MAX = 512
 IMG_MAX_DIFF = 60
 
 class CFDataset(Dataset):
-    def __init__(self, target_indices, stride, use_all_sequence=True, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
-        self.target_indices = target_indices
+    def __init__(self, target_index, stride, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
+        self.target_index = target_index
         self.stride = stride
-        self.use_all_sequence = use_all_sequence
         self.image_type = image_type
 
         self.img = []
@@ -125,8 +124,8 @@ class CFDataset(Dataset):
         self.force = self.apply_butterworth_filter()
         # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
         self.force = self.interpolate_nano_to_capacitance(self.img, self.force, self.img_timestamp, self.force_timestamp)
-        # use_all_sequence가 아니라면, 이미지를 target_index 씩 자름
-        if not use_all_sequence: self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label)
+        # 이미지를 target_index 씩 자름
+        self.img, self.force, self.label = self.break_images_smaller(self.img, self.force, self.label)
 
         # force값을 clipping함. 0 이상인 것은 0으로, -6 이하인 것은 -6으로.
         self.outlier_filter()
@@ -134,14 +133,13 @@ class CFDataset(Dataset):
         self.preprocess()
 
         # label
-        for sequence in range(len(self.label)):
-            self.label[sequence] = F.one_hot(torch.Tensor(self.label[sequence]).to(torch.int64), num_classes=num_classes)
+        self.label = F.one_hot(torch.Tensor(self.label).to(torch.int64), num_classes=num_classes)
 
     def __len__(self):
         return len(self.img)
 
     def __getitem__(self, index):
-        return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
+        return np.array(self.img[index]), self.label[index], self.force[index][2]
 
     # capacitance 이미지 입장에서, force와 timestamp가 얼마나 겹치는지 확인
     def check_overlap_percentage(self):
@@ -325,34 +323,27 @@ class CFDataset(Dataset):
         previous_frame = 0
         for index in range(len(original_img)):
             frame = 0
-            force_per_data = []
-            image_per_data = []
-            label_per_data = []
-            while frame + self.target_indices < len(original_img[index]):
-                image_per_data.append(original_img[index][frame: frame + self.target_indices])
-                temp_force = original_force[index][frame : frame + self.target_indices]
 
-                force_per_data.append(temp_force[-1])
-                label_per_data.append(original_label[index])
+            while frame + self.target_index < len(original_img[index]):
+                img.append(original_img[index][frame: frame + self.target_index])
+                temp_force = original_force[index][frame : frame + self.target_index]
+
+                force.append(temp_force[-1])
+                label.append(original_label[index])
                 frame += self.stride
-
-            img.append(np.array(image_per_data))
-            force.append(np.array(force_per_data))
-            label.append(np.array(label_per_data))
 
             self.frame[index] = len(img) - previous_frame
             previous_frame = len(img)
 
-        return img, force, label
+        return np.array(img), force, label
 
     def outlier_filter(self):
-        for sequence_idx in range(len(self.force)):
-            force = np.array(self.force[sequence_idx])
+        force = np.array(self.force)
 
-            indices = np.where(force[:, 2] < -6)[0]
-            force[indices, 2] = -6
+        indices = np.where(force[:, 2] < -6)[0]
+        force[indices, 2] = -6
 
-            indices = np.where(force[:, 2] > 0)[0]
-            force[indices, 2] = 0
+        indices = np.where(force[:, 2] > 0)[0]
+        force[indices, 2] = 0
 
-            self.force[sequence_idx] = force
+        self.force = force

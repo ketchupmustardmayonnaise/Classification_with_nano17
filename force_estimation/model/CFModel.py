@@ -16,16 +16,14 @@ from torchvision import models
 # fully-connected layer는, fc_num_layer 개수만큼 stacking (최소 1, 최대 4)
 class CFModel(nn.Module):
     def __init__(self, encoder, encoder_output,
-                 decoder, rnn_layer,
-                 fc_num_layer, use_all_sequence,
-                 target_indices, image_type, drop_p,
+                 decoder, rnn_layer, fc_num_layer,
+                 target_index, image_type, drop_p,
                  fc_hidden_dim = None):
         assert fc_num_layer > 0
 
         super().__init__()
         self.fc_num_layer = fc_num_layer
-        self.target_indices = target_indices
-        self.use_all_sequence = use_all_sequence
+        self.target_indices = target_index
 
         # Encoder
         if encoder[0].lower() == 'resnet':
@@ -41,20 +39,14 @@ class CFModel(nn.Module):
 
         # Decoder
         if decoder == 'lstm':
-            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence,
-                            bidirectional=False)
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=False)
         elif decoder == 'gru':
-            self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
+            self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer)
         elif decoder == 'bidirectional_lstm':
-            if self.use_all_sequence:
-                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer,
-                                use_all_sequence=self.use_all_sequence)
-            else:
-                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer,
-                                use_all_sequence=self.use_all_sequence, bidirectional=True)
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
         else: raise Exception('Unknown rnn type')
 
-        fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' and not self.use_all_sequence else encoder_output
+        fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' else encoder_output
 
         if fc_num_layer == 1:
             self.bn = torch.nn.BatchNorm1d(fc_input_size)
@@ -94,7 +86,7 @@ class CFModel(nn.Module):
         x = input.reshape((input.shape[0] * input.shape[1], input.shape[2], input.shape[3], input.shape[4]))
 
         x = self.cnn(x)
-        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1)) if not self.use_all_sequence else x
+        x = x.reshape((int(x.shape[0] / self.target_indices), self.target_indices, -1))
         x = self.rnn(x)
 
         if self.fc_num_layer == 1:
