@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 class LSTM(nn.Module):
     def __init__(self, input_size=256, h_RNN_layers=2, bidirectional=False, drop_p=0.3, use_all_sequence=False):
@@ -18,9 +19,11 @@ class LSTM(nn.Module):
             bidirectional=bidirectional
         )
 
-    def forward(self, x_RNN):
+    def forward(self, x):
+        # x.shape = (chunk_size, frame, input_size)
         self.LSTM.flatten_parameters()
-        RNN_out, _ = self.LSTM(x_RNN, None)
+        RNN_out, _ = self.LSTM(x, None)
+
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 

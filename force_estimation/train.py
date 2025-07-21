@@ -90,14 +90,14 @@ class ForceEstimation:
         self.augmentation_angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle'] # online augmentation 시, 각도 최대치 (int)
 
         encoder = args.encoder if args.encoder is not None else cfg['encoder'] # 어떤 cnn을 쓸 것인지 (str)
-        encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output'] # cnn에서 결과적으로 나온 embedding_vector의 차원 (int)
+        self.encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output'] # cnn에서 결과적으로 나온 embedding_vector의 차원 (int)
 
         # decoder: (bool, str)
         # 첫 번째 parameter: use_all_sequence (하나의 데이터 시퀀스를 모두 순차적으로 학습할 것인지) (bool)
         # 두 번째 parameter: 어떤 시계열 모델을 사용할 것인지 (str)
         decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer'] # 시계열 모델 내 layer의 개수 (int)
-        decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output'] # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
+        self.rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer'] # 시계열 모델 내 layer의 개수 (int)
+        self.decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output'] # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
 
         self.use_all_sequence = decoder[0] # 하나의 데이터 시퀀스를 모두 순차적으로 학습할 것인지 (bool)
         decoder = decoder[1] # 어떤 시계열 모델을 사용할 것인지
@@ -116,12 +116,13 @@ class ForceEstimation:
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(encoder, encoder_output,
-                             decoder, rnn_layer, fc_num_layer, self.use_all_sequence,
+
+        self.model = CFModel(encoder, self.encoder_output,
+                             decoder, self.rnn_layer, fc_num_layer, self.use_all_sequence,
                              target_indices, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
+        # torchinfo.summary(self.model, input_size=(self.batch_size, target_indices, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = CFDataset(target_indices, stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
@@ -175,20 +176,20 @@ class ForceEstimation:
                 self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
             self.write_basic_information( self.use_wandb, self.use_all_sequence, target_indices, stride,
                                           self.image_type, image_resize, image_size, self.augmentation_angle,
-                                         encoder, encoder_output,
+                                         encoder, self.encoder_output,
                                          fc_num_layer, fc_hidden_dim,
-                                         decoder, rnn_layer, decoder_output,
+                                         decoder, self.rnn_layer, self.decoder_output,
                                          optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
 
             if self.use_wandb:
                 # wandb
                 wandb_config = {
                     "encoder": encoder,
-                    "encoder_output": encoder_output,
+                    "encoder_output": self.encoder_output,
 
                     "decoder": decoder,
-                    "rnn_layer": rnn_layer,
-                    "decoder_output": decoder_output,
+                    "rnn_layer": self.rnn_layer,
+                    "decoder_output": self.decoder_output,
 
                     "fc_num_layer": fc_num_layer,
                     "fc_hidden_dim": fc_hidden_dim,
@@ -268,6 +269,7 @@ class ForceEstimation:
         with torch.no_grad():
             for X, y, force in dataloader:
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, y, force = X.squeeze(), y.squeeze(), force.squeeze()
 
                 pred_force = self.model(X)
 
@@ -294,6 +296,8 @@ class ForceEstimation:
             MAE = []
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
                 self.model.train()
+
+                X, y, force = X.squeeze(), y.squeeze(), force.squeeze()
 
                 X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)

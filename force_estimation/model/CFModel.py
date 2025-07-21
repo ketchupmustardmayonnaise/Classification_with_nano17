@@ -1,3 +1,5 @@
+from sys import exception
+
 import force_estimation.model.resnet as resnet
 from force_estimation.model import fsnet
 from force_estimation.model.densenet import *
@@ -14,7 +16,8 @@ from torchvision import models
 # fully-connected layer는, fc_num_layer 개수만큼 stacking (최소 1, 최대 4)
 class CFModel(nn.Module):
     def __init__(self, encoder, encoder_output,
-                 decoder, rnn_layer, fc_num_layer, use_all_sequence,
+                 decoder, rnn_layer,
+                 fc_num_layer, use_all_sequence,
                  target_indices, image_type, drop_p,
                  fc_hidden_dim = None):
         assert fc_num_layer > 0
@@ -34,16 +37,22 @@ class CFModel(nn.Module):
             self.cnn = DenseNet(block_list = encoder[2], growth_rate = int(encoder[1]), n_classes=encoder_output, image_type=image_type)
         elif encoder[0].lower() == 'fsnet':
             self.cnn = FSNet(n_classes=encoder_output, image_type=image_type)
+        else: raise Exception('Unknown encoder type')
 
         # Decoder
         if decoder == 'lstm':
-            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence, bidirectional=False)
+            self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence,
+                            bidirectional=False)
         elif decoder == 'gru':
             self.rnn = GRU(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
         elif decoder == 'bidirectional_lstm':
             if self.use_all_sequence:
-                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence)
-            else: self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer, use_all_sequence=self.use_all_sequence, bidirectional=True)
+                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer,
+                                use_all_sequence=self.use_all_sequence)
+            else:
+                self.rnn = LSTM(input_size=encoder_output, h_RNN_layers=rnn_layer,
+                                use_all_sequence=self.use_all_sequence, bidirectional=True)
+        else: raise Exception('Unknown rnn type')
 
         fc_input_size = encoder_output * 2 if decoder == 'bidirectional_lstm' and not self.use_all_sequence else encoder_output
 
@@ -81,7 +90,7 @@ class CFModel(nn.Module):
             self.output = nn.Linear(fc_hidden_dim, 1)
 
     def forward(self, input):
-        # input size = (batch, frame, channel, height, width)
+        # input size = (chunk, frame, channel, height, width)
         x = input.reshape((input.shape[0] * input.shape[1], input.shape[2], input.shape[3], input.shape[4]))
 
         x = self.cnn(x)

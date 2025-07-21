@@ -132,15 +132,14 @@ class CFDataset(Dataset):
         self.preprocess()
 
         # label
-        self.label = torch.Tensor(self.label)
-        self.label = F.one_hot(self.label.to(torch.int64), num_classes=num_classes)
+        for sequence in range(len(self.label)):
+            self.label[sequence] = F.one_hot(torch.Tensor(self.label[sequence]).to(torch.int64), num_classes=num_classes)
 
     def __len__(self):
         return len(self.img)
 
     def __getitem__(self, index):
-        if self.use_all_sequence: return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
-        else: return np.array(self.img[index]), self.label[index], self.force[index][2]
+        return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
 
     def preprocess(self):
         if self.image_type.lower() == 'rgb' or self.image_type.lower() == 'origin':
@@ -303,22 +302,29 @@ class CFDataset(Dataset):
         previous_frame = 0
         for index in range(len(original_img)):
             frame = 0
+            force_per_data = []
+            image_per_data = []
+            label_per_data = []
             while frame + self.target_indices < len(original_img[index]):
-                img.append(original_img[index][frame: frame + self.target_indices])
+                image_per_data.append(original_img[index][frame: frame + self.target_indices])
                 temp_force = original_force[index][frame : frame + self.target_indices]
 
-                force.append(temp_force[-1])
-                label.append(original_label[index])
+                force_per_data.append(temp_force[-1])
+                label_per_data.append(original_label[index])
                 frame += self.stride
+
+            img.append(np.array(image_per_data))
+            force.append(np.array(force_per_data))
+            label.append(np.array(label_per_data))
 
             self.frame[index] = len(img) - previous_frame
             previous_frame = len(img)
 
-        return img, np.array(force), label
+        return img, force, label
 
     def outlier_filter(self):
-        if not self.use_all_sequence:
-            force = np.array(self.force)
+        for sequence_idx in range(len(self.force)):
+            force = np.array(self.force[sequence_idx])
 
             indices = np.where(force[:, 2] < -6)[0]
             force[indices, 2] = -6
@@ -326,18 +332,4 @@ class CFDataset(Dataset):
             indices = np.where(force[:, 2] > 0)[0]
             force[indices, 2] = 0
 
-            self.force = force
-        else:
-            for sequence_idx in range(len(self.img)):
-                for index in range(len(self.force)):
-                    img = np.array(self.img[index])
-                    force = np.array(self.force[index])
-
-                    indices = np.where(force[:, 2] < -6)[0]
-                    force[indices, 2] = -6
-
-                    indices = np.where(force[:, 2] > 0)[0]
-                    force[indices, 2] = 0
-
-                    self.img[index] = img
-                    self.force[index] = force
+            self.force[sequence_idx] = force

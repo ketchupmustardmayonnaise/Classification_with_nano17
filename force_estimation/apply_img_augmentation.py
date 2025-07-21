@@ -10,16 +10,16 @@ def apply_augmentation_to_all_frame(X_batch, angle):
     X_batch: Tensor or ndarray with shape (batch_size, frame, height, width)
     Returns: Tensor with same shape
     """
-    batch_size, num_frames, C, H, W = X_batch.shape
+    num_chunk, num_frames, C, H, W = X_batch.shape
     X_out = []
 
-    for b in range(batch_size):
-        sample_out = []
+    # 하나의 augmentation 파라미터 세트를 전체 chunk에 적용
+    angle = np.random.uniform(-angle, angle)
+    do_vflip = np.random.rand() < 0.5
+    do_hflip = np.random.rand() < 0.5
 
-        # 하나의 augmentation 파라미터 세트를 전체 batch에 적용
-        angle = np.random.uniform(-angle, angle)
-        do_vflip = np.random.rand() < 0.5
-        do_hflip = np.random.rand() < 0.5
+    for b in range(num_chunk):
+        sample_out = []
 
         for f in range(num_frames):
             # (C, H, W) → (H, W, C) for OpenCV
