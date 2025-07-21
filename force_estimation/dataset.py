@@ -300,7 +300,7 @@ class CFDataset(Dataset):
                 img.append(original_img[index][frame: frame + self.target_index])
                 temp_force = original_force[index][frame : frame + self.target_index]
 
-                force.append(temp_force[-1])
+                force.append(temp_force) # frame만큼 자른 force를 모두 저장
                 label.append(original_label[index])
                 frame += self.stride
 
@@ -315,10 +315,14 @@ class CFDataset(Dataset):
 
         threshold = clipping_per_label[label]
 
-        indices = np.where(force[:, 2] < threshold)[0]
-        force[indices, 2] = -6
+        for frame in range(self.target_index):
+            temp_force = force[frame]
+            indices = np.where(temp_force[:, 2] < threshold[frame])[0]
+            temp_force[indices, 2] = -6
 
-        indices = np.where(force[:, 2] > 0)[0]
-        force[indices, 2] = 0
+            indices = np.where(temp_force[:, 2] > 0)[0]
+            temp_force[indices, 2] = 0
+
+            force[frame] = temp_force
 
         self.force = force
