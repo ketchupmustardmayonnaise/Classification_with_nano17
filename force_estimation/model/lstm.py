@@ -2,12 +2,12 @@ import torch.nn as nn
 import torch
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=256, h_RNN_layers=2, bidirectional=False, drop_p=0.3):
+    def __init__(self, input_size=256, output_size=256, h_RNN_layers=2, bidirectional=False, drop_p=0.3):
         super(LSTM, self).__init__()
 
         self.input_size = input_size
         self.h_RNN_layers = h_RNN_layers  # RNN hidden layers
-        self.output_size = input_size  # RNN hidden nodes
+        self.output_size = output_size  # RNN hidden nodes
         self.drop_p = drop_p
 
         self.LSTM = nn.LSTM(
@@ -26,4 +26,4 @@ class LSTM(nn.Module):
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
-        return RNN_out[:, -1, :]
+        return RNN_out

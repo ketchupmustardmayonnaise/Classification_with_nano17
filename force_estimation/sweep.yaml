@@ -38,7 +38,7 @@ parameters:
   image_type:
     values: ["origin", "rgb", "diff"]
   augmentation_angle:
-    values: [20, 45, 90, 180]
+    values: 90
 
   encoder:
     values:
@@ -53,9 +53,9 @@ parameters:
     values: [64, 128, 256]
   decoder:
     values:
-      - "lstm"]
-      - "gru"]
-      - "bidirectional_lstm"]
+      - "lstm"
+      - "gru"
+      - "bidirectional_lstm"
   decoder_output:
     values: [64, 128, 256]
   rnn_layer:

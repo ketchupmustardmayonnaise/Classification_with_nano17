@@ -138,11 +138,15 @@ class CFDataset(Dataset):
         # label
         self.label = F.one_hot(torch.Tensor(self.label).to(torch.int64), num_classes=num_classes)
 
+        # self.img.shape = (# of chunk, frame, channel, height, width)
+        # self.force.shape = (# of chunk, frame, 6)  (6 features: (Fx, Fy, Fz, Tx, Ty, Tz))
+        # self.label.shape = (# of chunk, num_classes)
+
     def __len__(self):
         return len(self.img)
 
     def __getitem__(self, index):
-        return np.array(self.img[index]), self.label[index], self.force[index][2]
+        return np.array(self.img[index]), self.label[index], self.force[index, :, 2]
 
     # capacitance 이미지 입장에서, force와 timestamp가 얼마나 겹치는지 확인
     def check_overlap_percentage(self):

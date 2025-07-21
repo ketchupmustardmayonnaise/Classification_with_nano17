@@ -111,7 +111,7 @@ class ForceEstimation:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.model = CFModel(encoder, self.encoder_output,
-                             decoder, self.rnn_layer, fc_num_layer,
+                             decoder, self.decoder_output, self.rnn_layer, fc_num_layer,
                              target_index, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)

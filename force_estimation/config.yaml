@@ -24,7 +24,7 @@ fc_hidden_dim: 64
 # image
 target_index: 5 #몇 frame으로 자를 것인지
 stride: 1
-augmentation_angle: 45
+augmentation_angle: 90
 
 image_type: rgb # [origin, rgb, diff]
 image_resize: True
