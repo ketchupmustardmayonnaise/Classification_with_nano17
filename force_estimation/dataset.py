@@ -90,6 +90,8 @@ class CFDataset(Dataset):
                         line_index += 1
 
         print(sum(self.frame))
+        # img_timestamp와 force_timestamp 기반으로, 동시에 수집한 데이터들인지 확인함
+        self.check_overlap_percentage()
         # force data에서, 첫 번째 force로 나머지를 뺌 (초기값 보정)
         self.force_zero_calibration()
 
@@ -140,6 +142,27 @@ class CFDataset(Dataset):
 
     def __getitem__(self, index):
         return np.array(self.img[index]), self.label[index], self.force[index][:, 2]
+
+    # capacitance 이미지 입장에서, force와 timestamp가 얼마나 겹치는지 확인
+    def check_overlap_percentage(self):
+        index_for_delete = []
+        for sequence_idx in range(len(self.img)):
+            overlap_start = max(self.img_timestamp[sequence_idx][0], self.force_timestamp[sequence_idx][0])
+            overlap_end = min(self.img_timestamp[sequence_idx][-1], self.force_timestamp[sequence_idx][-1])
+
+            overlap_duration = max(0, (overlap_end - overlap_start))
+            total_duration_of_cap = self.img_timestamp[sequence_idx][-1] - self.img_timestamp[sequence_idx][0]
+
+            if (overlap_duration / total_duration_of_cap) < 0.5: index_for_delete.append(sequence_idx)
+
+        for idx in range(len(index_for_delete)-1, -1, -1): # 맨 끝에서부터 삭제 (맨 앞에서부터 삭제하면 다른 데이터가 삭제될 수 있음)
+            del self.img[index_for_delete[idx]]
+            del self.force[index_for_delete[idx]]
+            del self.img_timestamp[index_for_delete[idx]]
+            del self.force_timestamp[index_for_delete[idx]]
+            del self.label[index_for_delete[idx]]
+            del self.frame[index_for_delete[idx]]
+
 
     def preprocess(self):
         if self.image_type.lower() == 'rgb' or self.image_type.lower() == 'origin':
