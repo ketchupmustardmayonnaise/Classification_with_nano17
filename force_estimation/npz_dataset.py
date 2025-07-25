@@ -23,7 +23,7 @@ class RFTDataset(Dataset):
                             self.img.append(data['img'])
                             self.force.append(data['force'])
                             self.img_ts.append(data['img_ts'])
-                            self.force.append(data['force_ts'])
+                            self.force_ts.append(data['force_ts'])
                             self.label.append(int(label))
                             self.frame.append(len(data['img']))
 
