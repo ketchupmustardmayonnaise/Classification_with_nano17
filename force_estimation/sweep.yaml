@@ -23,8 +23,6 @@ parameters:
     value: "../saved_models"
   scheduler:
     value: None
-  image_resize:
-    value: True
   image_size:
     value: [64, 64]
   train_mode:

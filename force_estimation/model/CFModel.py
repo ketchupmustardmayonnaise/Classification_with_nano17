@@ -1,3 +1,4 @@
+from email.utils import encode_rfc2231
 from sys import exception
 
 import force_estimation.model.resnet as resnet
@@ -28,20 +29,33 @@ class CFModel(nn.Module):
         self.decoder_output = decoder_output
 
         # Encoder
-        if encoder[0].lower() == 'resnet':
-            if encoder[1].lower() == "basicblock":
-                self.cnn = resnet.ResNet(resnet.BasicBlock, encoder[2], n_classes=encoder_output, image_type=image_type)
-            elif encoder[1].lower() == "bottleneck":
-                self.cnn = resnet.ResNet(resnet.Bottleneck, encoder[2], n_classes=encoder_output, image_type=image_type)
-        elif encoder[0].lower() == 'densenet':
-            self.cnn = DenseNet(block_list = encoder[2], growth_rate = int(encoder[1]), n_classes=encoder_output, image_type=image_type)
-        elif encoder[0].lower() == 'fsnet':
-            self.cnn = FSNet(n_classes=encoder_output, image_type=image_type)
-        else: raise Exception('Unknown encoder type')
+        if encoder.lower() == 'resnet18':
+            self.cnn = models.resnet18(pretrained=True)
+        elif encoder.lower() == 'resnet34':
+            self.cnn = models.resnet34(pretrained=True)
+        elif encoder.lower() == 'resnet50':
+            self.cnn = models.resnet50(pretrained=True)
+        elif encoder.lower() == 'densenet121':
+            self.cnn = models.densenet121(pretrained=True)
+        elif encoder.lower() == 'alexnet':
+            self.cnn = models.alexnet(pretrained=True)
+        elif encoder.lower() == 'vgg16':
+            self.cnn = models.vgg16(pretrained=True)
+        else:
+            self.cnn = nn.Sequential(
+                nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
+            )
+        #modules = list(self.cnn.children())[:-1]
+        #self.cnn = nn.Sequential(*modules)
+
+        for param in self.cnn.parameters():
+            param.requires_grad = False
+
+        self.enc_fc = nn.Linear(1000, encoder_output)
 
         # Decoder
         if decoder == 'lstm':
-            self.rnn = LSTM(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=False)
+            self.rnn = LSTM(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=False, target_index=target_index)
         elif decoder == 'gru':
             self.rnn = GRU(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer)
         elif decoder == 'bidirectional_lstm':
@@ -51,56 +65,56 @@ class CFModel(nn.Module):
         self.fc_input_size = decoder_output * 2 if decoder == 'bidirectional_lstm' else decoder_output
 
         if fc_num_layer == 1:
-            self.bn = torch.nn.BatchNorm1d(self.fc_input_size)
+            # self.bn = torch.nn.BatchNorm1d(self.fc_input_size)
             self.dropout = nn.Dropout(drop_p)
-            self.output = nn.Linear(self.fc_input_size, 1)
+            self.output = nn.Linear(self.fc_input_size, 3)
         elif fc_num_layer == 2:
             assert fc_hidden_dim is not None
             self.input = nn.Linear(self.fc_input_size, fc_hidden_dim)
             self.hidden_layer = nn.Linear(fc_hidden_dim, fc_hidden_dim)
-            self.bn = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn = torch.nn.BatchNorm1d(fc_hidden_dim)
             self.dropout = nn.Dropout(drop_p)
-            self.output = nn.Linear(fc_hidden_dim, 1)
+            self.output = nn.Linear(fc_hidden_dim, 3)
         elif fc_num_layer == 3:
             assert fc_hidden_dim is not None
             self.input = nn.Linear(self.fc_input_size, fc_hidden_dim)
             self.hidden_layer = nn.Linear(fc_hidden_dim, fc_hidden_dim)
-            self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
-            self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
             self.dropout1 = nn.Dropout(drop_p)
             self.dropout2 = nn.Dropout(drop_p)
-            self.output = nn.Linear(fc_hidden_dim, 1)
+            self.output = nn.Linear(fc_hidden_dim, 3)
         elif fc_num_layer == 4:
             assert fc_hidden_dim is not None
             self.input = nn.Linear(self.fc_input_size, fc_hidden_dim)
             self.hidden_layer1 = nn.Linear(fc_hidden_dim, fc_hidden_dim)
             self.hidden_layer2 = nn.Linear(fc_hidden_dim, fc_hidden_dim)
-            self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
-            self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
-            self.bn3 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn1 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn2 = torch.nn.BatchNorm1d(fc_hidden_dim)
+            # self.bn3 = torch.nn.BatchNorm1d(fc_hidden_dim)
             self.dropout1 = nn.Dropout(drop_p)
             self.dropout2 = nn.Dropout(drop_p)
             self.dropout3 = nn.Dropout(drop_p)
-            self.output = nn.Linear(fc_hidden_dim, target_index)
+            self.output = nn.Linear(fc_hidden_dim, 3)
 
     def forward(self, input):
-        # input size = (batch_size, frame, channel, height, width)
-        batch_size, frame, channel, height, width = input.shape
-        x = input.view((batch_size * frame, channel, height, width)) # (batch_size * chunk * frame, channel, height, width)
+        # input size = (frame, channel, height, width)
+        frame, channel, height, width = input.shape
 
-        x = self.cnn(x) # output shape: ( batch_size * frame, encoder_output )
-        x = x.view((batch_size, frame, self.encoder_output))
-        x = self.rnn(x) # output shape: ( batch_size, frame, decoder_output )
-        x = x.contiguous().view((batch_size * frame, self.fc_input_size)) # output shape = ( batch_size * frame, decoder_output )
+        x = self.cnn(input)
+        # x = input.view((frame, -1))
+        x = self.enc_fc(x)  # output shape: ( frame, encoder_output )
+        x = self.rnn(x) # x output shape: ( chunk size, target_index, decoder output )
+        x.reshape((-1, self.decoder_output))
 
         if self.fc_num_layer == 1:
-            x = self.bn(x)
+            # x = self.bn(x)
             x = self.dropout(x)
             x = self.output(x)
 
         elif self.fc_num_layer == 2:
             x = self.input(x)
-            x = self.bn(x)
+            # x = self.bn(x)
             x = F.relu(x)
             x = self.dropout(x)
 
@@ -108,12 +122,12 @@ class CFModel(nn.Module):
 
         elif self.fc_num_layer == 3:
             x = self.input(x)
-            x = self.bn1(x)
+            # x = self.bn1(x)
             x = F.relu(x)
             x = self.dropout1(x)
 
             x = self.hidden_layer(x)
-            x = self.bn2(x)
+            # x = self.bn2(x)
             x = F.relu(x)
             x = self.dropout2(x)
 
@@ -121,22 +135,20 @@ class CFModel(nn.Module):
 
         elif self.fc_num_layer == 4:
             x = self.input(x)
-            x = self.bn1(x)
+            # x = self.bn1(x)
             x = F.relu(x)
             x = self.dropout1(x)
 
             x = self.hidden_layer1(x)
-            x = self.bn2(x)
+            # x = self.bn2(x)
             x = F.relu(x)
             x = self.dropout2(x)
 
             x = self.hidden_layer2(x)
-            x = self.bn3(x)
+            # x = self.bn3(x)
             x = F.relu(x)
             x = self.dropout3(x)
 
             x = self.output(x)
-
-        x = x.view((batch_size, frame)) # output shape = ( batch_size, frame )
 
         return x

@@ -6,6 +6,8 @@ import torchinfo
 import yaml
 import ast
 import shutil
+import npz_dataset_method  # 먼저 메서드 붙임이 일어남
+from npz_dataset import RFTDataset
 from torch.optim import lr_scheduler
 
 import wandb
@@ -13,7 +15,6 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from dataset import CFDataset
 from model import *
 from apply_img_augmentation import *
 
@@ -60,7 +61,6 @@ class ForceEstimation:
         parser.add_argument('--augmentation_angle', default=None, type=int)
 
         parser.add_argument('--image_type', default=None, type=str)
-        parser.add_argument('--image_resize', default=None, type=str2bool)
         parser.add_argument('--image_size', default=None, type=ast.literal_eval)
 
         parser.add_argument('--save_dir', default=None, type=str)
@@ -81,10 +81,9 @@ class ForceEstimation:
         # parameters
         train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode'] # true일 때만 학습 (bool)
         self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb'] # wandb에 올릴 것인지 (bool)
-        target_index = int(args.target_index) if args.target_index is not None else cfg['target_index'] # 몇 frame으로 자를 것인지 (bool)
+        self.target_index = int(args.target_index) if args.target_index is not None else cfg['target_index'] # 몇 frame으로 자를 것인지 (bool)
         stride = int(args.stride) if args.stride is not None else cfg['stride'] # 몇 frame만큼 띄워서 학습할 것인지 (int)
         self.image_type = args.image_type if args.image_type is not None else cfg['image_type'] # origin, rgb, diff (str)
-        image_resize = args.image_resize if args.image_resize is not None else cfg['image_resize'] # 이미지를 확대할 것인지 (bool)
         image_size = args.image_size if args.image_size is not None else cfg['image_size'] # 확대한다면, 이미지를 얼마나 확대할 것인지 (int, int)
         image_size = [int(image_size[0]), int(image_size[1])]
         self.augmentation_angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle'] # online augmentation 시, 각도 최대치 (int)
@@ -112,13 +111,14 @@ class ForceEstimation:
 
         self.model = CFModel(encoder, self.encoder_output,
                              decoder, self.decoder_output, self.rnn_layer, fc_num_layer,
-                             target_index, self.image_type, dropout,
+                             self.target_index, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, target_index, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(42, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
-        self.test_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataset.preprocess()
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
         if train_mode:
@@ -130,7 +130,7 @@ class ForceEstimation:
 
             # create directories
             time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + encoder[0] + "_" + decoder + time_suffix
+            self.save_dir = cfg['save_dir'] + "/" + encoder + "_" + decoder + time_suffix
             self.log_dir = self.save_dir + '/log'
             if not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir)
@@ -139,11 +139,13 @@ class ForceEstimation:
             copy_config(self.save_dir)
 
             # train dataset
-            self.train_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
+            self.train_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['train_data_dir'])
+            self.train_dataset.preprocess()
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
             # validation dataset
-            self.val_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['val_data_dir'])
+            self.val_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['val_data_dir'])
+            self.val_dataset.preprocess()
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             # optimizer
@@ -167,8 +169,8 @@ class ForceEstimation:
             # loss
             if self.loss_type != "MSE+MAE":
                 self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information( self.use_wandb, target_index, stride,
-                                          self.image_type, image_resize, image_size, self.augmentation_angle,
+            self.write_basic_information( self.use_wandb, self.target_index, stride,
+                                          self.image_type, image_size, self.augmentation_angle,
                                          encoder, self.encoder_output,
                                          fc_num_layer, fc_hidden_dim,
                                          decoder, self.rnn_layer, self.decoder_output,
@@ -187,11 +189,10 @@ class ForceEstimation:
                     "fc_num_layer": fc_num_layer,
                     "fc_hidden_dim": fc_hidden_dim,
 
-                    "target_index": target_index,
+                    "target_index": self.target_index,
                     "stride": stride,
 
                     "image_type": self.image_type,
-                    "image_resize": image_resize,
                     "image_size": image_size,
                     "augmentation_angle": self.augmentation_angle,
 
@@ -204,8 +205,8 @@ class ForceEstimation:
                     "loss": self.loss_type,
                 }
 
-                run_name = encoder[0] + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
-                self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
+                run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
+                self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
 
             self.train()
 
@@ -216,7 +217,7 @@ class ForceEstimation:
             self.test(cfg['model_dir'][:epoch_idx-1])
 
     def write_basic_information(self, use_wandb, target_index, stride,
-                                image_type, image_resize, image_size, augmentation_angle,
+                                image_type, image_size, augmentation_angle,
                                 encoder, encoder_output,
                                 fc_num_layer, fc_hidden_dim,
                                 decoder, rnn_layer, decoder_output,
@@ -231,7 +232,6 @@ class ForceEstimation:
         basic_txt_file.write(f"stride: {stride}\n\n")
 
         basic_txt_file.write(f"image_type: {image_type}\n")
-        basic_txt_file.write(f"image_resize: {image_resize}\n")
         basic_txt_file.write(f"image_size: {image_size}\n")
         basic_txt_file.write(f"augmentation_angle: {augmentation_angle}\n\n")
 
@@ -259,13 +259,21 @@ class ForceEstimation:
 
         with torch.no_grad():
             for X, y, force in dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                if X.shape[1] < self.target_index: continue
+
+                X = X.squeeze()
+                force = force.squeeze()
+                _force = []
+                for start in range(0, len(force) - (self.target_index - 1)):
+                    _force.append(force[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
 
                 pred_force = self.model(X)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
                                                     reduction='mean')
-                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
                                                    reduction='mean')
 
         MSE /= len(dataloader)
@@ -283,18 +291,25 @@ class ForceEstimation:
             MSE = []
             MAE = []
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
-                self.model.train()
+                if X.shape[1] < self.target_index: continue
 
-                X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                self.model.train()
+                X = X.squeeze()
+
+                # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
+
+                force = force.squeeze()
+                _force = []
+                for start in range(0, len(force) - (self.target_index - 1)):
+                    _force.append(force[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(),
-                                                       reduction='mean')
-                L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(),
-                                                      reduction='mean')
+                MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+                L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
                 if self.loss_type == 'MSE+MAE':
                     loss = (MSEloss + L1_loss) / 2
                 else:
@@ -303,7 +318,7 @@ class ForceEstimation:
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
 
-                loss.backward()
+                loss.backward(retain_graph=True)
                 self.optimizer.step()
 
             if self.scheduler is not None: self.scheduler.step()
@@ -370,12 +385,22 @@ class ForceEstimation:
         MSE = 0
         MAE = 0
 
+        MSE_for_axis = []
+        MAE_for_axis = []
+
         f = []
         pf = []
 
         with torch.no_grad():
             for X, y, force in self.test_dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                if X.shape[1] < self.target_index: continue
+                X = X.squeeze()
+                force = force.squeeze()
+                for start in range(0, len(force) - (self.target_index - 1)):
+                    _force.append(force[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
                 _force = force.detach().cpu().numpy().squeeze().tolist()
                 f.append(_force)
 
@@ -383,32 +408,57 @@ class ForceEstimation:
                 _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
                 pf.append(_pred_force)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
                                                     reduction='mean').item()
-                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
                                                    reduction='mean').item()
 
-        for start in range(0, 36, 12):
-            i = 0
-            end = start + 12
+                mse = torch.mean(torch.nn.functional.mse_loss(pred_force.float(), force.float(),
+                                                    reduction='none'), dim=0).tolist()
+                mae = torch.mean(torch.nn.functional.l1_loss(pred_force.float(), force.float(),
+                                                    reduction='none'), dim=0).tolist()
 
-            for index in range(40):
-                _f = f[i : i + self.test_dataset.frame[index]]
-                _pf = pf[i : i + self.test_dataset.frame[index]]
-                if index > start and index <= end:
-                    plt.subplot(3, 4, index - start)
-                    plt.plot(np.array(_f), color='r', label='Force')
-                    plt.plot(np.array(_pf), color='b', label='Predicted Force')
-                i += self.test_dataset.frame[index]
+                MSE_for_axis.append(mse)
+                MAE_for_axis.append(mae)
+
+        for start in range(0, 9, 3): # 가장 앞에 위치한 9개의 데이터에 대해서만 그림
+            end = start + 3
+            fig, axes = plt.subplots(3, 3, figsize=(14, 12)) # plot 만듦
+
+            for index in range(start, end): # 한 plot 안에 세 데이터를 배치
+                _f = f[index]
+                _pf = pf[index]
+
+                for num_data in range(3): # 3개 Fx, Fy, Fz에 대하여
+                    axes[index % 3, num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
+                    axes[index % 3, num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
+                    axes[index % 3, num_data].set_xlabel('Frame')
+                    axes[index % 3, num_data].set_ylabel('Force (N)')
+
+                    if num_data == 0: axes[index % 3, num_data].set_title('X')
+                    elif num_data == 1: axes[index % 3, num_data].set_title('Y')
+                    elif num_data == 2: axes[index % 3, num_data].set_title('Z')
 
             plt.legend()
-            plt.savefig(save_dir + f'/test_{int(start / 12) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
-                format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
+            plt.savefig(save_dir + f'/test_{int(start / 3) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
+                        format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
             plt.show()
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
         print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+
+        MSE_for_axis = torch.Tensor(MSE_for_axis)
+        MSE_for_axis = torch.mean(MSE_for_axis, dim=1)
+        MAE_for_axis = torch.Tensor(MAE_for_axis)
+        MAE_for_axis = torch.mean(MAE_for_axis, dim=1)
+
+        print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
+        print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+
+        train_txt_path = save_dir + "/train.txt"
+        with open(train_txt_path, 'a') as train_txt_file:
+            train_txt_file.write("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
         return MSE, MAE
 
 if __name__ == '__main__':

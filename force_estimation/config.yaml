@@ -1,15 +1,8 @@
 train_mode: True
-use_wandb: False
+use_wandb: True
 
 # encoder
-encoder: ["resnet", "BasicBlock", [2, 2, 2, 2]]
-# ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
-# ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
-# ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
-# ["resnet", "Bottleneck", [3, 4, 6, 3]] # resnet-50
-# ["resnet", "Bottleneck", [3, 4, 23, 3]] # resnet-101
-# ["resnet", "Bottleneck", [3, 8, 36, 3]] # resnet-152
-# ["densenet", 32, [6, 12, 24, 16]] # densenet
+encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
 encoder_output: 256
 
 # decoder
@@ -18,32 +11,31 @@ rnn_layer: 2
 decoder_output: 128
 
 # fully connected layer
-fc_num_layer: 2
-fc_hidden_dim: 64
+fc_num_layer: 3
+fc_hidden_dim: 1000
 
 # image
-target_index: 5 #몇 frame으로 자를 것인지
+target_index: 12 #몇 frame으로 자를 것인지
 stride: 1
-augmentation_angle: 90
+augmentation_angle: 45
 
 image_type: rgb # [origin, rgb, diff]
-image_resize: True
 image_size: !!python/tuple
   - 64
   - 64
 
 # directory
-train_data_dir: ../dataset/using_training_data/train
-val_data_dir: ../dataset/using_training_data/val
-test_data_dir: ../dataset/using_training_data/test
+train_data_dir: ../dataset/rft64/train
+val_data_dir: ../dataset/rft64/val
+test_data_dir: ../dataset/rft64/test
 save_dir: ../saved_models
-model_dir: C:\Users\user\PycharmProjects\Classification_with_nano17\saved_models\resnet_gru_07-16_12-46-31/epoch_54.pt
+model_dir: C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_stateful\saved_models\(many-to-one) (stateful) bidirectional_lstm_07-27_19-19-50\epoch_44.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
-batch_size: 128
-num_epoch: 500
+batch_size: 1
+num_epoch: 200
 learning_rate: 0.0001
 weight_decay: 0.005
 dropout: 0.3
-loss: MAE # [MSE, MAE, MSE+MAE]
+loss: MSE # [MSE, MAE, MSE+MAE]
