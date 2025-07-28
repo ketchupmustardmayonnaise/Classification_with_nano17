@@ -455,9 +455,9 @@ class ForceEstimation:
         print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
 
         MSE_for_axis = torch.Tensor(MSE_for_axis)
-        MSE_for_axis = torch.mean(MSE_for_axis, dim=1)
+        MSE_for_axis = torch.mean(MSE_for_axis, dim=(0,1))
         MAE_for_axis = torch.Tensor(MAE_for_axis)
-        MAE_for_axis = torch.mean(MAE_for_axis, dim=1)
+        MAE_for_axis = torch.mean(MAE_for_axis, dim=(0,1))
 
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')

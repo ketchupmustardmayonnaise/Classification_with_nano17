@@ -5,7 +5,7 @@ from matplotlib.animation import FuncAnimation
 import npz_dataset_method
 from npz_dataset import RFTDataset
 
-dataset = RFTDataset()
+dataset = RFTDataset(path='./../dataset/rft64/origin')
 dataset.preprocess()
 
 def play_sequence(images, forces):

@@ -1,5 +1,5 @@
-train_mode: True
-use_wandb: False
+train_mode: False
+use_wandb: True
 
 # encoder
 encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
@@ -15,7 +15,7 @@ fc_num_layer: 3
 fc_hidden_dim: 1000
 
 # image
-target_index: 45 #몇 frame으로 자를 것인지
+target_index: 30 #몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 45
 
@@ -29,7 +29,7 @@ train_data_dir: ../dataset/rft64/train
 val_data_dir: ../dataset/rft64/val
 test_data_dir: ../dataset/rft64/test
 save_dir: ../saved_models
-model_dir: C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_bidirectional_lstm_07-28_04-34-41\epoch_180.pt
+model_dir: C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_bidirectional_lstm_07-28_22-05-02\epoch_129.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
