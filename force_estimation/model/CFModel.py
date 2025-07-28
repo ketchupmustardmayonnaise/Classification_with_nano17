@@ -59,7 +59,7 @@ class CFModel(nn.Module):
         elif decoder == 'gru':
             self.rnn = GRU(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer)
         elif decoder == 'bidirectional_lstm':
-            self.rnn = LSTM(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
+            self.rnn = LSTM(input_size=encoder_output, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=True, target_index=target_index)
         else: raise Exception('Unknown rnn type')
 
         self.fc_input_size = decoder_output * 2 if decoder == 'bidirectional_lstm' else decoder_output
@@ -105,7 +105,7 @@ class CFModel(nn.Module):
         # x = input.view((frame, -1))
         x = self.enc_fc(x)  # output shape: ( frame, encoder_output )
         x = self.rnn(x) # x output shape: ( chunk size, target_index, decoder output )
-        x.reshape((-1, self.decoder_output))
+        # x.reshape((-1, self.decoder_output))
 
         if self.fc_num_layer == 1:
             # x = self.bn(x)

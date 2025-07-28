@@ -114,7 +114,7 @@ class ForceEstimation:
                              self.target_index, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(42, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])

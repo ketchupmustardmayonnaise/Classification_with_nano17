@@ -1,0 +1,18 @@
+C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\force_estimation\train.py:309: UserWarning: Using a target size (torch.Size([105, 45, 3])) that is different to the input size (torch.Size([138, 12, 3])). This will likely lead to incorrect results due to broadcasting. Please ensure they have the same size.
+  MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+Traceback (most recent call last):
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\force_estimation\train.py", line 474, in <module>
+    force_estimation = ForceEstimation(config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\force_estimation\train.py", line 211, in __init__
+    self.train()
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\force_estimation\train.py", line 309, in train
+    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\nn\functional.py", line 3294, in mse_loss
+    expanded_input, expanded_target = torch.broadcast_tensors(input, target)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\functional.py", line 74, in broadcast_tensors
+    return _VF.broadcast_tensors(tensors)  # type: ignore[attr-defined]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: The size of tensor a (12) must match the size of tensor b (45) at non-singleton dimension 1

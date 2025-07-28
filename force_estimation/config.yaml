@@ -15,14 +15,14 @@ fc_num_layer: 3
 fc_hidden_dim: 1000
 
 # image
-target_index: 12 #몇 frame으로 자를 것인지
+target_index: 45 #몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 45
 
 image_type: rgb # [origin, rgb, diff]
 image_size: !!python/tuple
-  - 64
-  - 64
+  - 224
+  - 224
 
 # directory
 train_data_dir: ../dataset/rft64/train
