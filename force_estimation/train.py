@@ -395,18 +395,26 @@ class ForceEstimation:
             for X, y, force in self.test_dataloader:
                 if X.shape[1] < self.target_index: continue
                 X = X.squeeze()
-                force = force.squeeze()
-                for start in range(0, len(force) - (self.target_index - 1)):
-                    _force.append(force[start:start + self.target_index].tolist())
+
+                force_origin = force.squeeze()
+                _force = []
+                for start in range(0, len(force_origin) - (self.target_index - 1)):
+                    _force.append(force_origin[start:start + self.target_index].tolist())
                 _force = torch.Tensor(_force)
 
                 X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
                 _force = force.detach().cpu().numpy().squeeze().tolist()
-                f.append(_force)
+                f.append(force_origin)
 
                 pred_force = self.model(X)
                 _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
-                pf.append(_pred_force)
+
+                force_sequence = []
+                force_sequence.extend(_pred_force[0])  # 첫 번째 데이터는 그냥 저장
+                for i in range(1, len(_pred_force)):
+                    force_sequence.append(_pred_force[i][self.target_index - 1])
+
+                pf.append(force_sequence)
 
                 MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
                                                     reduction='mean').item()
