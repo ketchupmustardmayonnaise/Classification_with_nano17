@@ -292,8 +292,6 @@ class ForceEstimation:
             MAE = []
             for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
                 if X.shape[1] < self.target_index: continue
-
-                self.model.train()
                 X = X.squeeze()
 
                 # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)

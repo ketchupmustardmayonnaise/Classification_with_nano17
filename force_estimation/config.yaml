@@ -1,5 +1,5 @@
-train_mode: False
-use_wandb: True
+train_mode: True
+use_wandb: False
 
 # encoder
 encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16

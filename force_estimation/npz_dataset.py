@@ -12,7 +12,7 @@ clipping_per_label = np.array([0.0, 0.0, -5.0, -6.0, 0.0, 0.0, 0.0])
 origin_image_size = (10, 8)
 
 class RFTDataset(Dataset):
-    def __init__(self, image_size=(28, 28), image_type='RGB', path='./../dataset/rft_origin'):
+    def __init__(self, image_size=(28, 28), image_type='RGB', path='./../dataset/rft64/train'):
         self.img = []
         self.force = []
         self.label = []

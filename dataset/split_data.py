@@ -1,57 +1,49 @@
-import os
-import csv
+import zipfile
 import random
-'''
-data라는 폴더 내에 있는 원본 데이터 파일을, force_estimation / validation / test set으로 나누는 코드
-30개의 데이터를 21:6:3 (7:2:1)로 나눔
-'''
+import os
+current_path = os.getcwd()
+print(current_path)
 
-def split_csv_files(folder_path):
-    # 폴더 안의 모든 파일 확인
-    for file_name in os.listdir(folder_path):
-        # 파일 확장자가 .csv인 경우만 처리
-        if file_name.endswith('.csv'):
-            file_path = os.path.join(folder_path, file_name)
+# 원본 ZIP 경로
+src_zip_path = f'{current_path}\\rft64\\2'  # 여기에 원래 zip 경로 넣기
 
-            # 원본 파일 읽기
-            with open(file_path, 'r', encoding='utf-8') as file:
-                reader = list(csv.reader(file))
+for file_name in os.listdir(src_zip_path):  # 각 파일들에 대하여
+    with zipfile.ZipFile(src_zip_path + '/' + file_name, 'r') as zf:  # 각 zip파일들에 대하여
 
-            reader = [lst for lst in reader if lst != '\n' or lst != []]
-            # 데이터를 랜덤하게 섞기
-            random.shuffle(reader)
+        print("Exists:", os.path.exists(src_zip_path))
+        print("Readable:", os.access(src_zip_path, os.R_OK))
+        print("Writable:", os.access(src_zip_path, os.W_OK))
 
-            # 전체 개수
-            total = len(reader)
+        # 출력 ZIP 파일 이름들
+        output_zips = {
+            'train': f'{src_zip_path}_train.zip',
+            'val': f'{src_zip_path}_val.zip',
+            'test': f'{src_zip_path}_test.zip'
+        }
 
-            # 7:2:1 비율로 나누기 위한 인덱스 계산
-            train_end = int(total * 0.7)
-            val_end = train_end + int(total * 0.2)
+        # Step 1: 원본 ZIP에서 npz 파일 리스트 가져오기
+        npz_files = [name for name in zf.namelist() if name.endswith('.npz')]
 
-            # 슬라이싱
-            train_set = reader[:train_end]
-            val_set = reader[train_end:val_end]
-            test_set = reader[val_end:]
+        # Step 2: 섞고 나누기
+        random.shuffle(npz_files)  # 랜덤 셔플
+        n_total = len(npz_files)
+        n_train = int(n_total * 0.7)
+        n_val = int(n_total * 0.2)
+        n_test = n_total - n_train - n_val  # 나머지
 
-            # 새로운 파일 이름 생성
-            base_name = os.path.splitext(file_name)[0]
-            train_file = os.path.join(folder_path, f"{base_name}_train.csv")
-            validation_file = os.path.join(folder_path, f"{base_name}_validation.csv")
-            test_file = os.path.join(folder_path, f"{base_name}_test.csv")
+        split_dict = {
+            'train': npz_files[:n_train],
+            'val': npz_files[n_train:n_train + n_val],
+            'test': npz_files[n_train + n_val:]
+        }
 
-            # 새로운 파일로 저장
-            def save_csv(data, path):
-                with open(path, 'w', encoding='utf-8', newline='') as out_file:
-                    writer = csv.writer(out_file)
-                    writer.writerows(data)
+        # Step 3: 각각을 새 zip 파일로 저장
+        for split_name, file_list in split_dict.items():
+            with zipfile.ZipFile(output_zips[split_name], 'a') as out_zip:
+                for fn in file_list:
+                    # ZIP 내 파일을 읽고 그대로 새 ZIP에 쓰기
+                    with zf.open(fn) as source_file:
+                        data = source_file.read()
+                        out_zip.writestr(fn, data)
 
-            save_csv(train_set, train_file)
-            save_csv(val_set, validation_file)
-            save_csv(test_set, test_file)
-
-            print(f"Processed {file_name}: Saved as {train_file}, {validation_file}, and {test_file}.")
-
-
-# 특정 폴더 경로 지정
-folder_path = "./"
-split_csv_files(folder_path)
+        print(f"✅ 분할 완료: {file_name} train.zip, val.zip, test.zip 생성됨.")
