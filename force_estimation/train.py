@@ -6,6 +6,8 @@ import torchinfo
 import yaml
 import ast
 import shutil
+import npz_dataset_method  # 먼저 메서드 붙임이 일어남
+from npz_dataset import RFTDataset
 from torch.optim import lr_scheduler
 
 import wandb
@@ -13,7 +15,6 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from dataset import CFDataset
 from model import *
 from apply_img_augmentation import *
 
@@ -118,7 +119,8 @@ class ForceEstimation:
         torchinfo.summary(self.model, input_size=(self.batch_size, target_index, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
-        self.test_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataset.preprocess()
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
         if train_mode:
@@ -139,11 +141,13 @@ class ForceEstimation:
             copy_config(self.save_dir)
 
             # train dataset
-            self.train_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['train_data_dir'])
+            self.train_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['train_data_dir'])
+            self.train_dataset.preprocess()
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
             # validation dataset
-            self.val_dataset = CFDataset(target_index, stride, image_type=self.image_type, image_resize=image_resize, image_size=image_size, path=cfg['val_data_dir'])
+            self.val_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['val_data_dir'])
+            self.val_dataset.preprocess()
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             # optimizer
