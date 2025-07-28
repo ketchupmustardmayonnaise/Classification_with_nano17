@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import ast
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -27,7 +28,7 @@ def copy_config(dir):
     shutil.copy(src_path, dst_path)
     
 
-def write_basic_information(self, save_dir,use_wandb, use_all_sequence, target_indices, stride,
+def write_basic_information( save_dir,use_wandb, use_all_sequence, target_indices, stride,
                                 image_type, image_resize, image_size, augmentation_angle,
                                 encoder, encoder_output,
                                 fc_num_layer, fc_hidden_dim,

@@ -14,7 +14,7 @@ num_classes = 8
 IMG_MAX = 512
 IMG_MAX_DIFF = 60
 
-class CFDataset(Dataset):
+class Preprocessing(Dataset):
     def __init__(self, target_indices, stride, use_all_sequence=True, image_resize=False, image_size=(28, 28), image_type='RGB', path='./data/origin'):
         self.target_indices = target_indices
         self.stride = stride

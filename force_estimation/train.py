@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 from util import *
-from Classification_with_nano17.force_estimation.dataPreprocessing import CFDataset
+from Classification_with_nano17.force_estimation.dataPreprocessing import Preprocessing
 from model import *
 from apply_img_augmentation import *
 
@@ -79,7 +79,7 @@ class ForceEstimation:
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_indices, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
-        self.test_dataset = CFDataset(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=image_size, path=cfg['test_data_dir'])
+        self.test_dataset = Preprocessing(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=image_size, path=cfg['test_data_dir'])
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
 
@@ -115,6 +115,12 @@ class ForceEstimation:
         val_best_loss = 1e10
 
         for epoch in range(self.num_epoch):
+            msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
+              ' Validation MSE: {:.3f}, Validation MAE: {:.3f}, {}'
+
+        val_best_loss = 1e10
+
+        for epoch in range(self.num_epoch):
             self.model.train()
             MSE = []
             MAE = []
@@ -127,19 +133,14 @@ class ForceEstimation:
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                if self.use_all_sequence:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
-                    if self.loss_type == 'MSE+MAE':
-                        loss = (MSEloss + L1_loss) / 2
-                    else: loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
+                MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                                                       reduction='mean')
+                L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(),
+                                                      reduction='mean')
+                if self.loss_type == 'MSE+MAE':
+                    loss = (MSEloss + L1_loss) / 2
                 else:
-                    MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
-                    L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.squeeze().float(), reduction='mean')
-                    if self.loss_type == 'MSE+MAE':
-                        loss = (MSEloss + L1_loss) / 2
-                    else:
-                        loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
+                    loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
 
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
@@ -261,13 +262,12 @@ class ForceEstimation:
         return MSE, MAE
     
     def setup_run(self) : 
-
         # train dataset
-        self.train_dataset = CFDataset(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=self.image_size, path=self.cfg['train_data_dir'])
+        self.train_dataset = Preprocessing(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=self.image_size, path=self.cfg['train_data_dir'])
         self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
 
         # validation dataset
-        self.val_dataset = CFDataset(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=self.image_size, path=self.cfg['val_data_dir'])
+        self.val_dataset = Preprocessing(self.target_indices, self.stride, use_all_sequence=self.use_all_sequence, image_type=self.image_type, image_resize=self.image_resize, image_size=self.image_size, path=self.cfg['val_data_dir'])
         self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
         # optimizer
