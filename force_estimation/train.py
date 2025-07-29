@@ -205,7 +205,7 @@ class ForceEstimation:
                     "loss": self.loss_type,
                 }
 
-                run_name = encoder + '_' + decoder + '_' + optimizer + '_lr-' + f'{time_suffix}'
+                run_name = '(many-to-many)after_modify_rgb_30frames_MSE' + encoder + '_' + decoder + '_' + f'{time_suffix}'
                 self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
 
             self.train()

@@ -3,7 +3,6 @@ import zipfile
 import torch
 import torch.nn.functional as F
 import numpy as np
-from keras.src.legacy.preprocessing.text import one_hot
 from torch.utils.data import Dataset
 import matplotlib.pyplot as plt
 

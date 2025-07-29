@@ -12,9 +12,10 @@ def _divide_RGB_channels(self):
         new_seq = []
         initial_img = None
         for frame_idx in range(len(self.img[sequence_idx])):
-            # 처음 프레임이라면 시행 X
+            # 처음 or 두 번째 프레임이라면 시행 X
             if frame_idx == 0:
                 initial_img = self.img[sequence_idx][0]
+            elif frame_idx == 1: continue
 
             current_frame = self.img[sequence_idx][frame_idx]
             previous_frame = self.img[sequence_idx][frame_idx - 1]
@@ -32,7 +33,7 @@ def _divide_RGB_channels(self):
 
         self.img[sequence_idx] = np.array(new_seq)
         self.img_ts[sequence_idx] = self.img_ts[sequence_idx][1:]
-        self.frame[sequence_idx] -= 1
+        self.frame[sequence_idx] -= 2
 
 def _extract_mean_and_max(self, channel):
     cap = []
