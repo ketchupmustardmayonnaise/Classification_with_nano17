@@ -1,0 +1,1 @@
+from models.cnnLstm import ImageToVectorModel
