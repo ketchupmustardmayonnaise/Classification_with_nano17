@@ -457,31 +457,6 @@ class ForceEstimation:
                 MSE_for_axis.append(mse)
                 MAE_for_axis.append(mae)
 
-        '''
-        for start in range(0, 9, 3): # 가장 앞에 위치한 9개의 데이터에 대해서만 그림
-            end = start + 3
-            fig, axes = plt.subplots(3, 3, figsize=(14, 12)) # plot 만듦
-
-            for index in range(start, end): # 한 plot 안에 세 데이터를 배치
-                _f = f[index]
-                _pf = pf[index]
-
-                for num_data in range(3): # 3개 Fx, Fy, Fz에 대하여
-                    axes[index % 3, num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
-                    axes[index % 3, num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
-                    axes[index % 3, num_data].set_xlabel('Frame')
-                    axes[index % 3, num_data].set_ylabel('Force (N)')
-
-                    if num_data == 0: axes[index % 3, num_data].set_title('X')
-                    elif num_data == 1: axes[index % 3, num_data].set_title('Y')
-                    elif num_data == 2: axes[index % 3, num_data].set_title('Z')
-
-            plt.legend()
-            plt.savefig(save_dir + f'/test_{int(start / 3) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
-                        format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
-            plt.show()
-        '''
-
         for index in range(34, 35):  # 테스트셋 35번째 이미지만 그림
             fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
 
@@ -519,6 +494,8 @@ class ForceEstimation:
                     axes[num_data].set_title('Z')
 
             plt.legend()
+            plt.savefig(save_dir + f'/test_35th_data.png', dpi=300, facecolor='white', edgecolor='black',
+                        format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
             plt.show()
 
         MSE /= len(self.test_dataloader)
