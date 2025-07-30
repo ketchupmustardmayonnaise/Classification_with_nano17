@@ -496,7 +496,7 @@ class ForceEstimation:
             plt.legend()
             plt.savefig(save_dir + f'/test_35th_data.png', dpi=300, facecolor='white', edgecolor='black',
                         format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
-            plt.show()
+            # plt.show()
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
