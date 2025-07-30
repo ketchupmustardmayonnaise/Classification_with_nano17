@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: True
 
 # encoder
@@ -29,7 +29,7 @@ train_data_dir: ../dataset/rft64/train
 val_data_dir: ../dataset/rft64/val
 test_data_dir: ../dataset/rft64/test
 save_dir: ../saved_models
-model_dir: C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_bidirectional_lstm_07-28_22-05-02\epoch_129.pt
+model_dir: C:\Users\user\Documents\model_저장\(many-to-many) after modifying RGB image_30frames_MSE_07-29_18-14-01\epoch_127.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None

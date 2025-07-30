@@ -6,7 +6,7 @@ from matplotlib.animation import FuncAnimation
 import npz_dataset_method
 from npz_dataset import RFTDataset
 
-dataset = RFTDataset(path='./../dataset/rft64/train')
+dataset = RFTDataset(path='./../dataset/rft64/test')
 dataset.preprocess()
 
 def play_sequence(images, forces):
@@ -75,11 +75,11 @@ def play_sequence(images, forces):
 
     plt.tight_layout()
     plt.show(block=False) # plt.show()는 blocking이므로, 다음 시퀀스로 자연스럽게 넘어감
-    plt.pause(5)
+    plt.pause(50)
     plt.close()
 
 # ---------- 전체 시퀀스 반복 재생 ----------
 for index in range(dataset.__len__()):
-    images, _, forces = dataset.__getitem__(index)
+    images, _, forces = dataset.__getitem__(6)
     print(f"Playing sequence {index+1}/{len(dataset)}...")
     play_sequence(images, forces)

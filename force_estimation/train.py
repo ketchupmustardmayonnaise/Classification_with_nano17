@@ -40,6 +40,17 @@ def copy_config(dir):
     # 복사 실행
     shutil.copy(src_path, dst_path)
 
+def lists_for_plot(f, pf, target_index, plot_index):
+    # plot을 위해, 시퀀스 별로 index 뽑음
+    f_result = f[:len(f) - (target_index - plot_index)]
+
+    predicted_force_sequence = []
+    predicted_force_sequence.extend(pf[0][:plot_index])  # 첫 번째 데이터는 반만 저장
+    for i in range(1, len(pf)):
+        predicted_force_sequence.append(pf[i][plot_index - 1])
+
+    return f_result, predicted_force_sequence
+
 class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
@@ -120,6 +131,7 @@ class ForceEstimation:
         self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
         self.test_dataset.preprocess()
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
+        self.plot_index = 30
 
         if train_mode:
             self.best_epoch = 0
@@ -402,17 +414,14 @@ class ForceEstimation:
 
                 X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
                 _force = force.detach().cpu().numpy().squeeze().tolist()
-                f.append(force_origin)
 
                 pred_force = self.model(X)
                 _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
 
-                force_sequence = []
-                force_sequence.extend(_pred_force[0])  # 첫 번째 데이터는 그냥 저장
-                for i in range(1, len(_pred_force)):
-                    force_sequence.append(_pred_force[i][self.target_index - 1])
-
-                pf.append(force_sequence)
+                # plot을 위해, 시퀀스를 합침
+                _f, _pf = lists_for_plot(force_origin, _pred_force, self.target_index, self.plot_index)
+                f.append(_f)
+                pf.append(_pf)
 
                 MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
                                                     reduction='mean').item()
@@ -427,6 +436,7 @@ class ForceEstimation:
                 MSE_for_axis.append(mse)
                 MAE_for_axis.append(mae)
 
+        '''
         for start in range(0, 9, 3): # 가장 앞에 위치한 9개의 데이터에 대해서만 그림
             end = start + 3
             fig, axes = plt.subplots(3, 3, figsize=(14, 12)) # plot 만듦
@@ -448,6 +458,30 @@ class ForceEstimation:
             plt.legend()
             plt.savefig(save_dir + f'/test_{int(start / 3) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
                         format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
+            plt.show()
+        '''
+
+        for start in range(34, 35):  # 가장 앞에 위치한 9개의 데이터에 대해서만 그림
+            fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
+
+            _f = f[start]
+            _pf = pf[start]
+
+            plt.suptitle("15th frame")
+            for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
+                axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
+                axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
+                axes[num_data].set_xlabel('Frame')
+                axes[num_data].set_ylabel('Force (N)')
+
+                if num_data == 0:
+                    axes[num_data].set_title('X')
+                elif num_data == 1:
+                    axes[num_data].set_title('Y')
+                elif num_data == 2:
+                    axes[num_data].set_title('Z')
+
+            plt.legend()
             plt.show()
 
         MSE /= len(self.test_dataloader)
