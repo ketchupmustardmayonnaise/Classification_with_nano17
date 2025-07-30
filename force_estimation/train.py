@@ -51,6 +51,20 @@ def lists_for_plot(f, pf, target_index, plot_index):
 
     return f_result, predicted_force_sequence
 
+def lists_for_plot_mean(f, pf):
+    # plot을 위해, 시퀀스 별로 index 뽑음
+    predicted_force_sequence = [[] for _ in range(len(f))]
+
+    # predicted force의 모든 값을 리스트에 append함.
+    for i in range(0, len(pf)):
+        for j in range(0, len(pf[i])):
+            predicted_force_sequence[i+j].append(pf[i][j])
+
+    for i in range(0, len(predicted_force_sequence)):
+        predicted_force_sequence[i] = np.mean(np.array(predicted_force_sequence[i]), axis=0)
+
+    return f, predicted_force_sequence
+
 class ForceEstimation:
     def __init__(self, cfg):
         parser = argparse.ArgumentParser()
@@ -87,6 +101,8 @@ class ForceEstimation:
         parser.add_argument("--weight_decay", default=None, type=float)
         parser.add_argument('--dropout', default=None, type=float)
         parser.add_argument('--loss', default=None, type=str)
+
+        parser.add_argument('--plot_index', default=None, type=int)
         args = parser.parse_args()
 
         # parameters
@@ -116,6 +132,7 @@ class ForceEstimation:
         dropout = float(args.dropout) if args.dropout is not None else cfg['dropout']
         self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
         self.loss_type = args.loss if args.loss is not None else cfg['loss']
+        self.plot_index = args.plot_index if args.plot_index is not None else cfg['plot_index'] # 몇 번째 data를 가지고 plot할 것인지 (-1이면 mean으로 처리)
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -131,7 +148,6 @@ class ForceEstimation:
         self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
         self.test_dataset.preprocess()
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
-        self.plot_index = 30
 
         if train_mode:
             self.best_epoch = 0
@@ -419,15 +435,20 @@ class ForceEstimation:
                 _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
 
                 # plot을 위해, 시퀀스를 합침
-                _f, _pf = lists_for_plot(force_origin, _pred_force, self.target_index, self.plot_index)
+                if self.plot_index <= 0 or self.plot_index > self.target_index:
+                    _f, _pf = lists_for_plot_mean(force_origin, _pred_force)
+                else: _f, _pf = lists_for_plot(force_origin, _pred_force, self.target_index, self.plot_index)
+
                 f.append(_f)
                 pf.append(_pf)
 
+                # 평균 MSE, MAE 계산
                 MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
                                                     reduction='mean').item()
                 MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
                                                    reduction='mean').item()
 
+                # 각 X, Y, Z별 MSE, MAE 계산
                 mse = torch.mean(torch.nn.functional.mse_loss(pred_force.float(), force.float(),
                                                     reduction='none'), dim=0).tolist()
                 mae = torch.mean(torch.nn.functional.l1_loss(pred_force.float(), force.float(),
@@ -461,18 +482,34 @@ class ForceEstimation:
             plt.show()
         '''
 
-        for start in range(34, 35):  # 가장 앞에 위치한 9개의 데이터에 대해서만 그림
+        for index in range(34, 35):  # 테스트셋 35번째 이미지만 그림
             fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
 
-            _f = f[start]
-            _pf = pf[start]
+            _f = f[index]
+            _pf = pf[index]
 
-            plt.suptitle("15th frame")
+            if self.plot_index <= 0 or self.plot_index > self.target_index:
+                plt.suptitle(f"mean frame")
+            else:
+                plt.suptitle(f"{self.plot_index}th frame")
+
+            # 해당 plot에 대해서만 MSE, MAE
+            mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                               reduction='none'), axis=0)
+            mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                               reduction='none'), axis=0)
+
             for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
                 axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
                 axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
                 axes[num_data].set_xlabel('Frame')
                 axes[num_data].set_ylabel('Force (N)')
+
+                axes[num_data].text(x=0.05, y=0.05,
+                                    s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
+                                    transform=axes[num_data].transAxes,
+                                    horizontalalignment='left',
+                                    verticalalignment='top')
 
                 if num_data == 0:
                     axes[num_data].set_title('X')
@@ -486,7 +523,7 @@ class ForceEstimation:
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
-        print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+        print("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
 
         MSE_for_axis = torch.Tensor(MSE_for_axis)
         MSE_for_axis = torch.mean(MSE_for_axis, dim=(0,1))
@@ -498,7 +535,10 @@ class ForceEstimation:
 
         train_txt_path = save_dir + "/train.txt"
         with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
+            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
+            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
+            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+
         return MSE, MAE
 
 if __name__ == '__main__':

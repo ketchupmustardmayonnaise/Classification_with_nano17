@@ -104,7 +104,7 @@ class RFTDataset(Dataset):
         # label
         self.label = F.one_hot(torch.Tensor(self.label).to(torch.int64), num_classes=num_classes)
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        # fig, axes = plt.subplots(1, 2, figsize=(12, 4))
         #axes[0].plot(b_f)
         #axes[1].plot(b_a)
         #plt.show()
