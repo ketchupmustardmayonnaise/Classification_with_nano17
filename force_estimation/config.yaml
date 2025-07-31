@@ -29,7 +29,7 @@ train_data_dir: ../dataset/rft64/train
 val_data_dir: ../dataset/rft64/val
 test_data_dir: ../dataset/rft64/test
 save_dir: ../saved_models
-model_dir: C:\Users\user\Documents\model_저장\(many-to-many) after modifying RGB image_30frames_MSE_07-29_18-14-01\epoch_127.pt
+model_dir: C:\Users\user\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_bidirectional_lstm_07-30_19-43-16\epoch_179.pt
 
 optimizer: Adam # [Adam, SGD, rmsprop]
 scheduler: None
@@ -38,6 +38,6 @@ num_epoch: 200
 learning_rate: 0.0001
 weight_decay: 0.00
 dropout: 0.3
-loss: MSE # [MSE, MAE, MSE+MAE]
+loss: MAE # [MSE, MAE, MSE+MAE]
 
 plot_index: -1

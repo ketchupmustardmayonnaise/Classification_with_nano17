@@ -233,7 +233,7 @@ class ForceEstimation:
                     "loss": self.loss_type,
                 }
 
-                run_name = '(many-to-many)after_modify_rgb_30frames_MSE' + encoder + '_' + decoder + '_' + f'{time_suffix}'
+                run_name = '(many-to-many) after_modify_rgb_30frames_MAE_adddatas_stateful_alexnet_bilstm_' + f'{time_suffix}'
                 self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
 
             self.train()
@@ -457,7 +457,7 @@ class ForceEstimation:
                 MSE_for_axis.append(mse)
                 MAE_for_axis.append(mae)
 
-        for index in range(34, 35):  # 테스트셋 35번째 이미지만 그림
+        for index in range(len(self.test_dataset)):  # 테스트셋 35번째 이미지만 그림
             fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
 
             _f = f[index]
@@ -479,6 +479,7 @@ class ForceEstimation:
                 axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
                 axes[num_data].set_xlabel('Frame')
                 axes[num_data].set_ylabel('Force (N)')
+                if num_data == 0 or num_data == 1: axes[num_data].set_ylim([-1.5, 1.5])
 
                 axes[num_data].text(x=0.05, y=0.05,
                                     s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
@@ -494,7 +495,7 @@ class ForceEstimation:
                     axes[num_data].set_title('Z')
 
             plt.legend()
-            plt.savefig(save_dir + f'/test_35th_data.png', dpi=300, facecolor='white', edgecolor='black',
+            plt.savefig(save_dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
                         format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
             # plt.show()
 
@@ -513,8 +514,8 @@ class ForceEstimation:
         train_txt_path = save_dir + "/train.txt"
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
-            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
-            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
+            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
 
         return MSE, MAE
 

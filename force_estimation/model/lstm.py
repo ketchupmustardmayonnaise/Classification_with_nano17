@@ -36,7 +36,7 @@ class LSTM(nn.Module):
             xi = x[f : f + self.target_index]
 
             out, (h, c) = self.LSTM(xi, (h, c))
-            h, c = h.detach(), c.detach()
+            # h, c = h.detach(), c.detach()
 
             if output is None:
                 output = out.unsqueeze(0)
