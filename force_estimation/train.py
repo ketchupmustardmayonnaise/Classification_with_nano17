@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from models import *
-from utils.apply_img_augmentation import *
+from model import *
+from apply_img_augmentation import *
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -64,6 +64,52 @@ def lists_for_plot_mean(f, pf):
         predicted_force_sequence[i] = np.mean(np.array(predicted_force_sequence[i]), axis=0)
 
     return f, predicted_force_sequence
+
+def plot(f, pf, plot_index, save_dir):
+    dir = f'{save_dir}/{plot_index}th_frame_of_sliding_window'
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    for index in range(len(f)):  # 테스트셋 35번째 이미지만 그림
+        fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
+
+        _f = f[index]
+        _pf = pf[index]
+
+        if plot_index <= 0:
+            plt.suptitle(f"mean frame")
+        else:
+            plt.suptitle(f"{index}th frame of sliding window")
+
+        # 해당 plot에 대해서만 MSE, MAE
+        mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                                      reduction='none'), axis=0)
+        mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                                     reduction='none'), axis=0)
+
+        for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
+            axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
+            axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
+            axes[num_data].set_xlabel('Frame')
+            axes[num_data].set_ylabel('Force (N)')
+            if num_data == 0 or num_data == 1: axes[num_data].set_ylim([-1.5, 1.5])
+
+            axes[num_data].text(x=0.05, y=0.05,
+                                s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
+                                transform=axes[num_data].transAxes,
+                                horizontalalignment='left',
+                                verticalalignment='top')
+
+            if num_data == 0:
+                axes[num_data].set_title('X')
+            elif num_data == 1:
+                axes[num_data].set_title('Y')
+            elif num_data == 2:
+                axes[num_data].set_title('Z')
+
+        plt.legend()
+        plt.savefig(dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
+                    format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
 
 class ForceEstimation:
     def __init__(self, cfg):
@@ -142,7 +188,7 @@ class ForceEstimation:
                              self.target_index, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 3, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
@@ -233,11 +279,7 @@ class ForceEstimation:
                     "loss": self.loss_type,
                 }
 
-<<<<<<< HEAD
                 run_name = '(many-to-many) after_modify_rgb_30frames_MAE_adddatas_stateful_alexnet_bilstm_' + f'{time_suffix}'
-=======
-                run_name = '(many-to-many)after_modify_rgb_30frames_MSE' + encoder + '_' + decoder + '_' + f'{time_suffix}_convNeXt'
->>>>>>> 283b6b2 (test result)
                 self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
 
             self.train()
@@ -358,16 +400,22 @@ class ForceEstimation:
 
             # best model select
             if self.loss_type == "MAE" and val_MAE < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = val_MAE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE" and val_MSE < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = val_MSE
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = (val_MSE + val_MAE) / 2
                 torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
@@ -461,47 +509,10 @@ class ForceEstimation:
                 MSE_for_axis.append(mse)
                 MAE_for_axis.append(mae)
 
-        for index in range(len(self.test_dataset)):  # 테스트셋 35번째 이미지만 그림
-            fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
-
-            _f = f[index]
-            _pf = pf[index]
-
-            if self.plot_index <= 0 or self.plot_index > self.target_index:
-                plt.suptitle(f"mean frame")
-            else:
-                plt.suptitle(f"{self.plot_index}th frame")
-
-            # 해당 plot에 대해서만 MSE, MAE
-            mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                               reduction='none'), axis=0)
-            mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                               reduction='none'), axis=0)
-
-            for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
-                axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
-                axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
-                axes[num_data].set_xlabel('Frame')
-                axes[num_data].set_ylabel('Force (N)')
-                if num_data == 0 or num_data == 1: axes[num_data].set_ylim([-1.5, 1.5])
-
-                axes[num_data].text(x=0.05, y=0.05,
-                                    s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
-                                    transform=axes[num_data].transAxes,
-                                    horizontalalignment='left',
-                                    verticalalignment='top')
-
-                if num_data == 0:
-                    axes[num_data].set_title('X')
-                elif num_data == 1:
-                    axes[num_data].set_title('Y')
-                elif num_data == 2:
-                    axes[num_data].set_title('Z')
-
-            plt.legend()
-            plt.savefig(save_dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
-                        format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
-            # plt.show()
+        plot(f, pf, -1, save_dir)
+        start = 15
+        for i in range(start, self.target_index+1, 5):
+            plot(f, pf, i, save_dir)
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
