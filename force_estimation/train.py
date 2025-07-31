@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from model import *
-from apply_img_augmentation import *
+from models import *
+from utils.apply_img_augmentation import *
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -142,7 +142,7 @@ class ForceEstimation:
                              self.target_index, self.image_type, dropout,
                              fc_hidden_dim=fc_hidden_dim)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 3, image_size[0], image_size[1]))
 
         # test dataset
         self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
@@ -233,7 +233,11 @@ class ForceEstimation:
                     "loss": self.loss_type,
                 }
 
+<<<<<<< HEAD
                 run_name = '(many-to-many) after_modify_rgb_30frames_MAE_adddatas_stateful_alexnet_bilstm_' + f'{time_suffix}'
+=======
+                run_name = '(many-to-many)after_modify_rgb_30frames_MSE' + encoder + '_' + decoder + '_' + f'{time_suffix}_convNeXt'
+>>>>>>> 283b6b2 (test result)
                 self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
 
             self.train()

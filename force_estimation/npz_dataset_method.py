@@ -125,7 +125,7 @@ def _normalize_image(self, img_max, img_max_diff):
     if self.image_type.lower() == 'rgb':
         for sequence_idx in range(len(self.img)):
             self.img[sequence_idx] = self.img[sequence_idx].astype('float32')
-
+            
             self.img[sequence_idx][:, 0] = (self.img[sequence_idx][:, 0] * 255 / self.rgb_mean_and_max[1]) # [0, 255]
             self.img[sequence_idx][:, 0] -= (self.rgb_mean_and_max[0] * 255 / self.rgb_mean_and_max[1])
 
@@ -143,7 +143,16 @@ def _normalize_image(self, img_max, img_max_diff):
         for index in range(len(self.img)):
             self.img[index] = np.array(self.img[index]).astype(np.float32)
             self.img[index] = np.where(self.img[index] >= img_max_diff, 1.0, self.img[index] / img_max_diff)
-
+    elif self.image_type.lower() == 'zScore':
+        for sequence_idx in range(len(self.img)):
+            img = self.img[sequence_idx].astype('float32')
+            
+            means = np.mean(img, axis=0)
+            stds = np.std(img, axis=0)
+            
+            epsilon = 1e-8
+            
+            self.img[sequence_idx] = (img - means) / (stds + epsilon)
     else:
         raise Exception('Unknown image type')
 
