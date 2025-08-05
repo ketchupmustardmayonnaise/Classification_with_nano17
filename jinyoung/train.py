@@ -3,22 +3,18 @@ import time
 import torchinfo
 import yaml
 import ast
-import wandb
-import matplotlib.pyplot as plt
-import npz_dataset_method  # 먼저 메서드 붙임이 일어남
-import lightning as pl
-from npz_dataset import RFTDataset
+import dataset.npz_dataset_method  # 먼저 메서드 붙임이 일어남
+from dataset.npz_dataset import RFTDataset
 from torch.optim import lr_scheduler
-from sklearn.model_selection import KFold
-from torch.utils.data import Subset, ConcatDataset
-from util import *
-from models import ImageToVectorModel
-from apply_img_augmentation import *
-
+from utils.util import *
+from utils.apply_img_augmentation import *
+import wandb
+from torch.utils.data import DataLoader #, Subset, ConcatDataset
+#from sklearn.model_selection import KFold
+from models.CFModel import CFModel
 
 class ForceEstimation:
     def __init__(self, cfg):
-        # parameters
         self.cfg = cfg
         self.best_epoch = 0
 
@@ -44,7 +40,7 @@ class ForceEstimation:
             ('train_mode', str), # train일 때만 학습 (bool)
             ('use_wandb', str2bool), # wandb에 올릴 것인지 (bool)
             ('image_resize', str2bool), # 이미지를 확대할 것인지 (bool)
-            ('target_index', int), # 몇 frame으로 자를 것인지 (bool)
+            ('frame_length', int), # 몇 frame으로 자를 것인지 (bool)
             ('stride', int), # 몇 frame만큼 띄워서 학습할 것인지 (int)
             ('augmentation_angle', int), # online augmentation 시, 각도 최대치 (int)
             ('num_epoch', int),
@@ -64,13 +60,14 @@ class ForceEstimation:
             ('scheduler_type', str), 
             ('loss_type', str), 
             ('image_size', ast.literal_eval) # 확대한다면, 이미지를 얼마나 확대할 것인지 (int, int)
+            ('plot_index', int) # 몇 번째 data를 가지고 plot할 것인지 (-1이면 mean으로 처리)
         ]
 
         # 3. 반복문을 통해 공통 파라미터 한 번에 초기화
         for key, p_type in common_params:
-            _init_param(key, p_type)     
-
-        image_size = [int(self.image_size[0]), int(self.image_size[1])]
+            _init_param(key, p_type)
+            
+        image_size = [int(image_size[0]), int(image_size[1])]
 
         time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
         self.save_dir = self.cfg['save_dir'] + "/" + self.encoder[0] + "_" + self.decoder + time_suffix
@@ -83,29 +80,18 @@ class ForceEstimation:
         
         copy_config(self.save_dir)
         
-        self.model = ImageToVectorModel(self.encoder_output, 3)
+        self.model = CFModel(self.encoder, self.encoder_output,
+                             self.decoder, self.decoder_output, self.rnn_layer, self.fc_num_layer,
+                             self.target_index, self.image_type, self.dropout,
+                             fc_hidden_dim=self.fc_hidden_dim)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
         
-        # train dataset
         self.train_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['train_data_dir'])
         self.train_dataset.preprocess()
         self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
-
-        # validation dataset
-        self.val_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['val_data_dir'])
-        self.val_dataset.preprocess()
-        self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
         
-        self.dataset = ConcatDataset([self.train_dataset, self.val_dataset])
-
-        # test dataset
-        # self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
-        # self.test_dataset.preprocess()
-        # self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
-
-        # optimizer
         if self.optimizer_type.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
                                         eps=1e-08, weight_decay=self.weight_decay, amsgrad=False)
@@ -120,18 +106,9 @@ class ForceEstimation:
             self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
         else: self.scheduler = None
 
-        #self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
-        #                                       end_factor=args.end_factor, total_iters=args.total_iters)
-
         # loss
-        if self.loss_type != "MSE+MAE":
-            self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
-        
-        
-        # model configuration
- 
+        self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
 
-        
         if self.use_wandb:
                 # wandb
                 wandb_config = {
@@ -165,179 +142,207 @@ class ForceEstimation:
 
                 run_name = self.encoder[0] + '_' + self.decoder + '_' + self.optimizer + '_lr-' + f'{time_suffix}'
                 self.run_log = wandb.init(project="force_estimation", config=wandb_config, name=run_name)
-        
 
 
-    def validation(self, dataloader):
+    def validate(self, dataloader):
         self.model.eval()
-        val_mse_losses = []
-        val_mae_losses = []
+        MSE = 0
+        MAE = 0
+
         with torch.no_grad():
             for X, y, force in dataloader:
-                X, force = X.float().to(self.device), force.to(self.device)
+                if X.shape[1] < self.target_index: continue
+
+                X = X.squeeze()
+                force = force.squeeze()
+                _force = []
+                for start in range(0, len(force) - (self.target_index - 1)):
+                    _force.append(force[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
+
                 pred_force = self.model(X)
-                val_mse_losses.append(torch.nn.functional.mse_loss(pred_force.squeeze(), force.squeeze()).item())
-                val_mae_losses.append(torch.nn.functional.l1_loss(pred_force.squeeze(), force.squeeze()).item())
-                
-        return np.mean(val_mse_losses), np.mean(val_mae_losses)
 
-    
-    
+                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
+                                                    reduction='mean')
+                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
+                                                   reduction='mean')
 
-    def train_fold(self, train_dataloader, val_dataloader,fold_index):
-        """하나의 폴드에 대한 학습 및 검증을 수행하는 내부 메서드"""
-                
-        val_best_loss = float('inf')
+        MSE /= len(dataloader)
+        MAE /= len(dataloader)
+        return MSE, MAE
+
+    def train(self):
+        msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
+              ' Validation MSE: {:.3f}, Validation MAE: {:.3f}, {}'
+
+        val_best_loss = 1e10
 
         for epoch in range(self.num_epoch):
             self.model.train()
-            epoch_mse_losses = []
-            epoch_mae_losses = []
+            MSE = []
+            MAE = []
+            for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
+                if X.shape[1] < self.target_index: continue
+                X = X.squeeze()
 
-            for batch_idx, (X, y, force) in enumerate(train_dataloader):
-                # X = apply_augmentation_to_all_frame(X, self.augmentation_angle) # 필요시 증강 사용
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
+
+                force = force.squeeze()
+                _force = []
+                for start in range(0, len(force) - (self.target_index - 1)):
+                    _force.append(force[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
-                
-                # 손실 계산
-                mse_loss = torch.nn.functional.mse_loss(pred_force.squeeze(), force.squeeze())
-                l1_loss = torch.nn.functional.l1_loss(pred_force.squeeze(), force.squeeze())
-                
-                if self.loss_type == 'MSE+MAE':
-                    loss = (mse_loss + l1_loss) / 2
-                else:
-                    loss = self.loss(pred_force.squeeze(), force.squeeze())
 
-                epoch_mse_losses.append(mse_loss.item())
-                epoch_mae_losses.append(l1_loss.item())
+                loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
 
-                loss.backward()
+                loss.backward(retain_graph=True)
                 self.optimizer.step()
 
             if self.scheduler is not None: self.scheduler.step()
 
-            # 검증
-            val_MSE, val_MAE = self.validation(val_dataloader)
+            # test the model
+            val_MSE, val_MAE = self.validate(self.val_dataloader)
 
-            # 최고 모델 선택 및 저장
-            loss_criteria = {"MAE": val_MAE, "MSE": val_MSE, "MSE+MAE": (val_MSE + val_MAE) / 2}
-            current_val_loss = loss_criteria.get(self.loss_type)
-
-            improve = ""
-            if current_val_loss < val_best_loss:
+            # best model select
+            if self.loss_type == "MAE" and val_MAE < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
-                val_best_loss = current_val_loss
-                # 파일명에 폴드 번호를 추가하여 덮어쓰기 방지
-                save_path = os.path.join(self.save_dir, f"fold_{fold_index}_best_model.pt")
-                torch.save(self.model.state_dict(), save_path)
+                val_best_loss = val_MAE
+                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
-            
-            # 로그 메시지 포맷 및 출력
-            msg = '[Fold {} | Epoch {}/{}] Lr: {:.6f} | Train MSE: {:.3f}, MAE: {:.3f} | Val MSE: {:.3f}, MAE: {:.3f} {}'
-            print_msg = msg.format(fold_index, epoch + 1, self.num_epoch, self.learning_rate, 
-                                   np.mean(epoch_mse_losses), np.mean(epoch_mae_losses), 
-                                   val_MSE, val_MAE, improve)
-            print(print_msg)
+            elif self.loss_type == "MSE" and val_MSE < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
+                self.best_epoch = epoch + 1
+                val_best_loss = val_MSE
+                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                improve = "******"
+            elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
+                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
+                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
+                self.best_epoch = epoch + 1
+                val_best_loss = (val_MSE + val_MAE) / 2
+                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                improve = "******"
+            else: improve = " "
 
-            # 로그 파일 및 wandb 기록
-            train_txt_path = os.path.join(self.save_dir, "train_log.txt")
-            with open(train_txt_path, 'a') as f:
-                f.write(print_msg + '\n')
-            
+            print(msg.format(
+                epoch + 1,  # {}/{} 중 첫 번째
+                self.num_epoch,  # {}/{} 중 두 번째
+                float(self.learning_rate),
+                float(np.mean(MSE)),  # {:.3f}
+                float(np.mean(MAE)),  # {:.3f}
+                float(val_MSE),  # {:.3f}
+                float(val_MAE),  # {:.3f}
+                improve
+            ))
+
+            train_txt_path = self.save_dir + "/train.txt"
+            with open(train_txt_path, 'a') as train_txt_file:
+                train_txt_file.write(msg.format(
+                    epoch + 1,
+                    self.num_epoch,
+                    float(self.learning_rate),
+                    float(np.mean(MSE)),
+                    float(np.mean(MAE)),
+                    float(val_MSE),
+                    float(val_MAE),
+                    improve
+                ) + '\n')
+
             if self.use_wandb:
-                wandb.log({
-                    f"Fold-{fold_index}/Train MSE": np.mean(epoch_mse_losses),
-                    f"Fold-{fold_index}/Train MAE": np.mean(epoch_mae_losses),
-                    f"Fold-{fold_index}/Validation MSE": val_MSE,
-                    f"Fold-{fold_index}/Validation MAE": val_MAE,
-                    f"Fold-{fold_index}/Best Loss": val_best_loss,
-                })
-        
-        return val_best_loss
-    
-    def train(self):
-        """K-Fold 교차 검증을 총괄하는 메인 학습 메서드"""
-        kfold = KFold(n_splits=self.k_folds, shuffle=True, random_state=self.seed)
-        fold_results = []
+                try:
+                    wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
+                                  "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+                except:
+                    wandb.finish()
 
-        if self.use_wandb:
-            # wandb.init(...) # wandb 초기화
-            pass
+        self.model.load_state_dict(torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch)))
+        self.test(self.save_dir)
+        if self.use_wandb: wandb.finish()
 
-        for fold, (train_ids, val_ids) in enumerate(kfold.split(self.dataset)):
-            print(f'{"="*25} FOLD {fold + 1}/{self.k_folds} {"="*25}')
-            
-            train_subset = Subset(self.dataset, train_ids)
-            val_subset = Subset(self.dataset, val_ids)
-
-            train_loader = torch.utils.data.DataLoader(train_subset, batch_size=self.batch_size, shuffle=True)
-            val_loader = torch.utils.data.DataLoader(val_subset, batch_size=self.batch_size)
-
-            # 현재 폴드에 대한 학습 실행
-            best_loss_for_fold = self.train_fold(train_loader, val_loader, fold + 1)
-            fold_results.append(best_loss_for_fold)
-        
-        # 최종 결과 출력
-        print(f'\n{"="*25} K-FOLD FINAL RESULTS {"="*25}')
-        print(f'{self.k_folds}-Fold CV best loss: {np.mean(fold_results):.4f} ± {np.std(fold_results):.4f}')
 
     def test(self, save_dir):
         self.model.eval()
         MSE = 0
         MAE = 0
 
+        MSE_for_axis = []
+        MAE_for_axis = []
+
         f = []
         pf = []
 
         with torch.no_grad():
             for X, y, force in self.test_dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                if X.shape[1] < self.target_index: continue
+                X = X.squeeze()
+
+                force_origin = force.squeeze()
+                _force = []
+                for start in range(0, len(force_origin) - (self.target_index - 1)):
+                    _force.append(force_origin[start:start + self.target_index].tolist())
+                _force = torch.Tensor(_force)
+
+                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
                 _force = force.detach().cpu().numpy().squeeze().tolist()
-                f.append(_force)
 
                 pred_force = self.model(X)
                 _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
-                pf.append(_pred_force)
 
-                if self.use_all_sequence:
-                    MSE += torch.nn.functional.mse_loss(pred_force.float(), force.reshape((force.shape[1])).float())
-                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.reshape((force.shape[1])).float())
-                else:
-                    MSE += torch.nn.functional.mse_loss(pred_force.reshape((len(force))).float(), force.float(),
-                                                        reduction='mean').item()
-                    MAE += torch.nn.functional.l1_loss(pred_force.reshape((len(force))).float(), force.float(),
-                                                       reduction='mean').item()
+                # plot을 위해, 시퀀스를 합침
+                if self.plot_index <= 0 or self.plot_index > self.target_index:
+                    _f, _pf = lists_for_plot_mean(force_origin, _pred_force)
+                else: _f, _pf = lists_for_plot(force_origin, _pred_force, self.target_index, self.plot_index)
 
-        if self.use_all_sequence:
-            f = sum(f, [])
-            pf = sum(pf, [])
+                f.append(_f)
+                pf.append(_pf)
 
-        for start in range(0, 36, 12):
-            i = 0
-            end = start + 12
+                # 평균 MSE, MAE 계산
+                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
+                                                    reduction='mean').item()
+                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
+                                                   reduction='mean').item()
 
-            for index in range(40):
-                _f = f[i : i + self.test_dataset.frame[index]]
-                _pf = pf[i : i + self.test_dataset.frame[index]]
-                if index > start and index <= end:
-                    plt.subplot(3, 4, index - start)
-                    plt.plot(np.array(_f), color='r', label='Force')
-                    plt.plot(np.array(_pf), color='b', label='Predicted Force')
-                i += self.test_dataset.frame[index]
+                # 각 X, Y, Z별 MSE, MAE 계산
+                mse = torch.mean(torch.nn.functional.mse_loss(pred_force.float(), force.float(),
+                                                    reduction='none'), dim=0).tolist()
+                mae = torch.mean(torch.nn.functional.l1_loss(pred_force.float(), force.float(),
+                                                    reduction='none'), dim=0).tolist()
 
-            plt.legend()
-            plt.savefig(save_dir + f'/test_{int(start / 12) + 1}.png', dpi=300, facecolor='white', edgecolor='black',
-                format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
-            plt.show()
+                MSE_for_axis.append(mse)
+                MAE_for_axis.append(mae)
+
+        plot(f, pf, -1, save_dir)
+        start = 15
+        for i in range(start, self.target_index+1, 5):
+            plot(f, pf, i, save_dir)
 
         MSE /= len(self.test_dataloader)
         MAE /= len(self.test_dataloader)
-        print("Train: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+        print("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+
+        MSE_for_axis = torch.Tensor(MSE_for_axis)
+        MSE_for_axis = torch.mean(MSE_for_axis, dim=(0,1))
+        MAE_for_axis = torch.Tensor(MAE_for_axis)
+        MAE_for_axis = torch.mean(MAE_for_axis, dim=(0,1))
+
+        print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
+        print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+
+        train_txt_path = save_dir + "/train.txt"
+        with open(train_txt_path, 'a') as train_txt_file:
+            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
+            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
+            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+
         return MSE, MAE
-    
-   
 
 if __name__ == '__main__':
         

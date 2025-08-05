@@ -1,0 +1,33 @@
+{"time":"2025-07-30T10:31:58.892302069Z","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-07-30T10:31:59.278266845Z","level":"INFO","msg":"stream: created new stream","id":"pao2tubi"}
+{"time":"2025-07-30T10:31:59.278308265Z","level":"INFO","msg":"stream: started","id":"pao2tubi"}
+{"time":"2025-07-30T10:31:59.278340825Z","level":"INFO","msg":"handler: started","stream_id":"pao2tubi"}
+{"time":"2025-07-30T10:31:59.278341515Z","level":"INFO","msg":"writer: Do: started","stream_id":"pao2tubi"}
+{"time":"2025-07-30T10:31:59.278385625Z","level":"INFO","msg":"sender: started","stream_id":"pao2tubi"}
+{"time":"2025-07-30T12:59:40.08021063Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T13:29:23.888268851Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T13:39:45.49941682Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:40:17.525991517Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded"}
+{"time":"2025-07-30T13:40:51.55347769Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:41:30.947821916Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:41:39.120129699Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T13:42:17.976571604Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:52:15.506759554Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:52:47.801277738Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:53:22.683468571Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:54:00.966373942Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:54:48.255088759Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": net/http: request canceled (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2025-07-30T13:55:06.032946356Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T13:55:49.073781566Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/graphql\": read tcp 163.180.160.141:48906->35.186.228.49:443: read: connection reset by peer"}
+{"time":"2025-07-30T14:20:29.744158796Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T14:24:39.600247217Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T14:26:52.720191249Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T14:29:09.940206055Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T14:32:10.160136356Z","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/pinkmiro-kyung-hee-university/rft64_10Hz/pao2tubi/file_stream\": dial tcp 35.186.228.49:443: connect: connection timed out"}
+{"time":"2025-07-30T15:28:21.917876864Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-07-30T15:28:22.001688685Z","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading summary, console lines 200-204","runtime_seconds":0.083615981}],"total_operations":1}}
+{"time":"2025-07-30T15:28:22.298401109Z","level":"INFO","msg":"stream: closing","id":"pao2tubi"}
+{"time":"2025-07-30T15:28:22.298432169Z","level":"INFO","msg":"handler: closed","stream_id":"pao2tubi"}
+{"time":"2025-07-30T15:28:22.298449019Z","level":"INFO","msg":"writer: Close: closed","stream_id":"pao2tubi"}
+{"time":"2025-07-30T15:28:22.298461179Z","level":"INFO","msg":"sender: closed","stream_id":"pao2tubi"}
+{"time":"2025-07-30T15:28:22.298571179Z","level":"INFO","msg":"stream: closed","id":"pao2tubi"}

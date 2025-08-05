@@ -23,8 +23,6 @@ parameters:
     value: "../saved_models"
   scheduler:
     value: None
-  image_resize:
-    value: True
   image_size:
     value: [64, 64]
   train_mode:
@@ -38,7 +36,7 @@ parameters:
   image_type:
     values: ["origin", "rgb", "diff"]
   augmentation_angle:
-    values: [20, 45, 90, 180]
+    values: 90
 
   encoder:
     values:
@@ -53,11 +51,9 @@ parameters:
     values: [64, 128, 256]
   decoder:
     values:
-      - [True, "lstm"]
-      - [True, "gru"]
-      - [False, "bidirectional_lstm"]
-      - [False, "lstm"]
-      - [False, "gru"]
+      - "lstm"
+      - "gru"
+      - "bidirectional_lstm"
   decoder_output:
     values: [64, 128, 256]
   rnn_layer:

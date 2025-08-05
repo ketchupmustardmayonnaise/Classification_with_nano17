@@ -1,0 +1,37 @@
+Traceback (most recent call last):
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 474, in <module>
+    force_estimation = ForceEstimation(config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 211, in __init__
+    self.train()
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 307, in train
+    pred_force = self.model(X)
+                 ^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/models/CFModel.py", line 107, in forward
+    x = self.rnn(x) # x output shape: ( chunk size, target_index, decoder output )
+        ^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/models/lstm.py", line 38, in forward
+    out, (h, c) = self.LSTM(xi, (h, c))
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1751, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/module.py", line 1762, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/nn/modules/rnn.py", line 1124, in forward
+    result = _VF.lstm(
+             ^^^^^^^^^
+KeyboardInterrupt

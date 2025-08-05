@@ -1,0 +1,12 @@
+{"time":"2025-07-30T10:30:05.672341645Z","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-07-30T10:30:05.991383733Z","level":"INFO","msg":"stream: created new stream","id":"nxlaripa"}
+{"time":"2025-07-30T10:30:05.99201742Z","level":"INFO","msg":"stream: started","id":"nxlaripa"}
+{"time":"2025-07-30T10:30:05.99203576Z","level":"INFO","msg":"writer: Do: started","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:30:05.992084669Z","level":"INFO","msg":"handler: started","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:30:05.99204398Z","level":"INFO","msg":"sender: started","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:31:05.445706394Z","level":"INFO","msg":"stream: closing","id":"nxlaripa"}
+{"time":"2025-07-30T10:31:06.036086139Z","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-07-30T10:31:06.293946418Z","level":"INFO","msg":"handler: closed","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:31:06.293985677Z","level":"INFO","msg":"writer: Close: closed","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:31:06.294000417Z","level":"INFO","msg":"sender: closed","stream_id":"nxlaripa"}
+{"time":"2025-07-30T10:31:06.294053777Z","level":"INFO","msg":"stream: closed","id":"nxlaripa"}

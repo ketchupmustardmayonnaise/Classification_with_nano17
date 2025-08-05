@@ -1,0 +1,78 @@
+[Epoch: 1/200], Lr: 0.000100, Train MSE: 0.716, Train MAE: 0.546 Validation MSE: 0.716, Validation MAE: 0.552, ******
+[Epoch: 2/200], Lr: 0.000100, Train MSE: 0.618, Train MAE: 0.509 Validation MSE: 0.662, Validation MAE: 0.536, ******
+[Epoch: 3/200], Lr: 0.000100, Train MSE: 0.594, Train MAE: 0.502 Validation MSE: 0.592, Validation MAE: 0.518, ******
+[Epoch: 4/200], Lr: 0.000100, Train MSE: 0.566, Train MAE: 0.486 Validation MSE: 0.481, Validation MAE: 0.476, ******
+[Epoch: 5/200], Lr: 0.000100, Train MSE: 0.545, Train MAE: 0.479 Validation MSE: 0.465, Validation MAE: 0.469, ******
+[Epoch: 6/200], Lr: 0.000100, Train MSE: 0.534, Train MAE: 0.469 Validation MSE: 0.471, Validation MAE: 0.473,
+[Epoch: 7/200], Lr: 0.000100, Train MSE: 0.515, Train MAE: 0.465 Validation MSE: 0.469, Validation MAE: 0.469, ******
+[Epoch: 8/200], Lr: 0.000100, Train MSE: 0.509, Train MAE: 0.462 Validation MSE: 0.462, Validation MAE: 0.468, ******
+[Epoch: 9/200], Lr: 0.000100, Train MSE: 0.492, Train MAE: 0.456 Validation MSE: 0.471, Validation MAE: 0.466, ******
+[Epoch: 10/200], Lr: 0.000100, Train MSE: 0.493, Train MAE: 0.456 Validation MSE: 0.452, Validation MAE: 0.460, ******
+[Epoch: 11/200], Lr: 0.000100, Train MSE: 0.483, Train MAE: 0.449 Validation MSE: 0.454, Validation MAE: 0.467,
+[Epoch: 12/200], Lr: 0.000100, Train MSE: 0.484, Train MAE: 0.448 Validation MSE: 0.473, Validation MAE: 0.475,
+[Epoch: 13/200], Lr: 0.000100, Train MSE: 0.482, Train MAE: 0.448 Validation MSE: 0.453, Validation MAE: 0.463,
+[Epoch: 14/200], Lr: 0.000100, Train MSE: 0.470, Train MAE: 0.443 Validation MSE: 0.458, Validation MAE: 0.462,
+[Epoch: 15/200], Lr: 0.000100, Train MSE: 0.470, Train MAE: 0.442 Validation MSE: 0.485, Validation MAE: 0.478,
+[Epoch: 16/200], Lr: 0.000100, Train MSE: 0.476, Train MAE: 0.443 Validation MSE: 0.512, Validation MAE: 0.490,
+[Epoch: 17/200], Lr: 0.000100, Train MSE: 0.469, Train MAE: 0.441 Validation MSE: 0.497, Validation MAE: 0.487,
+[Epoch: 18/200], Lr: 0.000100, Train MSE: 0.459, Train MAE: 0.436 Validation MSE: 0.532, Validation MAE: 0.496,
+[Epoch: 19/200], Lr: 0.000100, Train MSE: 0.445, Train MAE: 0.426 Validation MSE: 0.527, Validation MAE: 0.495,
+[Epoch: 20/200], Lr: 0.000100, Train MSE: 0.446, Train MAE: 0.429 Validation MSE: 0.486, Validation MAE: 0.471,
+[Epoch: 21/200], Lr: 0.000100, Train MSE: 0.457, Train MAE: 0.427 Validation MSE: 0.527, Validation MAE: 0.490,
+[Epoch: 22/200], Lr: 0.000100, Train MSE: 0.433, Train MAE: 0.420 Validation MSE: 0.495, Validation MAE: 0.479,
+[Epoch: 23/200], Lr: 0.000100, Train MSE: 0.436, Train MAE: 0.419 Validation MSE: 0.522, Validation MAE: 0.482,
+[Epoch: 24/200], Lr: 0.000100, Train MSE: 0.418, Train MAE: 0.412 Validation MSE: 0.485, Validation MAE: 0.469,
+[Epoch: 25/200], Lr: 0.000100, Train MSE: 0.425, Train MAE: 0.411 Validation MSE: 0.481, Validation MAE: 0.459, ******
+[Epoch: 26/200], Lr: 0.000100, Train MSE: 0.406, Train MAE: 0.401 Validation MSE: 0.496, Validation MAE: 0.469,
+[Epoch: 27/200], Lr: 0.000100, Train MSE: 0.399, Train MAE: 0.399 Validation MSE: 0.455, Validation MAE: 0.460,
+[Epoch: 28/200], Lr: 0.000100, Train MSE: 0.398, Train MAE: 0.399 Validation MSE: 0.465, Validation MAE: 0.459, ******
+[Epoch: 29/200], Lr: 0.000100, Train MSE: 0.396, Train MAE: 0.400 Validation MSE: 0.471, Validation MAE: 0.464,
+[Epoch: 30/200], Lr: 0.000100, Train MSE: 0.386, Train MAE: 0.393 Validation MSE: 0.451, Validation MAE: 0.447, ******
+[Epoch: 31/200], Lr: 0.000100, Train MSE: 0.380, Train MAE: 0.390 Validation MSE: 0.429, Validation MAE: 0.443, ******
+[Epoch: 32/200], Lr: 0.000100, Train MSE: 0.375, Train MAE: 0.384 Validation MSE: 0.432, Validation MAE: 0.443, ******
+[Epoch: 33/200], Lr: 0.000100, Train MSE: 0.378, Train MAE: 0.388 Validation MSE: 0.419, Validation MAE: 0.431, ******
+[Epoch: 34/200], Lr: 0.000100, Train MSE: 0.374, Train MAE: 0.386 Validation MSE: 0.438, Validation MAE: 0.442,
+[Epoch: 35/200], Lr: 0.000100, Train MSE: 0.360, Train MAE: 0.375 Validation MSE: 0.424, Validation MAE: 0.430, ******
+[Epoch: 36/200], Lr: 0.000100, Train MSE: 0.355, Train MAE: 0.373 Validation MSE: 0.418, Validation MAE: 0.427, ******
+[Epoch: 37/200], Lr: 0.000100, Train MSE: 0.360, Train MAE: 0.376 Validation MSE: 0.418, Validation MAE: 0.421, ******
+[Epoch: 38/200], Lr: 0.000100, Train MSE: 0.355, Train MAE: 0.372 Validation MSE: 0.425, Validation MAE: 0.428,
+[Epoch: 39/200], Lr: 0.000100, Train MSE: 0.329, Train MAE: 0.361 Validation MSE: 0.411, Validation MAE: 0.417, ******
+[Epoch: 40/200], Lr: 0.000100, Train MSE: 0.340, Train MAE: 0.360 Validation MSE: 0.411, Validation MAE: 0.417,
+[Epoch: 41/200], Lr: 0.000100, Train MSE: 0.345, Train MAE: 0.366 Validation MSE: 0.410, Validation MAE: 0.414, ******
+[Epoch: 42/200], Lr: 0.000100, Train MSE: 0.331, Train MAE: 0.359 Validation MSE: 0.387, Validation MAE: 0.404, ******
+[Epoch: 43/200], Lr: 0.000100, Train MSE: 0.326, Train MAE: 0.355 Validation MSE: 0.408, Validation MAE: 0.411,
+[Epoch: 44/200], Lr: 0.000100, Train MSE: 0.335, Train MAE: 0.355 Validation MSE: 0.457, Validation MAE: 0.449,
+[Epoch: 45/200], Lr: 0.000100, Train MSE: 0.323, Train MAE: 0.349 Validation MSE: 0.415, Validation MAE: 0.423,
+[Epoch: 46/200], Lr: 0.000100, Train MSE: 0.313, Train MAE: 0.344 Validation MSE: 0.429, Validation MAE: 0.431,
+[Epoch: 47/200], Lr: 0.000100, Train MSE: 0.313, Train MAE: 0.343 Validation MSE: 0.426, Validation MAE: 0.430,
+[Epoch: 48/200], Lr: 0.000100, Train MSE: 0.320, Train MAE: 0.346 Validation MSE: 0.411, Validation MAE: 0.417,
+[Epoch: 49/200], Lr: 0.000100, Train MSE: 0.316, Train MAE: 0.347 Validation MSE: 0.386, Validation MAE: 0.393, ******
+[Epoch: 50/200], Lr: 0.000100, Train MSE: 0.306, Train MAE: 0.336 Validation MSE: 0.388, Validation MAE: 0.402,
+[Epoch: 51/200], Lr: 0.000100, Train MSE: 0.291, Train MAE: 0.326 Validation MSE: 0.403, Validation MAE: 0.408,
+[Epoch: 52/200], Lr: 0.000100, Train MSE: 0.314, Train MAE: 0.342 Validation MSE: 0.404, Validation MAE: 0.409,
+[Epoch: 53/200], Lr: 0.000100, Train MSE: 0.314, Train MAE: 0.343 Validation MSE: 0.404, Validation MAE: 0.424,
+[Epoch: 54/200], Lr: 0.000100, Train MSE: 0.312, Train MAE: 0.338 Validation MSE: 0.433, Validation MAE: 0.439,
+[Epoch: 55/200], Lr: 0.000100, Train MSE: 0.327, Train MAE: 0.346 Validation MSE: 0.423, Validation MAE: 0.431,
+[Epoch: 56/200], Lr: 0.000100, Train MSE: 0.308, Train MAE: 0.339 Validation MSE: 0.427, Validation MAE: 0.433,
+[Epoch: 57/200], Lr: 0.000100, Train MSE: 0.299, Train MAE: 0.334 Validation MSE: 0.391, Validation MAE: 0.402,
+[Epoch: 58/200], Lr: 0.000100, Train MSE: 0.286, Train MAE: 0.325 Validation MSE: 0.423, Validation MAE: 0.417,
+[Epoch: 59/200], Lr: 0.000100, Train MSE: 0.298, Train MAE: 0.329 Validation MSE: 0.439, Validation MAE: 0.441,
+[Epoch: 60/200], Lr: 0.000100, Train MSE: 0.297, Train MAE: 0.333 Validation MSE: 0.439, Validation MAE: 0.435,
+[Epoch: 61/200], Lr: 0.000100, Train MSE: 0.301, Train MAE: 0.333 Validation MSE: 0.369, Validation MAE: 0.389, ******
+[Epoch: 62/200], Lr: 0.000100, Train MSE: 0.298, Train MAE: 0.327 Validation MSE: 0.406, Validation MAE: 0.411,
+[Epoch: 63/200], Lr: 0.000100, Train MSE: 0.290, Train MAE: 0.324 Validation MSE: 0.395, Validation MAE: 0.402,
+[Epoch: 64/200], Lr: 0.000100, Train MSE: 0.280, Train MAE: 0.314 Validation MSE: 0.375, Validation MAE: 0.389,
+[Epoch: 65/200], Lr: 0.000100, Train MSE: 0.284, Train MAE: 0.321 Validation MSE: 0.369, Validation MAE: 0.389,
+[Epoch: 66/200], Lr: 0.000100, Train MSE: 0.271, Train MAE: 0.309 Validation MSE: 0.376, Validation MAE: 0.393,
+[Epoch: 67/200], Lr: 0.000100, Train MSE: 0.282, Train MAE: 0.318 Validation MSE: 0.432, Validation MAE: 0.433,
+[Epoch: 68/200], Lr: 0.000100, Train MSE: 0.295, Train MAE: 0.325 Validation MSE: 0.446, Validation MAE: 0.439,
+[Epoch: 69/200], Lr: 0.000100, Train MSE: 0.285, Train MAE: 0.322 Validation MSE: 0.385, Validation MAE: 0.400,
+[Epoch: 70/200], Lr: 0.000100, Train MSE: 0.281, Train MAE: 0.318 Validation MSE: 0.419, Validation MAE: 0.429,
+[Epoch: 71/200], Lr: 0.000100, Train MSE: 0.291, Train MAE: 0.323 Validation MSE: 0.445, Validation MAE: 0.446,
+[Epoch: 72/200], Lr: 0.000100, Train MSE: 0.269, Train MAE: 0.309 Validation MSE: 0.404, Validation MAE: 0.400,
+[Epoch: 73/200], Lr: 0.000100, Train MSE: 0.272, Train MAE: 0.307 Validation MSE: 0.403, Validation MAE: 0.405,
+[Epoch: 74/200], Lr: 0.000100, Train MSE: 0.262, Train MAE: 0.304 Validation MSE: 0.399, Validation MAE: 0.405,
+[Epoch: 75/200], Lr: 0.000100, Train MSE: 0.262, Train MAE: 0.305 Validation MSE: 0.405, Validation MAE: 0.406,
+[Epoch: 76/200], Lr: 0.000100, Train MSE: 0.253, Train MAE: 0.298 Validation MSE: 0.414, Validation MAE: 0.410,
+[Epoch: 77/200], Lr: 0.000100, Train MSE: 0.266, Train MAE: 0.305 Validation MSE: 0.418, Validation MAE: 0.416,
+[Epoch: 78/200], Lr: 0.000100, Train MSE: 0.244, Train MAE: 0.294 Validation MSE: 0.370, Validation MAE: 0.387, ******

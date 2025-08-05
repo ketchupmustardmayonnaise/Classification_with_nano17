@@ -1,0 +1,17 @@
+[Epoch: 1/200], Lr: 0.000100, Train MSE: 0.726, Train MAE: 0.552 Validation MSE: 0.524, Validation MAE: 0.501, ******
+Traceback (most recent call last):
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 474, in <module>
+    force_estimation = ForceEstimation(config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 211, in __init__
+    self.train()
+  File "/home/gpuadmin/Jins/Classification_with_nano17/force_estimation/train.py", line 319, in train
+    loss.backward(retain_graph=True)
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/_tensor.py", line 648, in backward
+    torch.autograd.backward(
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/autograd/__init__.py", line 353, in backward
+    _engine_run_backward(
+  File "/home/gpuadmin/anaconda3/envs/handWatch/lib/python3.11/site-packages/torch/autograd/graph.py", line 824, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
