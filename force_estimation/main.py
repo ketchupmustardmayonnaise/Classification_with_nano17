@@ -114,15 +114,11 @@ class ForceEstimation:
             self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
         else: self.scheduler = None
 
-        #self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
-        #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
         # loss
         if self.loss_type != "MSE+MAE":
             self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
         
-        
-        # model configuration
  
 
         

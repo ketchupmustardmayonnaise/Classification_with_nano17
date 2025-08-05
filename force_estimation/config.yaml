@@ -15,7 +15,7 @@ fc_num_layer: 3
 fc_hidden_dim: 1000
 
 # image
-target_index: 30 #몇 frame으로 자를 것인지
+frame_length: 30 #몇 frame으로 자를 것인지
 stride: 1
 augmentation_angle: 45
 
