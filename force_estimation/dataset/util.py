@@ -276,10 +276,12 @@ def preprocess(img, force, label, img_ts, force_ts,
 
     for sequence_index in range(len(img)):
         # 이미지를 채널별로 normalize
+        img[sequence_index] = resize_image(img[sequence_index], image_size)
+        
         img[sequence_index] = normalize_image(img[sequence_index], max, mean)
         # or... img[sequence_index] = z_score_of_image(img[sequence_index], max, std)
 
-        img[sequence_index] = resize_image(img[sequence_index], image_size)
+        
 
         frame.append(int(len(img[sequence_index])))
 

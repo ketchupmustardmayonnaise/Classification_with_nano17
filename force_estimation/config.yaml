@@ -31,11 +31,11 @@ val_data_dir: ./dataset/val_dataset.h5
 test_data_dir: ./dataset/test_dataset.h5
 
 save_dir: ../saved_models
-model_dir: ../saved_models/1layermae/epoch_3.pt # 확장자: .pt 또는 .pth
+model_dir: None # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None
-loss_type: MSE # [MSE, MAE, MSE+MAE]
+loss_type: MAE # [MSE, MAE, MSE+MAE]
 
 batch_size: 8
 num_epoch: 100

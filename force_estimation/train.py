@@ -170,7 +170,7 @@ class ForceEstimation:
                         "loss": self.loss_type,
                     }
 
-                    run_name = f'{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_3layer_MSE'
+                    run_name = f'{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_3layer_MAE'
                     self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
                 self.train()
