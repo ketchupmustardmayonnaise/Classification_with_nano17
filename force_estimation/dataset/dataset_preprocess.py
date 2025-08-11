@@ -29,9 +29,7 @@ import traceback
 # =====================================
 # configuration
 
-dataset_type = 'test'
-
-
+dataset_type = 'train'
 
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
@@ -47,9 +45,9 @@ num_classes = 7
 original_image_size = (10, 8)
 # =====================================
 
-max = [318.8728, 192.6237, 274.7175]
-mean = [23.0956, -0.0002, -0.0011]
-std = [46.4343, 2.6335, 3.2608]
+max = [318.8728, 236.7046, 274.7175]
+mean = [22.0353, -0.0010, -0.0022]
+std = [45.9203, 2.5501, 3.1633]
 
 img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
 img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,

@@ -361,21 +361,17 @@ class ForceEstimation:
     def test(self):
         self.model.eval()
 
-        f = [] # ( # of sequences, full sequence, 3)
+        f = [] # (# of sequences, full sequence, 3)
         pf = [] # (# of sequences, # of chunks, 30)
 
-        MSE = 0
-        MAE = 0
-
-        MSE_for_axis = []
-        MAE_for_axis = []
+        MSE = [] # shape: (num of chunks, target_index, 3)
+        MAE = [] # shape: (num of chunks, target_index, 3)
 
         with torch.no_grad():
-            num_of_batch = 0
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
                 _force = _force.squeeze().tolist()
-                f.append(_force) # 리스트에 각 시퀀스마다 전체 저장
+                f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
                 # 각 시퀀스를 sliding window씩 자름
                 X = []
@@ -405,42 +401,30 @@ class ForceEstimation:
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
 
-                    # 전체 test dataset에서 평균 MSE, MAE 계산
-                    MSE += torch.nn.functional.mse_loss(pred_force, force_batch,
-                                                        reduction='mean').item()
-                    MAE += torch.nn.functional.l1_loss(pred_force, force_batch,
-                                                       reduction='mean').item()
-
                     # 각 X, Y, Z별 MSE, MAE 계산
-                    mse = torch.mean(torch.nn.functional.mse_loss(pred_force, force_batch,
-                                                                  reduction='none'), dim=0).tolist()
-                    mae = torch.mean(torch.nn.functional.l1_loss(pred_force, force_batch,
-                                                                 reduction='none'), dim=0).tolist()
+                    MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
+                                                            reduction='none').tolist())
+                    MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch,
+                                                            reduction='none').tolist())
 
-                    MSE_for_axis.extend(mse)
-                    MAE_for_axis.extend(mae)
-
-                    num_of_batch += 1
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
 
         train_txt_path = self.save_dir + "/train.txt"
         plot_for_plain_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
 
-        MSE /= num_of_batch
-        MAE /= num_of_batch
+        MSE = torch.Tensor(MSE)
+        MAE = torch.Tensor(MAE)
 
-        MSE_for_axis = torch.Tensor(MSE_for_axis)
-        MSE_for_axis = torch.mean(MSE_for_axis, dim=0)
-        MAE_for_axis = torch.Tensor(MAE_for_axis)
-        MAE_for_axis = torch.mean(MAE_for_axis, dim=0)
+        MSE_for_axis = torch.mean(MSE, dim=(0, 1))
+        MAE_for_axis = torch.mean(MAE, dim=(0, 1))
 
-        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
 
         with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
+            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)) + '\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
 
