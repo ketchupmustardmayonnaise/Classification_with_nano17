@@ -1,7 +1,7 @@
 import argparse
 import ast
 import yaml
-from force_estimation.main import ForceEstimation
+from train import ForceEstimation
 import wandb
 
 def str2bool(v):

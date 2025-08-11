@@ -1,13 +1,11 @@
-import os
+import pathlib
 import sys
 import time
-import argparse
 import torchinfo
 import yaml
-import ast
-import shutil
-import npz_dataset_method  # 먼저 메서드 붙임이 일어남
-from npz_dataset import RFTDataset
+from tqdm import tqdm
+from utils import *
+from dataset import *
 from torch.optim import lr_scheduler
 
 import wandb
@@ -16,315 +14,190 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
-from apply_img_augmentation import *
-
-def str2bool(v):
-    if isinstance(v, bool):
-       return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
-
-def copy_config(dir):
-    # 현재 파일 위치 기준으로 config.yaml 경로 설정
-    current_dir = os.getcwd()  # 또는 원하는 기준 경로
-    src_path = os.path.join(current_dir, "config.yaml")
-
-    # 복사할 대상 경로
-    dst_dir = dir
-    dst_path = os.path.join(dst_dir, "config.yaml")
-
-    # 복사 실행
-    shutil.copy(src_path, dst_path)
-
-def lists_for_plot(f, pf, target_index, plot_index):
-    # plot을 위해, 시퀀스 별로 index 뽑음
-    f_result = f[:len(f) - (target_index - plot_index)]
-
-    predicted_force_sequence = []
-    predicted_force_sequence.extend(pf[0][:plot_index])  # 첫 번째 데이터는 반만 저장
-    for i in range(1, len(pf)):
-        predicted_force_sequence.append(pf[i][plot_index - 1])
-
-    return f_result, predicted_force_sequence
-
-def lists_for_plot_mean(f, pf):
-    # plot을 위해, 시퀀스 별로 index 뽑음
-    predicted_force_sequence = [[] for _ in range(len(f))]
-
-    # predicted force의 모든 값을 리스트에 append함.
-    for i in range(0, len(pf)):
-        for j in range(0, len(pf[i])):
-            predicted_force_sequence[i+j].append(pf[i][j])
-
-    for i in range(0, len(predicted_force_sequence)):
-        predicted_force_sequence[i] = np.mean(np.array(predicted_force_sequence[i]), axis=0)
-
-    return f, predicted_force_sequence
-
-def plot(f, pf, plot_index, save_dir):
-    dir = f'{save_dir}/{plot_index}th_frame_of_sliding_window'
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-
-    for index in range(len(f)):  # 테스트셋 35번째 이미지만 그림
-        fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
-
-        _f = f[index]
-        _pf = pf[index]
-
-        if plot_index <= 0:
-            plt.suptitle(f"mean frame")
-        else:
-            plt.suptitle(f"{index}th frame of sliding window")
-
-        # 해당 plot에 대해서만 MSE, MAE
-        mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                                      reduction='none'), axis=0)
-        mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                                     reduction='none'), axis=0)
-
-        for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
-            axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
-            axes[num_data].plot(np.array(_pf)[:, num_data], color='b', label='predicted force')
-            axes[num_data].set_xlabel('Frame')
-            axes[num_data].set_ylabel('Force (N)')
-            if num_data == 0 or num_data == 1: axes[num_data].set_ylim([-1.5, 1.5])
-
-            axes[num_data].text(x=0.05, y=0.05,
-                                s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
-                                transform=axes[num_data].transAxes,
-                                horizontalalignment='left',
-                                verticalalignment='top')
-
-            if num_data == 0:
-                axes[num_data].set_title('X')
-            elif num_data == 1:
-                axes[num_data].set_title('Y')
-            elif num_data == 2:
-                axes[num_data].set_title('Z')
-
-        plt.legend()
-        plt.savefig(dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
-                    format='png', bbox_inches='tight', pad_inches=0.1, transparent=False)
+from force_estimation.utils.apply_img_augmentation import *
 
 class ForceEstimation:
     def __init__(self, cfg):
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--train_mode', default=None, type=str2bool)
-        parser.add_argument('--use_wandb', default=None, type=str2bool)
-
-        parser.add_argument('--encoder', default=None, type=str)
-        parser.add_argument('--encoder_output', default=None, type=str)
-
-        parser.add_argument('--decoder', default=None, type=str)
-        parser.add_argument('--rnn_layer', default=None, type=int)
-        parser.add_argument('--decoder_output', default=None, type=int)
-
-        parser.add_argument('--fc_num_layer', default=None, type=int)
-        parser.add_argument('--fc_hidden_dim', default=None, type=int)
-
-        parser.add_argument('--target_index', default=None, type=int)
-        parser.add_argument('--stride', default=None, type=int)
-        parser.add_argument('--augmentation_angle', default=None, type=int)
-
-        parser.add_argument('--image_type', default=None, type=str)
-        parser.add_argument('--image_size', default=None, type=ast.literal_eval)
-
-        parser.add_argument('--save_dir', default=None, type=str)
-        parser.add_argument('--test_data_dir', default=None, type=str)
-        parser.add_argument('--train_data_dir', default=None, type=str)
-        parser.add_argument('--val_data_dir', default=None, type=str)
-
-        parser.add_argument('--optimizer', default=None, type=str)
-        parser.add_argument('--scheduler', default=None, type=str)
-        parser.add_argument('--batch_size', default=None, type=int)
-        parser.add_argument("--num_epoch", default=None, type=int)
-        parser.add_argument("--learning_rate", default=None, type=float)
-        parser.add_argument("--weight_decay", default=None, type=float)
-        parser.add_argument('--dropout', default=None, type=float)
-        parser.add_argument('--loss', default=None, type=str)
-
-        parser.add_argument('--plot_index', default=None, type=int)
-        args = parser.parse_args()
-
         # parameters
-        train_mode = args.train_mode if args.train_mode is not None else cfg['train_mode'] # true일 때만 학습 (bool)
-        self.use_wandb = args.use_wandb if args.use_wandb is not None else cfg['use_wandb'] # wandb에 올릴 것인지 (bool)
-        self.target_index = int(args.target_index) if args.target_index is not None else cfg['target_index'] # 몇 frame으로 자를 것인지 (bool)
-        stride = int(args.stride) if args.stride is not None else cfg['stride'] # 몇 frame만큼 띄워서 학습할 것인지 (int)
-        self.image_type = args.image_type if args.image_type is not None else cfg['image_type'] # origin, rgb, diff (str)
-        image_size = args.image_size if args.image_size is not None else cfg['image_size'] # 확대한다면, 이미지를 얼마나 확대할 것인지 (int, int)
-        image_size = [int(image_size[0]), int(image_size[1])]
-        self.augmentation_angle = int(args.augmentation_angle) if args.augmentation_angle is not None else cfg['augmentation_angle'] # online augmentation 시, 각도 최대치 (int)
+        self.cfg = cfg
+        self.best_epoch = 0
 
-        encoder = args.encoder if args.encoder is not None else cfg['encoder'] # 어떤 cnn을 쓸 것인지 (str)
-        self.encoder_output = int(args.encoder_output) if args.encoder_output is not None else cfg['encoder_output'] # cnn에서 결과적으로 나온 embedding_vector의 차원 (int)
+        # 1. 파라미터 초기화를 위한 헬퍼 메소드 정의
+        def _init_param(key, p_type=None):
+            value = self.cfg.get(key)
 
-        # decoder: 어떤 시계열 모델을 사용할 것인지 (str)
-        decoder = args.decoder if args.decoder is not None else cfg['decoder']
-        self.rnn_layer = int(args.rnn_layer) if args.rnn_layer is not None else cfg['rnn_layer'] # 시계열 모델 내 layer의 개수 (int)
-        self.decoder_output = int(args.decoder_output) if args.decoder_output is not None else cfg['decoder_output'] # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
+            if value is not None and p_type is not None:
+                # --- 수정된 부분 ---
+                # p_type이 ast.literal_eval이고, 실제 값이 문자열일 때만 변환을 수행합니다.
+                if p_type is ast.literal_eval:
+                    if isinstance(value, str):
+                        value = p_type(value)
+                else:  # int, float, str2bool 등 다른 타입 변환은 그대로 수행
+                    value = p_type(value)
+                # --- 수정 끝 ---
 
-        fc_num_layer = int(args.fc_num_layer) if args.fc_num_layer is not None else cfg['fc_num_layer'] # fully-connected layer의 개수 (int)
-        fc_hidden_dim = int(args.fc_hidden_dim) if args.fc_hidden_dim is not None else cfg['fc_hidden_dim'] # fully-connected layer의 hidden layer의 dimension 개수
+            setattr(self, key, value)
 
-        optimizer = args.optimizer if args.optimizer is not None else cfg['optimizer']
-        scheduler = args.scheduler if args.scheduler is not None else cfg['scheduler']
-        self.num_epoch = int(args.num_epoch) if args.num_epoch else cfg['num_epoch']
-        dropout = float(args.dropout) if args.dropout is not None else cfg['dropout']
-        self.batch_size = args.batch_size if args.batch_size is not None else cfg['batch_size']
-        self.loss_type = args.loss if args.loss is not None else cfg['loss']
-        self.plot_index = args.plot_index if args.plot_index is not None else cfg['plot_index'] # 몇 번째 data를 가지고 plot할 것인지 (-1이면 mean으로 처리)
+        # 2. 공통 파라미터 리스트 정의 (파라미터명, 타입)
+        # 타입이 None이면 변환 없이 그대로 사용
+        common_params = [
+            ('train_mode', bool),  # train일 때만 학습 (bool)
+            ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
+            ('resume', bool),
+
+            ('image_type', str),  # origin, rgb, diff (str)
+            ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
+            ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
+            ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
+            # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
+
+            ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
+
+            ('decoder', str),  # 어떤 시계열 모델을 사용할 것인지 (str)
+            ('rnn_layer', int),  # 시계열 모델 내 layer의 개수 (int)
+            ('decoder_output', int),  # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
+
+            ('fc_num_layer', int),  # fully-connected layer의 개수 (int)
+            ('fc_hidden_dim', int),  # fully-connected layer의 hidden layer의 dimension 개수
+
+            ('batch_size', int),
+            ('learning_rate', float),
+            ('weight_decay', float),
+            ('dropout', float),
+            ('num_epoch', int),
+
+            ('optimizer_type', str),
+            ('scheduler_type', str),
+            ('loss_type', str),
+
+            ('model_dir', str),
+            ('save_dir', str)
+        ]
+
+        # 3. 반복문을 통해 공통 파라미터 한 번에 초기화
+        for key, p_type in common_params:
+            _init_param(key, p_type)
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        self.model = CFModel(encoder, self.encoder_output,
-                             decoder, self.decoder_output, self.rnn_layer, fc_num_layer,
-                             self.target_index, self.image_type, dropout,
-                             fc_hidden_dim=fc_hidden_dim)
+        self.model = CFModel(self.encoder,
+                             self.decoder, 
+                             self.decoder_output, 
+                             self.rnn_layer, 
+                             self.fc_num_layer,
+                             self.target_index)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(100, 3 if self.image_type.lower() == "rgb" else 1, image_size[0], image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3 if self.image_type.lower() == "rgb" else 1, self.image_size[0], self.image_size[1]))
 
         # test dataset
-        self.test_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['test_data_dir'])
-        self.test_dataset.preprocess()
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
+        self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['test_data_dir'], dataset_type='test')
+        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
-        if train_mode:
-            self.best_epoch = 0
-            self.num_epoch = args.num_epoch if args.num_epoch is not None else cfg['num_epoch']
-            self.learning_rate = args.learning_rate if args.learning_rate is not None else cfg['learning_rate']
-            self.learning_rate = float(self.learning_rate)
-            weight_decay = args.weight_decay if args.weight_decay is not None else cfg['weight_decay']
+        # optimizer
+        if self.optimizer_type.lower() == 'adam':
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
+                                              eps=1e-08, weight_decay=self.weight_decay, amsgrad=False)
+        elif self.optimizer_type.lower() == 'rmsprop':
+            self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate,
+                                                 weight_decay=self.weight_decay)
+        else:
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
+                                             weight_decay=self.weight_decay)
+            self.optimizer_type = 'sgd'
 
-            # create directories
-            time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + encoder + "_" + decoder + time_suffix
-            self.log_dir = self.save_dir + '/log'
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
-            if not os.path.exists(self.log_dir):
-                os.makedirs(self.log_dir)
-            copy_config(self.save_dir)
-
+        # train
+        if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['train_data_dir'])
-            self.train_dataset.preprocess()
-            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=False)
+            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
+                                                                shuffle=True)
 
             # validation dataset
-            self.val_dataset = RFTDataset(image_type=self.image_type, image_size=image_size, path=cfg['val_data_dir'])
-            self.val_dataset.preprocess()
-            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
+            self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['val_data_dir'], dataset_type='val')
+            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size,
+                                                              shuffle=False)
+            
+            self.learning_rate = float(self.learning_rate)
 
-            # optimizer
-            if optimizer.lower() == 'adam':
-                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
-                                            eps=1e-08, weight_decay=weight_decay, amsgrad=False)
-            elif optimizer.lower() == 'rmsprop':
-                self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate, weight_decay=weight_decay)
-            else:
-                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
-                                                 weight_decay=weight_decay)
-
+            
             # scheduler
-            if scheduler.lower() == 'step':
+            if self.scheduler_type.lower() == 'step':
                 self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
-            else: self.scheduler = None
+            else:
+                self.scheduler = None
 
-            #self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
+            # self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
-            # loss
-            if self.loss_type != "MSE+MAE":
-                self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
-            self.write_basic_information( self.use_wandb, self.target_index, stride,
-                                          self.image_type, image_size, self.augmentation_angle,
-                                         encoder, self.encoder_output,
-                                         fc_num_layer, fc_hidden_dim,
-                                         decoder, self.rnn_layer, self.decoder_output,
-                                         optimizer, scheduler, dropout, self.batch_size, self.loss_type, self.learning_rate, weight_decay)
+            if not self.resume:
+                # create directories
+                time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
+                self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
 
-            if self.use_wandb:
+                if not os.path.exists(self.save_dir):
+                    os.makedirs(self.save_dir)
+                copy_config(self.save_dir)
+
+                # loss
+                if self.loss_type != "MSE+MAE":
+                    self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+
                 # wandb
-                wandb_config = {
-                    "encoder": encoder,
-                    "encoder_output": self.encoder_output,
+                if self.use_wandb:
+                    # wandb
+                    wandb_config = {
+                        "encoder": self.encoder,
 
-                    "decoder": decoder,
-                    "rnn_layer": self.rnn_layer,
-                    "decoder_output": self.decoder_output,
+                        "decoder": self.decoder,
+                        "rnn_layer": self.rnn_layer,
+                        "decoder_output": self.decoder_output,
 
-                    "fc_num_layer": fc_num_layer,
-                    "fc_hidden_dim": fc_hidden_dim,
+                        "fc_num_layer": self.fc_num_layer,
+                        "fc_hidden_dim": self.fc_hidden_dim,
 
-                    "target_index": self.target_index,
-                    "stride": stride,
+                        "target_index": self.target_index,
+                        "stride": self.stride,
 
-                    "image_type": self.image_type,
-                    "image_size": image_size,
-                    "augmentation_angle": self.augmentation_angle,
+                        "image_type": self.image_type,
+                        "image_size": self.image_size,
 
-                    "optimizer": optimizer,
-                    "scheduler": scheduler,
-                    "batch_size": self.batch_size,
-                    "learning_rate": self.learning_rate,
-                    "weight_decay": weight_decay,
-                    "dropout": dropout,
-                    "loss": self.loss_type,
-                }
+                        "optimizer": self.optimizer_type,
+                        "scheduler": self.scheduler_type,
+                        "batch_size": self.batch_size,
+                        "learning_rate": self.learning_rate,
+                        "weight_decay": self.weight_decay,
+                        "dropout": self.dropout,
+                        "loss": self.loss_type,
+                    }
 
-                run_name = '(many-to-many) after_modify_rgb_30frames_MAE_adddatas_stateful_alexnet_bilstm_' + f'{time_suffix}'
-                self.run_log = wandb.init(project="rft64_10Hz", config=wandb_config, name=run_name)
+                    run_name = f'{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_3layer_MSE'
+                    self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
-            self.train()
+                self.train()
 
+            else: # resume
+                self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
+                checkpoint = torch.load(cfg['model_dir'])
+                self.model.load_state_dict(checkpoint['model'])
+
+                
+                self.optimizer.load_state_dict(checkpoint['optimizer'])
+
+                # loss
+                self.loss_type = checkpoint['loss_type']
+                if self.loss_type != "MSE+MAE":
+                    self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+
+                self.run_log = wandb.init(project="rft64_2", id=cfg['resume_wandb_id'], resume="must")
+
+                self.train(checkpoint['epoch'])
+
+        # test
         else:
-            self.save_dir = cfg['model_dir']
-            self.model.load_state_dict(torch.load(cfg['model_dir']))
-            epoch_idx = cfg['model_dir'].find("epoch")
-            self.test(cfg['model_dir'][:epoch_idx-1])
-
-    def write_basic_information(self, use_wandb, target_index, stride,
-                                image_type, image_size, augmentation_angle,
-                                encoder, encoder_output,
-                                fc_num_layer, fc_hidden_dim,
-                                decoder, rnn_layer, decoder_output,
-                                optimizer, scheduler, dropout, batch_size, loss, learning_rate, weight_decay):
-        basic_txt_path = self.save_dir + "/basic.txt"
-        basic_txt_file = open(basic_txt_path, 'a')
-        basic_txt_file.write(f"use_wandb: {use_wandb}\n\n") # wandb를 사용할 것인지?
-        basic_txt_file.write(f"encoder: {encoder}\n")
-        basic_txt_file.write(f"encoder_output: {encoder_output}\n\n")
-
-        basic_txt_file.write(f"target_index: {target_index}\n")
-        basic_txt_file.write(f"stride: {stride}\n\n")
-
-        basic_txt_file.write(f"image_type: {image_type}\n")
-        basic_txt_file.write(f"image_size: {image_size}\n")
-        basic_txt_file.write(f"augmentation_angle: {augmentation_angle}\n\n")
-
-        basic_txt_file.write(f"decoder: {decoder}\n")
-        basic_txt_file.write(f"rnn_layer: {rnn_layer}\n")
-        basic_txt_file.write(f"decoder_output: {decoder_output}\n\n")
-
-        basic_txt_file.write(f"fc_num_layer: {fc_num_layer}\n")
-        basic_txt_file.write(f"fc_hidden_dim: {fc_hidden_dim}\n\n")
-
-        basic_txt_file.write(f"optimizer: {optimizer}\n")
-        basic_txt_file.write(f"scheduler: {scheduler}\n")
-        basic_txt_file.write(f"dropout: {dropout}\n\n")
-
-        basic_txt_file.write(f"loss: {loss}\n")
-        basic_txt_file.write(f"batch_size: {batch_size}\n")
-        basic_txt_file.write(f"learning_rate: {learning_rate}\n")
-        basic_txt_file.write(f"weight_decay: {weight_decay}\n\n")
-        basic_txt_file.close()
+            self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
+            checkpoint = torch.load(cfg['model_dir'])
+            self.model.load_state_dict(checkpoint['model'])
+            self.test()
 
     def validate(self, dataloader):
         self.model.eval()
@@ -332,93 +205,120 @@ class ForceEstimation:
         MAE = 0
 
         with torch.no_grad():
-            for X, y, force in dataloader:
-                if X.shape[1] < self.target_index: continue
-
-                X = X.squeeze()
-                force = force.squeeze()
-                _force = []
-                for start in range(0, len(force) - (self.target_index - 1)):
-                    _force.append(force[start:start + self.target_index].tolist())
-                _force = torch.Tensor(_force)
-                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
+            for X, force, y in dataloader:
+                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 pred_force = self.model(X)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
+                MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(),
                                                     reduction='mean')
-                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
+                MAE += torch.nn.functional.l1_loss(pred_force.float(), force.float(),
                                                    reduction='mean')
 
         MSE /= len(dataloader)
         MAE /= len(dataloader)
         return MSE, MAE
 
-    def train(self):
+    def train(self, start_epoch=0):
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}, {}'
 
         val_best_loss = 1e10
 
-        for epoch in range(self.num_epoch):
+        for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
+
             MSE = []
             MAE = []
-            for batch_idx, (X, y, force) in enumerate(self.train_dataloader):
-                if X.shape[1] < self.target_index: continue
-                X = X.squeeze()
 
+            # tqdm으로 배치 진행 상황을 보여줌
+            progress_bar = tqdm(self.train_dataloader, desc="Training", leave=False)
+            running_loss = 0.0
+
+            # X.shape =
+            for batch in progress_bar:
+                X, force, y = batch
                 # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
-
-                force = force.squeeze()
-                _force = []
-                for start in range(0, len(force) - (self.target_index - 1)):
-                    _force.append(force[start:start + self.target_index].tolist())
-                _force = torch.Tensor(_force)
-                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                MSEloss = torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
-                L1_loss = torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(), reduction='mean')
+                MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(),
+                                                       reduction='mean')
+                L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(),
+                                                      reduction='mean')
                 if self.loss_type == 'MSE+MAE':
                     loss = (MSEloss + L1_loss) / 2
                 else:
-                    loss = self.loss(pred_force.squeeze().float(), force.squeeze().float())
+                    loss = self.loss(pred_force.float(), force.float())
 
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
 
-                loss.backward(retain_graph=True)
+                # 현재 평균 loss를 tqdm description에 표시
+                running_loss += loss.item()
+                progress_bar.set_postfix(loss=running_loss / (progress_bar.n + 1))
+
+                loss.backward()
                 self.optimizer.step()
 
             if self.scheduler is not None: self.scheduler.step()
-
-            # test the model
+            # validate the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)
 
-            # best model select
+            # current model save
+            torch.save({
+                'epoch': epoch+1,
+                'model': self.model.state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'optimizer_type': self.optimizer_type,
+                'loss': val_best_loss,
+                'loss_type': self.loss_type
+            }, self.save_dir + "/current.pt")
+
+            # best model save
             if self.loss_type == "MAE" and val_MAE < val_best_loss:
                 if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
                     os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = val_MAE
-                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                torch.save({
+                    'epoch': epoch+1,
+                    'model': self.model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'optimizer_type': self.optimizer_type,
+                    'loss': val_best_loss,
+                    'loss_type': self.loss_type
+                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE" and val_MSE < val_best_loss:
                 if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
                     os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = val_MSE
-                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                torch.save({
+                    'epoch': epoch+1,
+                    'model': self.model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'optimizer_type': self.optimizer_type,
+                    'loss': val_best_loss,
+                    'loss_type': self.loss_type
+                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
                 if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
                     os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
                 self.best_epoch = epoch + 1
                 val_best_loss = (val_MSE + val_MAE) / 2
-                torch.save(self.model.state_dict(), self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
+                torch.save({
+                    'epoch': epoch+1,
+                    'model': self.model.state_dict(),
+                    'optimizer': self.optimizer.state_dict(),
+                    'optimizer_type': self.optimizer_type,
+                    'loss': val_best_loss,
+                    'loss_type': self.loss_type
+                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
                 improve = "******"
             else: improve = " "
 
@@ -453,80 +353,92 @@ class ForceEstimation:
                 except:
                     wandb.finish()
 
-        self.model.load_state_dict(torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch)))
+        self.model.load_state_dict(torch.load(self.save_dir +"" + "/epoch_{}.pt".format(self.best_epoch)))
         self.test(self.save_dir)
         if self.use_wandb: wandb.finish()
 
 
-    def test(self, save_dir):
+    def test(self):
         self.model.eval()
+
+        f = [] # ( # of sequences, full sequence, 3)
+        pf = [] # (# of sequences, # of chunks, 30)
+
         MSE = 0
         MAE = 0
 
         MSE_for_axis = []
         MAE_for_axis = []
 
-        f = []
-        pf = []
-
         with torch.no_grad():
-            for X, y, force in self.test_dataloader:
-                if X.shape[1] < self.target_index: continue
-                X = X.squeeze()
+            num_of_batch = 0
+            for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
+                _X = _X.squeeze().tolist()
+                _force = _force.squeeze().tolist()
+                f.append(_force) # 리스트에 각 시퀀스마다 전체 저장
 
-                force_origin = force.squeeze()
-                _force = []
-                for start in range(0, len(force_origin) - (self.target_index - 1)):
-                    _force.append(force_origin[start:start + self.target_index].tolist())
-                _force = torch.Tensor(_force)
+                # 각 시퀀스를 sliding window씩 자름
+                X = []
+                force = []
+                for i in range(len(_X) - self.target_index + 1):
+                    X.append(_X[i:i+self.target_index])
+                    force.append(_force[i:i+self.target_index])
 
-                X, y, force = X.float().to(self.device), y.to(self.device), _force.to(self.device)
-                _force = force.detach().cpu().numpy().squeeze().tolist()
+                X, force, y = torch.Tensor(X), torch.Tensor(force), y.squeeze()
+                pf.append([])
 
-                pred_force = self.model(X)
-                _pred_force = pred_force.detach().cpu().numpy().squeeze().tolist()
+                # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
+                batch_start = 0
+                while True:
+                    if batch_start + self.batch_size < len(X):
+                        X_batch, force_batch, y_batch = X[batch_start:batch_start+self.batch_size],\
+                                                        force[batch_start:batch_start+self.batch_size],\
+                                                        y[batch_start:batch_start+self.batch_size]
+                    else:
+                        X_batch, force_batch, y_batch = X[batch_start:len(X)],\
+                                                        force[batch_start:len(X)],\
+                                                        y[batch_start:len(X)]
 
-                # plot을 위해, 시퀀스를 합침
-                if self.plot_index <= 0 or self.plot_index > self.target_index:
-                    _f, _pf = lists_for_plot_mean(force_origin, _pred_force)
-                else: _f, _pf = lists_for_plot(force_origin, _pred_force, self.target_index, self.plot_index)
+                    X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
-                f.append(_f)
-                pf.append(_pf)
+                    pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
+                    _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
+                    pf[len(pf)-1].extend(_pred_force_detach)
 
-                # 평균 MSE, MAE 계산
-                MSE += torch.nn.functional.mse_loss(pred_force.squeeze().float(), force.float(),
-                                                    reduction='mean').item()
-                MAE += torch.nn.functional.l1_loss(pred_force.squeeze().float(), force.float(),
-                                                   reduction='mean').item()
+                    # 전체 test dataset에서 평균 MSE, MAE 계산
+                    MSE += torch.nn.functional.mse_loss(pred_force, force_batch,
+                                                        reduction='mean').item()
+                    MAE += torch.nn.functional.l1_loss(pred_force, force_batch,
+                                                       reduction='mean').item()
 
-                # 각 X, Y, Z별 MSE, MAE 계산
-                mse = torch.mean(torch.nn.functional.mse_loss(pred_force.float(), force.float(),
-                                                    reduction='none'), dim=0).tolist()
-                mae = torch.mean(torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                    reduction='none'), dim=0).tolist()
+                    # 각 X, Y, Z별 MSE, MAE 계산
+                    mse = torch.mean(torch.nn.functional.mse_loss(pred_force, force_batch,
+                                                                  reduction='none'), dim=0).tolist()
+                    mae = torch.mean(torch.nn.functional.l1_loss(pred_force, force_batch,
+                                                                 reduction='none'), dim=0).tolist()
 
-                MSE_for_axis.append(mse)
-                MAE_for_axis.append(mae)
+                    MSE_for_axis.extend(mse)
+                    MAE_for_axis.extend(mae)
 
-        plot(f, pf, -1, save_dir)
-        start = 15
-        for i in range(start, self.target_index+1, 5):
-            plot(f, pf, i, save_dir)
+                    num_of_batch += 1
+                    batch_start += self.batch_size
+                    if batch_start >= len(X): break
 
-        MSE /= len(self.test_dataloader)
-        MAE /= len(self.test_dataloader)
-        print("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
+        train_txt_path = self.save_dir + "/train.txt"
+        plot_for_plain_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
+
+        MSE /= num_of_batch
+        MAE /= num_of_batch
 
         MSE_for_axis = torch.Tensor(MSE_for_axis)
-        MSE_for_axis = torch.mean(MSE_for_axis, dim=(0,1))
+        MSE_for_axis = torch.mean(MSE_for_axis, dim=0)
         MAE_for_axis = torch.Tensor(MAE_for_axis)
-        MAE_for_axis = torch.mean(MAE_for_axis, dim=(0,1))
+        MAE_for_axis = torch.mean(MAE_for_axis, dim=0)
 
+        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
 
-        train_txt_path = save_dir + "/train.txt"
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(MSE, MAE) + '\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
@@ -534,8 +446,9 @@ class ForceEstimation:
 
         return MSE, MAE
 
+
 if __name__ == '__main__':
-    f = open("config.yaml", 'r+', encoding='utf-8')
-    config = yaml.load(f, Loader=yaml.FullLoader)
+    with open("config.yaml", 'r+', encoding='utf-8') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
 
     force_estimation = ForceEstimation(config)

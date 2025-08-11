@@ -1,1 +1,0 @@
-{"validation_MAE":0.48720210790634155,"_timestamp":1.7536561877368128e+09,"_step":199,"_wandb":{"runtime":11292},"_runtime":11292,"train_MSE":0.38843633246648573,"train_MAE":0.4117472571739252,"validation_MSE":0.7117300033569336}

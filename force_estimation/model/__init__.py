@@ -1,5 +1,4 @@
-from .densenet import *
 from .gru import GRU
 from .lstm import LSTM
-from .resnet import *
+from .convNeXt import *
 from .CFModel import CFModel

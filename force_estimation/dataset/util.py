@@ -1,0 +1,289 @@
+import numpy as np
+import cv2
+from scipy import signal
+from scipy.interpolate import interp1d
+import os
+import torch
+import torch.nn.functional as F
+import zipfile
+
+target_index = 30
+
+def load_data_from_npz(path, target_index):
+    img = []
+    force = []
+
+    label = []
+    frame = []
+
+    img_ts = []
+    force_ts = []
+
+    for lab in os.listdir(path):  # 각 label에 대하여
+        for file_name in os.listdir(path + '/' + lab):  # 각 파일들에 대하여
+            with zipfile.ZipFile(path + '/' + lab + '/' + file_name, 'r') as zf:  # 각 zip파일들에 대하여
+                for npzfile in zf.namelist():  # 각 npz파일들에 대하여
+                    with zf.open(npzfile) as nf:
+                        data = np.load(nf)
+                        if len(data['img_ts']) > len(data['force_ts']): continue
+                        if len(data['img']) < target_index: continue
+
+                        img.append(data['img'])
+                        force.append(data['force'])
+
+                        img_ts.append(data['img_ts'])
+                        force_ts.append(data['force_ts'])
+
+                        label.append(int(lab))
+                        frame.append(len(data['img']))
+
+    print(f"{path}: {sum(frame)} image data")
+
+    return img, force, label, img_ts, force_ts
+
+def z_score_of_image(img: np.array, mean: list, std: list):
+    '''
+    - image.shape = (# of chunks, target_index, channel, height, width)
+    '''
+    # 일단 image는 RGB 채널로 나누어져 있으며
+    # break_images_smaller() 함수 실행함으로써 쪼개진 각 chunk라고 가정
+
+    # mean과 std는 3차원 리스트로, 각각 R, G, B의 평균과 표준편차
+
+    for channel in range(3):
+        img[:, :, channel] -= mean[channel]
+        img[:, :, channel] /= std[channel]
+
+    return img
+
+def divide_RGB_channels(img, img_ts):
+    ''' 첫 번째와 두 번째 프레임은 버리되, 나머지 프레임은 3 Chanenl 이미지로 '''
+    result = []
+    for sequence_idx in range(len(img)):
+        new_seq = []
+        for frame_idx in range(len(img[sequence_idx])):
+            # 처음 프레임이라면 시행 X
+            if frame_idx == 0 or frame_idx == 1:
+                continue
+
+            current_frame = img[sequence_idx][frame_idx]
+            previous_frame = img[sequence_idx][frame_idx - 1]
+            p_previous_frame = img[sequence_idx][frame_idx - 2]
+
+            diff = current_frame - previous_frame
+            diff_ = previous_frame - p_previous_frame
+            p_diff = diff - diff_
+
+            new_frame = np.vstack([current_frame.reshape((1, 10, 8)), diff.reshape((1, 10, 8)), p_diff.reshape((1, 10, 8))])
+            if np.isnan(new_frame).any():
+                continue
+            new_seq.append(new_frame)
+
+        img_ts[sequence_idx] = img_ts[sequence_idx][2:]
+        result.append(np.array(new_seq))
+
+    return result
+
+def interpolate_nano_to_capacitance(force, img_ts, force_ts):
+    result = []
+    for index in range(len(force_ts)):
+        # 보간 함수 생성 (외삽은 금지 - 범위 밖이면 NaN 발생)
+        interp_func = interp1d(force_ts[index], force[index], kind='linear', fill_value='extrapolate',
+                               axis=0)
+
+        # sensor1의 타임스탬프에 대해 sensor2 값 보간
+        r = interp_func(img_ts[index])
+        result.append(r)
+
+    return result
+
+def measure_image_and_force_frequency(img_ts, force_ts):
+    def measure_frequency(timestamps):
+        sum_of_intervals = 0.0
+        sum_of_frame_force = 0
+
+        for seq in timestamps:
+            interval = np.mean(np.diff(seq))
+            sum_of_frame_force += len(seq) - 1
+            sum_of_intervals += interval * (len(seq) - 1)
+
+        mean_interval = sum_of_intervals / sum_of_frame_force
+        frequency = 1 / mean_interval
+        return frequency
+
+    # force frequency 측정
+    force_hz = measure_frequency(force_ts)
+
+    # image frequency 측정
+    image_hz = measure_frequency(img_ts)
+
+    return image_hz, force_hz
+
+
+def apply_butterworth_filter(force, img_ts, force_ts):
+    result = []
+
+    image_hz, force_hz = measure_image_and_force_frequency(img_ts, force_ts)
+
+    nyq = 0.5 * force_hz
+    cutoff = 10
+
+    for index in range(len(force)):
+        temp_force = force[index]
+        b, a = signal.butter(2, cutoff / nyq, 'low')
+        data = []
+        for sig in range(6):
+            r = signal.filtfilt(b, a, temp_force[:, sig])
+            data.append(r)
+
+        result.append(np.array(data).T)
+
+    return result
+
+def resize_image(input_image, size):
+    if len(input_image.shape) == 5:
+        # 만약 입력이 각 시퀀스인 경우 (test dataset)
+        chunk, frame, c, h, w = input_image.shape
+        image = input_image.reshape((chunk * frame, c, h, w))
+    else:
+        # 만약 입력이 하나의 chunk인 경우 (train/val dataset)
+        image = input_image
+
+    # resize each image (cv2 expects (h, w, c), so we transpose before and after)
+    image = np.stack([
+        cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
+        for img in image
+    ])
+
+    if len(input_image.shape) == 5:
+        image = image.reshape((chunk, frame, c, size[0], size[1]))
+
+    return image.astype(np.float32)
+
+
+def normalize_image(img: np.array, max: list, mean: list):
+    '''
+    입력:
+     - img: 각 chunk로 나누어진 영상 이미지 (shape: (# of chunk, target_index, channel, height, width)
+     - max: 각 채널별 max값 list (shape: (3) (max of R channel, max of G channel, max of B channel)
+     - mean 각 채널별 mean값 list (shape: (3) (mean of R channel, mean of G channel, mean of B channel)
+    '''
+
+    img = img.astype('float32')
+
+    # 0 - 1로 정규화
+    img[:, :, 0] = ((img[:, :, 0] * 255 / max[0]))
+    img[:, :, 0] -= (mean[0] * 255 / max[0])
+
+    img[:, :, 1] -= mean[1]
+
+    img[:, :, 2] -= mean[2]
+
+    return img
+
+def break_images_smaller(origin_img: list, origin_force: list, origin_label, target_index, stride):
+    '''
+    각 시퀀스를 target_index만큼 쪼개고, 쪼개진 각 chunk dummy를 반환함. (image, force 모두 적용됨) (for train/validation dataset)
+
+    입력:
+     - origin_img: 각 시퀀스별 이미지 데이터 (shape: (# of sequence, # of frames of each sequence (variable), channel, height, width)
+     - origin_force : 각 시퀀스별 force 데이터 (shape: (# of sequence, # of forces of each sequence (variable), 6))
+     - origin_label: 각 시퀀스별 label (shape: (# of sequence, label)))
+     - target_index: 얼마만큼 자를 것인지 (int)
+     - stride: 얼마만큼 띄울 것인지 (int)
+
+    출력
+     - result_img: 이미지 chunk 데이터 (shape: (# of chunk, target_index, channel, height, width))
+     - result_force: 각 chunk에 해당하는 force 데이터 (현재 가장 마지막 데이터만을 저장) (shape: (# of chunk, 6))
+     - result_label: 각 chunk에 해당하는 label (shape: (# of chunk, label)))
+    '''
+
+    result_img = [] # temporary image list
+    result_force = []
+    result_label = []
+
+    for index in range(len(origin_img)):
+        frame_in_image = 0
+
+        while frame_in_image + target_index < len(origin_img[index]):
+            result_img.append(origin_img[index][frame_in_image : frame_in_image + target_index])
+            temp_force = origin_force[index][frame_in_image : frame_in_image + target_index]
+
+            result_force.append(temp_force[-1]) # 가장 마지막 frame의 force data만을 저장
+            result_label.append(origin_label[index])
+            frame_in_image += stride
+
+    return np.array(result_img), np.array(result_force, dtype=np.float32), result_label
+
+def break_images_smaller_for_sequence(origin_img: list, origin_force: list, origin_label, target_index, stride):
+    '''
+    각 시퀀스를 target_indices로 쪼개고, 각 시퀀스별로 저장함 (image, force 모두 적용됨) (for test dataset)
+
+    입력:
+     - origin_img: 각 시퀀스별 이미지 데이터 (shape: (# of sequence, # of frames of each sequence (variable), channel, height, width)
+     - origin_force : 각 시퀀스별 force 데이터 (shape: (# of sequence, # of forces of each sequence (variable), 6))
+     - origin_label: 각 시퀀스별 label (shape: (# of sequence, label)))
+     - target_index: 얼마만큼 자를 것인지 (int)
+     - stride: 얼마만큼 띄울 것인지 (int)
+
+    출력
+     - result_img: 각 시퀀스 내에서 나누어진 이미지 chunk 데이터 (shape: (# of sequence, # of chunk, target_index, channel, height, width))
+     - result_force: 각 시퀀스 내 chunk에 해당하는 force 데이터 (현재 가장 마지막 데이터만을 저장) (shape: (# of sequence, # of chunk, 6))
+     - result_label: 각 시퀀스 내 chunk에 해당하는 label (shape: (# of sequence, # of chunk, label)))
+    '''
+
+    result_img = []  # temporary image list
+    result_force = []
+    result_label = []
+
+    for index in range(len(origin_img)):
+        sequence_image = []
+        sequence_force = []
+        sequence_label = []
+
+        frame_in_image = 0
+
+        while frame_in_image + target_index < len(origin_img[index]):
+            sequence_image.append(origin_img[index][frame_in_image : frame_in_image + target_index])
+            temp_force = origin_force[index][frame_in_image : frame_in_image + target_index]
+
+            sequence_force.append(temp_force[-1]) # 가장 마지막 frame의 force data만을 저장
+            sequence_label.append(origin_label[index])
+            frame_in_image += stride
+
+        result_img.append(np.array(sequence_image))
+        result_force.append(np.array(sequence_force, dtype=np.float32))
+        result_label.append(np.array(sequence_label))
+
+    return result_img, result_force, result_label
+
+
+def preprocess(img, force, label, img_ts, force_ts,
+               max, mean, std, image_size, num_classes):
+    '''
+    모든 전처리 여기에서 진행
+    '''
+
+    img = divide_RGB_channels(img, img_ts)
+
+    # force data에 low-pass filter를 걺
+    force = apply_butterworth_filter(force, img_ts, force_ts)
+
+    # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
+    force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+
+    frame = []
+
+    for sequence_index in range(len(img)):
+        # 이미지를 채널별로 normalize
+        img[sequence_index] = normalize_image(img[sequence_index], max, mean)
+        # or... img[sequence_index] = z_score_of_image(img[sequence_index], max, std)
+
+        img[sequence_index] = resize_image(img[sequence_index], image_size)
+
+        frame.append(int(len(img[sequence_index])))
+
+    # label
+    label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=num_classes)
+
+    return img, force, label, frame

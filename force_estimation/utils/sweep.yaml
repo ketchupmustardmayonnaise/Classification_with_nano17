@@ -1,0 +1,84 @@
+program: wandb_sweep.py
+method: bayes
+metric:
+  name: validation_MSE
+  goal: minimize
+name: train_sweep
+
+parameters:
+# 바뀌지 않는 parameter들
+  use_wandb:
+    value: True
+  batch_size:
+    value: 64
+  num_epoch:
+    value: 100
+  train_data_dir:
+    value: "../dataset/two/train"
+  val_data_dir:
+    value: "../dataset/two/val"
+  test_data_dir:
+    value: "../dataset/two/test"
+  save_dir:
+    value: "../saved_models"
+  scheduler:
+    value: None
+  image_resize:
+    value: True
+  image_size:
+    value: [64, 64]
+  train_mode:
+    value: True
+
+# sweep되는 parameter들
+  target_indices:
+    values: [5, 8, 10]
+  stride:
+    values: [1, 3, 5]
+  image_type:
+    values: ["origin", "rgb", "diff"]
+  augmentation_angle:
+    values: [20, 45, 90, 180]
+
+  encoder:
+    values:
+      - ["resnet", "BasicBlock", [2, 2, 2, 2]] # resnet-18
+      - ["resnet", "BasicBlock", [3, 4, 6, 3]] # resnet-34
+      - ["resnet", "Bottleneck", [3, 4, 6, 3]] # resnet-50
+      - ["resnet", "Bottleneck", [3, 4, 23, 3]] # resnet-101
+      - ["resnet", "Bottleneck", [3, 8, 36, 3]] # resnet-152
+      - ["densenet", 32, [6, 12, 24, 16]] # densenet
+      - ["fsnet"]
+  encoder_output:
+    values: [64, 128, 256]
+  decoder:
+    values:
+      - "lstm"]
+      - "gru"]
+      - "bidirectional_lstm"]
+  decoder_output:
+    values: [64, 128, 256]
+  rnn_layer:
+    values: [1, 2, 3]
+
+  fc_num_layer:
+    values: [1, 2, 3, 4]
+  fc_hidden_dim:
+    values: [64, 128, 256]  
+
+  optimizer:
+    values: [Adam, SGD, rmsprop]
+  learning_rate:
+    min: 0.000001
+    max: 0.01
+  dropout:
+    min: 0.1
+    max: 0.5
+  weight_decay:
+    min: 0.0001
+    max: 0.1
+  loss:
+    values: [MAE, MSE, MSE+MAE]
+
+
+count: 100

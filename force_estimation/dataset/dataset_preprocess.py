@@ -1,0 +1,110 @@
+'''
+여러 개의 npz 시퀀스 파일을 다 불러온 후
+시퀀스들을 섞어서 저장하는 코드
+
+현재 train dataset의 모든 npz file을 불러오면 메모리가 없어서 안 됨
+다른 건 다 괜찮은데, 특히 이미지를 (224, 224)로 확대하면서 메모리가 부족함
+
+때문에 모든 npz 시퀀스 파일들을 불러온 후
+하나의 .h5 파일에 데이터들을 저장함
+'''
+
+'''
+dataset.h5
+├── sample_0/
+│   ├── img     (shape=(30, 3, 224, 224), float16)
+│   ├── force   (shape=(6), float16)
+│   └── label   (shape=(7), int)
+├── sample_1/
+│   ├── ...
+'''
+import h5py
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+from util import *
+import numpy as np
+import yaml
+import traceback
+# =====================================
+# configuration
+
+dataset_type = 'test'
+target_index = 30
+stride = 1
+image_size = (224, 224)
+
+
+with open("../config.yaml", 'r+', encoding='utf-8') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+
+image_size = config.get('image_size')
+target_index = config.get('target_index')
+stride = config.get('stride')
+num_classes = 7
+
+# 각 채널별 train dataset에 대한 max, mean
+
+
+original_image_size = (10, 8)
+# =====================================
+
+img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
+img = divide_RGB_channels(img, img_ts)
+# force data에 low-pass filter를 걺
+force = apply_butterworth_filter(force, img_ts, force_ts)
+# cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
+force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+# target_index씩 자름
+img, force, label = break_images_smaller(img, force, label, target_index, stride)
+
+# image shape = (seq, frame, c, h, w)
+r_value = []
+g_value = []
+b_value = []
+
+r_max = -1e10
+g_max = -1e10
+b_max = -1e10
+
+for seq in range(len(img)):
+    r_value.extend(img[seq][:, 0].flatten().tolist())
+    g_value.extend(img[seq][:, 1].flatten().tolist())
+    b_value.extend(img[seq][:, 2].flatten().tolist())
+
+    if np.max(img[seq][:, 0]) > r_max: r_max = np.max(img[seq][:, 0])
+    if np.max(img[seq][:, 1]) > g_max: g_max = np.max(img[seq][:, 1])
+    if np.max(img[seq][:, 2]) > b_max: b_max = np.max(img[seq][:, 2])
+
+max = [r_max, g_max, b_max]
+mean = [np.mean(r_value), np.mean(g_value), np.mean(b_value)]
+std = [np.std(r_value), np.std(g_value), np.std(b_value)]
+
+img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
+img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,
+                                               image_size, num_classes)
+
+file_name = f'{dataset_type}_dataset.h5'
+with h5py.File(file_name, 'w') as h5f:
+    # 각 sequence 저장
+    for index in range(0, len(img)):
+        try:
+            sample_name = f'sequence_{index:04d}'
+            group = h5f.create_group(sample_name)
+
+            # 저장
+            group.create_dataset('img', data=img[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 3, 224, 224), float32
+            group.create_dataset('force', data=force[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 6), float
+            group.create_dataset('label', data=label[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 7), int
+
+            if index % 10 == 0:
+                print(f"save {index} / {len(img)} data...")
+
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            sys.exit(1)
+
+    h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
+
+print("Complete to resize lots of images and save")

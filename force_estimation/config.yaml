@@ -1,42 +1,44 @@
-train_mode: False
+train_mode: True
 use_wandb: True
+resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
+resume_wandb_id: a0fpam95
 
 # encoder
-encoder: "convNeXt" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
-encoder_output: 256
+encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
+# encoder_output: 256
 
 # decoder
-decoder: bidirectional_lstm # [lstm, gru, bidirectional_lstm]
+decoder: lstm # [lstm, gru, bidirectional_lstm]
 rnn_layer: 2
-decoder_output: 128
+decoder_output: 3
 
 # fully connected layer
 fc_num_layer: 3
 fc_hidden_dim: 1000
 
 # image
-frame_length: 30 #몇 frame으로 자를 것인지
+target_index: 30 #몇 frame으로 자를 것인지
 stride: 1
-augmentation_angle: 45
 
-image_type: zScore # [origin, rgb, diff, zScore]
+image_type: rgb # [origin, rgb, diff, zScore]
 image_size: !!python/tuple
   - 224
   - 224
 
 # directory
-train_data_dir: ../dataset/rft64/train
-val_data_dir: ../dataset/rft64/val
-test_data_dir: ../dataset/rft64/test
+train_data_dir: ./dataset/train_dataset.h5
+val_data_dir: ./dataset/val_dataset.h5
+test_data_dir: ./dataset/test_dataset.h5
+
 save_dir: ../saved_models
-model_dir: /home/gpuadmin/Jins/Classification_with_nano17/saved_models/alexnet_bidirectional_lstm_07-30_10-32-29
-optimizer: Adam # [Adam, SGD, rmsprop]
-scheduler: None
-batch_size: 1
-num_epoch: 200
+model_dir: ../saved_models/1layermae/epoch_3.pt # 확장자: .pt 또는 .pth
+
+optimizer_type: Adam # [Adam, SGD, rmsprop]
+scheduler_type: None
+loss_type: MSE # [MSE, MAE, MSE+MAE]
+
+batch_size: 8
+num_epoch: 100
 learning_rate: 0.0001
 weight_decay: 0.00
 dropout: 0.3
-loss: MAE # [MSE, MAE, MSE+MAE]
-
-plot_index: -1
