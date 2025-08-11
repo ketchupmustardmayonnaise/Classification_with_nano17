@@ -47,9 +47,9 @@ num_classes = 7
 original_image_size = (10, 8)
 # =====================================
 
-max = []
-mean = []
-std = []
+max = [318.8728, 192.6237, 274.7175]
+mean = [23.0956, -0.0002, -0.0011]
+std = [46.4343, 2.6335, 3.2608]
 
 img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
 img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,
