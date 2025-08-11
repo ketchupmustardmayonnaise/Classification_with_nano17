@@ -1,6 +1,6 @@
 import h5py
 import numpy as np
-path = 'test_dataset.h5'
+path = 'val_dataset.h5'
 
 z_filter = -5
 

@@ -353,10 +353,10 @@ class ForceEstimation:
                 except:
                     wandb.finish()
 
-        self.model.load_state_dict(torch.load(self.save_dir +"" + "/epoch_{}.pt".format(self.best_epoch)))
-        self.test(self.save_dir)
+        best_model_checkpoint = torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch))
+        self.model.load_state_dict(best_model_checkpoint['model'])
+        self.test()
         if self.use_wandb: wandb.finish()
-
 
     def test(self):
         self.model.eval()
@@ -380,20 +380,19 @@ class ForceEstimation:
                     X.append(_X[i:i+self.target_index])
                     force.append(_force[i:i+self.target_index])
 
-                X, force, y = torch.Tensor(X), torch.Tensor(force), y.squeeze()
                 pf.append([])
 
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
                 while True:
                     if batch_start + self.batch_size < len(X):
-                        X_batch, force_batch, y_batch = X[batch_start:batch_start+self.batch_size],\
-                                                        force[batch_start:batch_start+self.batch_size],\
-                                                        y[batch_start:batch_start+self.batch_size]
+                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
+                                                        torch.Tensor(force[batch_start:batch_start+self.batch_size]),\
+                                                        torch.Tensor(y[batch_start:batch_start+self.batch_size])
                     else:
-                        X_batch, force_batch, y_batch = X[batch_start:len(X)],\
-                                                        force[batch_start:len(X)],\
-                                                        y[batch_start:len(X)]
+                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:len(X)]),\
+                                                        torch.Tensor(force[batch_start:len(X)]),\
+                                                        torch.Tensor(y[batch_start:len(X)])
 
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 

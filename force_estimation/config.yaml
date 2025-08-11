@@ -1,5 +1,5 @@
-train_mode: True
-use_wandb: True
+train_mode: False
+use_wandb: False
 resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
 resume_wandb_id: a0fpam95
 
@@ -31,14 +31,14 @@ val_data_dir: ./dataset/val_dataset.h5
 test_data_dir: ./dataset/test_dataset.h5
 
 save_dir: ../saved_models
-model_dir: None # 확장자: .pt 또는 .pth
+model_dir: C:\Users\user\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_lstm_08-11_19-38-08\epoch_1.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None
 loss_type: MAE # [MSE, MAE, MSE+MAE]
 
 batch_size: 8
-num_epoch: 100
+num_epoch: 1
 learning_rate: 0.0001
 weight_decay: 0.00
 dropout: 0.3
