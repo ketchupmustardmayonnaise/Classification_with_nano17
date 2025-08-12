@@ -54,7 +54,8 @@ class ForceEstimation:
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
 
             ('decoder', str),  # 어떤 시계열 모델을 사용할 것인지 (str)
-            ('rnn_layer', int),  # 시계열 모델 내 layer의 개수 (int)
+            ('decoder_layer', int),  # 시계열 모델 내 layer의 개수 (int)
+            ('decoder_dimension', int),
             ('decoder_output', int),  # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
 
             ('fc_num_layer', int),  # fully-connected layer의 개수 (int)
@@ -81,11 +82,14 @@ class ForceEstimation:
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = CFModel(self.encoder,
-                             self.decoder, 
-                             self.decoder_output, 
-                             self.rnn_layer, 
+                             self.decoder,
+                             self.decoder_layer,
+                             self.decoder_dimension, 
+                             self.decoder_output,                               
                              self.fc_num_layer,
-                             self.target_index)
+                             self.target_index,
+                             self.fc_hidden_dim,
+                             self.dropout)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3 if self.image_type.lower() == "rgb" else 1, self.image_size[0], self.image_size[1]))
 
@@ -149,7 +153,7 @@ class ForceEstimation:
                         "encoder": self.encoder,
 
                         "decoder": self.decoder,
-                        "rnn_layer": self.rnn_layer,
+                        "decoder_layer": self.decoder_layer,
                         "decoder_output": self.decoder_output,
 
                         "fc_num_layer": self.fc_num_layer,
@@ -170,7 +174,7 @@ class ForceEstimation:
                         "loss": self.loss_type,
                     }
 
-                    run_name = f'{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_3layer_MAE'
+                    run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
                     self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
                 self.train()

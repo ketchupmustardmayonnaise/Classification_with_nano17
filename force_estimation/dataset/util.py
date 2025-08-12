@@ -50,10 +50,14 @@ def z_score_of_image(img: np.array, mean: list, std: list):
 
     # mean과 std는 3차원 리스트로, 각각 R, G, B의 평균과 표준편차
 
-    for channel in range(3):
-        img[:, :, channel] -= mean[channel]
-        img[:, :, channel] /= std[channel]
+    mean = np.array(mean)
+    std = np.array(std)
 
+    mean_reshaped = dataset_mean.reshape(1, -1, 1, 1)
+    std_reshaped = dataset_std.reshape(1, -1, 1, 1)
+    
+    img = (img - mean_reshaped) / (std_reshaped + 1e-7)
+    
     return img
 
 def divide_RGB_channels(img, img_ts):
@@ -172,12 +176,14 @@ def normalize_image(img: np.array, max: list, mean: list):
     img = img.astype('float32')
 
     # 0 - 1로 정규화
-    img[:, :, 0] = ((img[:, :, 0] * 255 / max[0]))
-    img[:, :, 0] -= (mean[0] * 255 / max[0])
+    img[:, 0] = ((img[ :, 0] * 255 / max[0]))
+    img[:, 0] -= (mean[0] * 255 / max[0])
 
-    img[:, :, 1] -= mean[1]
+    img[:, 1] = ((img[ :, 0] * 255 / max[0]))
+    img[:, 1] -= (mean[0] * 255 / max[0])
 
-    img[:, :, 2] -= mean[2]
+    img[:, 2] = ((img[ :, 0] * 255 / max[0]))
+    img[:, 2] -= (mean[0] * 255 / max[0])
 
     return img
 

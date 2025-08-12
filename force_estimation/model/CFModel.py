@@ -14,8 +14,8 @@ from torchvision import models
 # fully-connected layer는, fc_num_layer 개수만큼 stacking (최소 1, 최대 4)
 class CFModel(nn.Module):
     def __init__(self, encoder,
-                 decoder, decoder_output, rnn_layer, fc_num_layer,
-                 target_index):
+                 decoder, decoder_layer, decoder_dimension,decoder_output,  fc_num_layer,
+                 target_index, fc_hidden_dim, dropout):
         assert fc_num_layer > 0
 
         super().__init__()
@@ -43,11 +43,11 @@ class CFModel(nn.Module):
 
         # Decoder
         if decoder == 'lstm':
-            self.decoder = LSTM(input_size=1000, hidden_size = 256, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=False)
+            self.decoder = LSTM(input_size=1000, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
         elif decoder == 'bidirectional_lstm':
-            self.decoder = LSTM(input_size=1000, output_size=decoder_output, h_RNN_layers=rnn_layer, bidirectional=True)
+            self.decoder = LSTM(input_size=1000, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
         elif decoder == 'gru':
-            self.decoder = GRU(input_size=1000, output_size=decoder_output, h_RNN_layers=rnn_layer)
+            self.decoder = GRU(input_size=1000, output_size=decoder_output, h_RNN_layers=decoder_layer)
         
         else: raise Exception('Unknown rnn type')
 

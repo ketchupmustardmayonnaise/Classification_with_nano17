@@ -8,12 +8,13 @@ encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
 # encoder_output: 256
 
 # decoder
-decoder: lstm # [lstm, gru, bidirectional_lstm]
-rnn_layer: 2
+decoder: bidirectional_lstm # [lstm, gru, bidirectional_lstm]
+decoder_layer: 2
+decoder_dimension : 256
 decoder_output: 3
 
 # fully connected layer
-fc_num_layer: 3
+fc_num_layer: 1
 fc_hidden_dim: 1000
 
 # image
@@ -26,9 +27,9 @@ image_size: !!python/tuple
   - 224
 
 # directory
-train_data_dir: ./dataset/train_dataset.h5
-val_data_dir: ./dataset/val_dataset.h5
-test_data_dir: ./dataset/test_dataset.h5
+train_data_dir: ./dataset/alexnetDiff/train_dataset.h5
+val_data_dir: ./dataset/alexnetDiff/val_dataset.h5
+test_data_dir: ./dataset/alexnetDiff/test_dataset.h5
 
 save_dir: ../saved_models
 model_dir: C:\Users\user\PycharmProjects\Classification_with_nano17_manytomany\saved_models\alexnet_lstm_08-11_19-38-08\epoch_1.pt # 확장자: .pt 또는 .pth
@@ -38,7 +39,7 @@ scheduler_type: None
 loss_type: MAE # [MSE, MAE, MSE+MAE]
 
 batch_size: 8
-num_epoch: 1
+num_epoch: 100
 learning_rate: 0.0001
 weight_decay: 0.00
 dropout: 0.3

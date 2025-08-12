@@ -29,7 +29,7 @@ import traceback
 # =====================================
 # configuration
 
-dataset_type = 'val'
+dataset_type = 'train'
 
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
@@ -39,41 +39,66 @@ target_index = config.get('target_index')
 stride = config.get('stride')
 num_classes = 7
 
-# 각 채널별 train dataset에 대한 max, mean
-
-
-original_image_size = (10, 8)
-# =====================================
+dataset_types = ['train', 'val', 'test']
 
 max = [318.8728, 236.7046, 274.7175]
 mean = [22.0353, -0.0010, -0.0022]
 std = [45.9203, 2.5501, 3.1633]
 
-img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
-img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,
-                                               image_size, num_classes)
+for d_type in dataset_types :
+    dataset_type = d_type
 
-file_name = f'{dataset_type}_dataset.h5'
-with h5py.File(file_name, 'w') as h5f:
-    # 각 sequence 저장
-    for index in range(0, len(img)):
-        try:
-            sample_name = f'sequence_{index:04d}'
-            group = h5f.create_group(sample_name)
 
-            # 저장
-            group.create_dataset('img', data=img[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 3, 224, 224), float32
-            group.create_dataset('force', data=force[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 6), float
-            group.create_dataset('label', data=label[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 7), int
+    original_image_size = (10, 8)
+    # =====================================
 
-            if index % 10 == 0:
-                print(f"save {index} / {len(img)} data...")
+    img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
+    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,
+                                                image_size, num_classes)
 
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            sys.exit(1)
+    file_name = f'{dataset_type}_dataset.h5'
+    with h5py.File(file_name, 'w') as h5f:
+        # 각 sequence 저장
+        for index in range(0, len(img)):
+            try:
+                sample_name = f'sequence_{index:04d}'
+                group = h5f.create_group(sample_name)
 
-    h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
+                # 저장
+                group.create_dataset('img', data=img[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 3, 224, 224), float32
+                group.create_dataset('force', data=force[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 6), float
+                group.create_dataset('label', data=label[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 7), int
+
+                if index % 10 == 0:
+                    print(f"save {index} / {len(img)} data...")
+
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
+                sys.exit(1)
+
+        h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
+
+    with h5py.File(file_name, 'a') as f:
+        sample_keys = list(f.keys())
+        if 'frame' in sample_keys: sample_keys.remove('frame')
+
+        for key in sample_keys:
+            base_group = f[f'{key}']
+            force = f[f'{key}/force']
+            filtered_force = np.copy(force)
+
+            if len(filtered_force.shape) == 1:
+                if filtered_force[2] > 0: filtered_force[2] = 0
+                if filtered_force[2] < -5: filtered_force[2] = -5
+            else: # test dataset
+                for i in range(filtered_force.shape[0]):
+                    if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
+                    if filtered_force[i, 2] < -5: filtered_force[i, 2] = -5
+
+            base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
+            
+    print(f'{d_type} complete')
+
 
 print("Complete to resize lots of images and save")
