@@ -3,7 +3,7 @@ import cv2  # 리사이즈를 위해 OpenCV 사용 (예시)
 from util import *
 
 # --- 설정 (Configuration) ---
-path = 'train'
+path = 'test'
 target_index = 30
 stride = 1
 image_size = (224, 224) # (너비, 높이) 순서
