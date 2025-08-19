@@ -7,7 +7,7 @@ from tqdm import tqdm
 from utils import *
 from dataset import *
 from torch.optim import lr_scheduler
-
+from utils.earlystopping import *
 import wandb
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
@@ -225,10 +225,13 @@ class ForceEstimation:
 
     def train(self, start_epoch=0):
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
-              ' Validation MSE: {:.3f}, Validation MAE: {:.3f}, {}'
+              ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
         val_best_loss = 1e10
+        patience = 10
+        best_model_path = os.path.join(self.save_dir, 'best_model.pt')
 
+        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
 
@@ -257,6 +260,9 @@ class ForceEstimation:
                 else:
                     loss = self.loss(pred_force.float(), force.float())
 
+                loss.backward()
+                self.optimizer.step()
+                
                 MSE.append(MSEloss.item())
                 MAE.append(L1_loss.item())
 
@@ -264,79 +270,40 @@ class ForceEstimation:
                 running_loss += loss.item()
                 progress_bar.set_postfix(loss=running_loss / (progress_bar.n + 1))
 
-                loss.backward()
-                self.optimizer.step()
+                
 
             if self.scheduler is not None: self.scheduler.step()
             # validate the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)
 
-            # current model save
-            torch.save({
-                'epoch': epoch+1,
-                'model': self.model.state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-                'optimizer_type': self.optimizer_type,
-                'loss': val_best_loss,
-                'loss_type': self.loss_type
-            }, self.save_dir + "/current.pt")
+            
+            if self.loss_type == 'MSE+MAE':
+                val_loss_to_monitor = (val_MSE + val_MAE) / 2
+            elif self.loss_type == 'MSE':
+                val_loss_to_monitor = val_MSE
+            else: # MAE or default
+                val_loss_to_monitor = val_MAE
 
-            # best model save
-            if self.loss_type == "MAE" and val_MAE < val_best_loss:
-                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
-                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
-                self.best_epoch = epoch + 1
-                val_best_loss = val_MAE
-                torch.save({
-                    'epoch': epoch+1,
-                    'model': self.model.state_dict(),
-                    'optimizer': self.optimizer.state_dict(),
-                    'optimizer_type': self.optimizer_type,
-                    'loss': val_best_loss,
-                    'loss_type': self.loss_type
-                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
-                improve = "******"
-            elif self.loss_type == "MSE" and val_MSE < val_best_loss:
-                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
-                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
-                self.best_epoch = epoch + 1
-                val_best_loss = val_MSE
-                torch.save({
-                    'epoch': epoch+1,
-                    'model': self.model.state_dict(),
-                    'optimizer': self.optimizer.state_dict(),
-                    'optimizer_type': self.optimizer_type,
-                    'loss': val_best_loss,
-                    'loss_type': self.loss_type
-                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
-                improve = "******"
-            elif self.loss_type == "MSE+MAE" and (val_MSE + val_MAE) / 2 < val_best_loss:
-                if os.path.exists(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt"):
-                    os.remove(self.save_dir + "/epoch_" + str(self.best_epoch) + ".pt")
-                self.best_epoch = epoch + 1
-                val_best_loss = (val_MSE + val_MAE) / 2
-                torch.save({
-                    'epoch': epoch+1,
-                    'model': self.model.state_dict(),
-                    'optimizer': self.optimizer.state_dict(),
-                    'optimizer_type': self.optimizer_type,
-                    'loss': val_best_loss,
-                    'loss_type': self.loss_type
-                }, self.save_dir + "/epoch_" + str(epoch + 1) + ".pt")
-                improve = "******"
-            else: improve = " "
-
+            early_stopping(val_loss_to_monitor, self.model)
+            
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+            avg_train_mse = np.mean(MSE)
+            avg_train_mae = np.mean(MAE)
+            current_lr = self.optimizer.param_groups[0]['lr']
+            
             print(msg.format(
-                epoch + 1,  # {}/{} 중 첫 번째
-                self.num_epoch,  # {}/{} 중 두 번째
-                float(self.learning_rate),
-                float(np.mean(MSE)),  # {:.3f}
-                float(np.mean(MAE)),  # {:.3f}
-                float(val_MSE),  # {:.3f}
-                float(val_MAE),  # {:.3f}
-                improve
+                epoch + 1,
+                self.num_epoch,
+                current_lr,
+                avg_train_mse,
+                avg_train_mae,
+                val_MSE,
+                val_MAE
             ))
-
+            
+            
             train_txt_path = self.save_dir + "/train.txt"
             with open(train_txt_path, 'a') as train_txt_file:
                 train_txt_file.write(msg.format(
@@ -346,8 +313,7 @@ class ForceEstimation:
                     float(np.mean(MSE)),
                     float(np.mean(MAE)),
                     float(val_MSE),
-                    float(val_MAE),
-                    improve
+                    float(val_MAE)
                 ) + '\n')
 
             if self.use_wandb:
@@ -357,10 +323,16 @@ class ForceEstimation:
                 except:
                     wandb.finish()
 
-        best_model_checkpoint = torch.load(self.save_dir + "/epoch_{}.pt".format(self.best_epoch))
-        self.model.load_state_dict(best_model_checkpoint['model'])
+        # --- 학습 종료 후 최종 작업 ---
+        print("Loading best model weights...")
+        # EarlyStopping에 의해 저장된 가장 좋은 모델의 가중치를 불러옵니다.
+        self.model.load_state_dict(torch.load(best_model_path))
+        
+        print("Running test with best model...")
         self.test()
-        if self.use_wandb: wandb.finish()
+        
+        if self.use_wandb:
+            wandb.finish()
 
     def test(self):
         self.model.eval()
@@ -370,11 +342,22 @@ class ForceEstimation:
 
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
-
+        
+        f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00]
+        f_std = [0.56331648, 0.66661553, 1.36792603]
+        
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
-                _force = _force.squeeze().tolist()
+              
+                _force = _force.squeeze()
+                
+                # mean_tensor = torch.from_numpy(np.array(f_mean)).to(_force_tensor.device)
+                # std_tensor = torch.from_numpy(np.array(f_std)).to(_force_tensor.device)
+                
+                # _force_denormalized = _force_tensor * std_tensor + mean_tensor
+                # _force = _force_denormalized.tolist()
+                
                 f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
                 # 각 시퀀스를 sliding window씩 자름
@@ -401,9 +384,14 @@ class ForceEstimation:
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
+                    
+                    # mean_tensor = torch.from_numpy(np.array(f_mean)).to(pred_force.device)
+                    # std_tensor = torch.from_numpy(np.array(f_std)).to(pred_force.device)
+                    
+                    # denormalized_force = (pred_force * std_tensor) + mean_tensor
+                    # _pred_force_detach = denormalized_force.detach().cpu().numpy().tolist()
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
-
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
                                                             reduction='none').tolist())

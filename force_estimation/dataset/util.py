@@ -53,12 +53,26 @@ def z_score_of_image(img: np.array, mean: list, std: list):
     mean = np.array(mean)
     std = np.array(std)
 
-    mean_reshaped = dataset_mean.reshape(1, -1, 1, 1)
-    std_reshaped = dataset_std.reshape(1, -1, 1, 1)
+    mean_reshaped = mean.reshape(1, -1, 1, 1)
+    std_reshaped = std.reshape(1, -1, 1, 1)
     
     img = (img - mean_reshaped) / (std_reshaped + 1e-7)
     
     return img
+
+def z_score_of_force(force_list:list, mean:list, std:list):
+    
+    
+    mean = np.array(mean)
+    std = np.array(std)
+    
+    std = std + 1e-8
+    
+    normalized_force = [ (np.array(force) - mean) / std for force in force_list ]
+    
+    return normalized_force
+
+
 
 def divide_RGB_channels(img, img_ts):
     ''' 첫 번째와 두 번째 프레임은 버리되, 나머지 프레임은 3 Chanenl 이미지로 '''
@@ -265,7 +279,7 @@ def break_images_smaller_for_sequence(origin_img: list, origin_force: list, orig
 
 
 def preprocess(img, force, label, img_ts, force_ts,
-               max, mean, std, image_size, num_classes):
+               img_max, img_mean, img_std, f_mean, f_std ,image_size, num_classes):
     '''
     모든 전처리 여기에서 진행
     '''
@@ -278,18 +292,22 @@ def preprocess(img, force, label, img_ts, force_ts,
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
 
+    # force = z_score_of_force(force, f_mean, f_std)
+    
     frame = []
 
     for sequence_index in range(len(img)):
         # 이미지를 채널별로 normalize
         img[sequence_index] = resize_image(img[sequence_index], image_size)
         
-        img[sequence_index] = normalize_image(img[sequence_index], max, mean)
+        img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
         # or... img[sequence_index] = z_score_of_image(img[sequence_index], max, std)
 
         
 
         frame.append(int(len(img[sequence_index])))
+    
+    
 
     # label
     label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=num_classes)

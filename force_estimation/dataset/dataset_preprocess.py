@@ -41,9 +41,12 @@ num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
 
-max = [318.8728, 236.7046, 274.7175]
-mean = [22.0353, -0.0010, -0.0022]
-std = [45.9203, 2.5501, 3.1633]
+img_max = [318.8728, 236.7046, 274.7175]
+img_mean = [22.0353, -0.0010, -0.0022]
+img_std = [45.9203, 2.5501, 3.1633]
+
+f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
+f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
 for d_type in dataset_types :
     dataset_type = d_type
@@ -53,10 +56,10 @@ for d_type in dataset_types :
     # =====================================
 
     img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
-    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, max, mean, std,
-                                                image_size, num_classes)
-
+    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std, f_mean, f_std, image_size, num_classes)
+    
     file_name = f'{dataset_type}_dataset.h5'
+    
     with h5py.File(file_name, 'w') as h5f:
         # 각 sequence 저장
         for index in range(0, len(img)):
@@ -90,11 +93,11 @@ for d_type in dataset_types :
 
             if len(filtered_force.shape) == 1:
                 if filtered_force[2] > 0: filtered_force[2] = 0
-                if filtered_force[2] < -5: filtered_force[2] = -5
+                if filtered_force[2] < -4: filtered_force[2] = -4
             else: # test dataset
                 for i in range(filtered_force.shape[0]):
                     if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
-                    if filtered_force[i, 2] < -5: filtered_force[i, 2] = -5
+                    if filtered_force[i, 2] < -7: filtered_force[i, 2] = -7
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
             
