@@ -7,8 +7,6 @@ import torch
 import torch.nn.functional as F
 import zipfile
 
-target_index = 30
-
 def load_data_from_npz(path, target_index):
     img = []
     force = []
@@ -144,11 +142,11 @@ def apply_butterworth_filter(force, img_ts, force_ts):
     image_hz, force_hz = measure_image_and_force_frequency(img_ts, force_ts)
 
     nyq = 0.5 * force_hz
-    cutoff = 10
+    cutoff = 6
 
     for index in range(len(force)):
         temp_force = force[index]
-        b, a = signal.butter(2, cutoff / nyq, 'low')
+        b, a = signal.butter(4, cutoff / nyq, 'low')
         data = []
         for sig in range(6):
             r = signal.filtfilt(b, a, temp_force[:, sig])
