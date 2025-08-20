@@ -167,11 +167,15 @@ def resize_image(input_image, size):
         # 만약 입력이 하나의 chunk인 경우 (train/val dataset)
         image = input_image
 
-    # resize each image (cv2 expects (h, w, c), so we transpose before and after)
-    image = np.stack([
-        cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
-        for img in image
-    ])
+    # print(size)
+    if size == (8, 10) :
+        pass
+    else :
+        # resize each image (cv2 expects (h, w, c), so we transpose before and after)
+        image = np.stack([
+            cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
+            for img in image
+        ])
 
     if len(input_image.shape) == 5:
         image = image.reshape((chunk, frame, c, size[0], size[1]))

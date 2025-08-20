@@ -4,12 +4,12 @@ resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 �
 resume_wandb_id: a0fpam95
 
 # encoder
-encoder: "alexnet" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16
+encoder: "alexnetchange" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, alexnetchange
 # encoder_output: 256
 
 # decoder
 decoder: bidirectional_lstm # [lstm, gru, bidirectional_lstm]
-decoder_layer: 2
+decoder_layer: 1
 decoder_dimension : 128
 decoder_output: 3
 
@@ -32,7 +32,7 @@ val_data_dir: ./dataset/alexnet-4/val_dataset.h5
 test_data_dir: ./dataset/alexnet-4/test_dataset.h5
 
 save_dir: ../saved_models
-model_dir: ../saved_models/bidirectional_zscore/epoch_20.pt # 확장자: .pt 또는 .pth
+model_dir: None # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None

@@ -200,7 +200,7 @@ class ForceEstimation:
         else:
             self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
             checkpoint = torch.load(cfg['model_dir'])
-            self.model.load_state_dict(checkpoint['model'])
+            self.model.load_state_dict(checkpoint)
             self.test()
 
     def validate(self, dataloader):
@@ -351,6 +351,7 @@ class ForceEstimation:
                 _X = _X.squeeze().tolist()
               
                 _force = _force.squeeze()
+                _force = _force.tolist()
                 
                 # mean_tensor = torch.from_numpy(np.array(f_mean)).to(_force_tensor.device)
                 # std_tensor = torch.from_numpy(np.array(f_std)).to(_force_tensor.device)
@@ -366,7 +367,8 @@ class ForceEstimation:
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i+self.target_index])
                     force.append(_force[i:i+self.target_index])
-
+                
+                
                 pf.append([])
 
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict

@@ -21,8 +21,7 @@ class CFModel(nn.Module):
         super().__init__()
         self.fc_num_layer = fc_num_layer
         self.target_indices = target_index
-
-
+        self.extractor = False
         if encoder.lower() == 'resnet18':
             self.encoder = models.resnet18(pretrained=True)
         elif encoder.lower() == 'resnet34':
@@ -37,17 +36,23 @@ class CFModel(nn.Module):
             self.encoder = models.vgg16(pretrained=True)
         elif encoder.lower() == 'convnext':
             self.encoder = models.convnext_base(pretrained=True)
+        elif encoder.lower() == 'alexnetchange':
+            self.extractor = True
+            pretrained_alexnet = models.alexnet(weights='DEFAULT')
+            self.encoder = pretrained_alexnet.features[:3]
         else: raise Exception('Unknown encoder type')
         for param in self.encoder.parameters():
             param.requires_grad = False
 
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        
         # Decoder
         if decoder == 'lstm':
-            self.decoder = LSTM(input_size=1000, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
+            self.decoder = LSTM(input_size=64, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
         elif decoder == 'bidirectional_lstm':
-            self.decoder = LSTM(input_size=1000, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
+            self.decoder = LSTM(input_size=64, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
         elif decoder == 'gru':
-            self.decoder = GRU(input_size=1000, output_size=decoder_output, h_RNN_layers=decoder_layer)
+            self.decoder = GRU(input_size=64, output_size=decoder_output, h_RNN_layers=decoder_layer)
         
         else: raise Exception('Unknown rnn type')
 
@@ -60,6 +65,10 @@ class CFModel(nn.Module):
         x = input.view((b * t, c, h, w))
         
         x = self.encoder(x)
+        if self.extractor :
+            x = self.pool(x)
+            x = torch.flatten(x, 1)
+                
         # x.shape = (batch_size(8) * target_index(45), 1000(alexnet))
         x = x.reshape((b, t, -1))
         # x.shape = (batch_size, target_index, 1000(alexnet))

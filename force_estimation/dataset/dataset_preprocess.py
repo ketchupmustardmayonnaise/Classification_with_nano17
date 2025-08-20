@@ -93,7 +93,7 @@ for d_type in dataset_types :
 
             if len(filtered_force.shape) == 1:
                 if filtered_force[2] > 0: filtered_force[2] = 0
-                if filtered_force[2] < -4: filtered_force[2] = -4
+                if filtered_force[2] < -7: filtered_force[2] = -7
             else: # test dataset
                 for i in range(filtered_force.shape[0]):
                     if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
