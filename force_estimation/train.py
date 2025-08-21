@@ -89,9 +89,10 @@ class ForceEstimation:
                              self.fc_num_layer,
                              self.target_index,
                              self.fc_hidden_dim,
-                             self.dropout)
+                             self.dropout,
+                             self.image_size)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3 if self.image_type.lower() == "rgb" else 1, self.image_size[0], self.image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
 
         # test dataset
         self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['test_data_dir'], dataset_type='test')
@@ -189,8 +190,15 @@ class ForceEstimation:
 
                 # loss
                 self.loss_type = checkpoint['loss_type']
-                if self.loss_type != "MSE+MAE":
-                    self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+                if self.loss_type == "MSE+MAE":
+                    pass
+                elif self.loss_type == "MSE" :
+                    self.loss = torch.nn.MSELoss()  
+                elif self.loss_type == "MAE" :
+                    self.loss = torch.nn.L1Loss()
+                elif self.loss_type == "huber" :
+                    self.loss = torch.nn.HuberLoss(delta=0.5)    
+                    
 
                 self.run_log = wandb.init(project="rft64_2", id=cfg['resume_wandb_id'], resume="must")
 
@@ -216,8 +224,12 @@ class ForceEstimation:
 
                 MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(),
                                                     reduction='mean')
-                MAE += torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                   reduction='mean')
+                if self.loss_type != "huber" :
+                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.float(),
+                                                    reduction='mean')
+                else :
+                    MAE += torch.nn.functional.huber_loss(pred_force.float(), force.float(),
+                                                    reduction='mean')
 
         MSE /= len(dataloader)
         MAE /= len(dataloader)

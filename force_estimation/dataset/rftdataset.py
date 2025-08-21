@@ -7,7 +7,7 @@ import numpy as np
 from torch.utils.data import Dataset
 import bisect
 
-from dataset.util import target_index
+
 
 
 class RFTDataset(Dataset):

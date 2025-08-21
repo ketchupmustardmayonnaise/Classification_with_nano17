@@ -6,6 +6,7 @@ import os
 import torch
 import torch.nn.functional as F
 import zipfile
+import yaml
 
 def load_data_from_npz(path, target_index):
     img = []
@@ -158,18 +159,23 @@ def apply_butterworth_filter(force, img_ts, force_ts):
     return result
 
 def resize_image(input_image, size):
-    '''
-        !!! 시퀀스별 처리함 !!!
+    if len(input_image.shape) == 5:
+        # 만약 입력이 각 시퀀스인 경우 (test dataset)
+        chunk, frame, c, h, w = input_image.shape
+        image = input_image.reshape((chunk * frame, c, h, w))
+    else:
+        # 만약 입력이 하나의 chunk인 경우 (train/val dataset)
+        image = input_image
 
-        입력:
-         - input_image: 각 시퀀스별 이미지 데이터 (shape: (frame, channel, height, width) )
-        '''
-
-    # resize each image (cv2 expects (h, w, c), so we transpose before and after)
-    image = np.stack([
-        cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
-        for img in input_image
-    ])
+    # print(size)
+    if size == (10, 8) :
+        pass
+    else :
+        # resize each image (cv2 expects (h, w, c), so we transpose before and after)
+        image = np.stack([
+            cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
+            for img in image
+        ])
 
     return image.astype(np.float32)
 
@@ -181,16 +187,30 @@ def normalize_image(img: np.array, max: list, mean: list):
      - max: 각 채널별 max값 list (shape: (3) (max of R channel, max of G channel, max of B channel)
      - mean 각 채널별 mean값 list (shape: (3) (mean of R channel, mean of G channel, mean of B channel)
     '''
-
+    with open("../config.yaml", 'r+', encoding='utf-8') as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+        
     img = img.astype('float32')
 
-    # 0 - 1로 정규화
-    img[:, 0] = ((img[ :, 0] * 255 / max[0]))
-    img[:, 0] -= (mean[0] * 255 / max[0])
+    # Gray Scale 0 - 1로 정규화
+    if cfg['image_type'].lower() == 'rgb' :
+        img[:, 0] = ((img[ :, 0] * 255 / max[0]))
+        img[:, 0] -= (mean[0] * 255 / max[0])
 
-    img[:, 1] -= mean[1]
+        img[:, 1] = ((img[ :, 0] * 255 / max[0]))
+        img[:, 1] -= (mean[0] * 255 / max[0])
 
-    img[:, 2] -= mean[2]
+        img[:, 2] = ((img[ :, 0] * 255 / max[0]))
+        img[:, 2] -= (mean[0] * 255 / max[0])
+    elif cfg['image_type'].lower() == 'diff' :
+        img[:, 0] = ((img[ :, 0] * 255 / max[0]))
+        img[:, 0] -= (mean[0] * 255 / max[0])
+
+        img[:, 1] -= mean[1]
+
+        img[:, 2] -= mean[2]
+    else: raise Exception('Unknown rgb type')
+        
 
     return img
 
@@ -218,7 +238,8 @@ def preprocess(img, force, label, img_ts, force_ts,
         img[sequence_index] = resize_image(img[sequence_index], image_size)
         
         img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
-        # or... img[sequence_index] = z_score_of_image(img[sequence_index], max, std)
+        
+        # img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
 
         
 

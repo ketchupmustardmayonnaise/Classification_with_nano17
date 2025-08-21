@@ -15,15 +15,34 @@ from torchvision import models
 class CFModel(nn.Module):
     def __init__(self, encoder,
                  decoder, decoder_layer, decoder_dimension,decoder_output,  fc_num_layer,
-                 target_index, fc_hidden_dim, dropout):
+                 target_index, fc_hidden_dim, dropout, image_size):
         assert fc_num_layer > 0
 
         super().__init__()
         self.fc_num_layer = fc_num_layer
         self.target_indices = target_index
         self.extractor = False
+        self.input_size = 1000
         if encoder.lower() == 'resnet18':
-            self.encoder = models.resnet18(pretrained=True)
+            self.extractor = True
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
+            self.input_size = 64
+            pretrained_model = models.resnet18(pretrained=True)
+            pretrained_model.conv1 = nn.Conv2d(in_channels =3, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)
+            self.encoder = nn.Sequential(
+                pretrained_model.conv1,
+                pretrained_model.bn1,
+                pretrained_model.relu,
+                pretrained_model.maxpool,
+                # pretrained_model.layer1,
+                # pretrained_model.layer2,  # layer1, layer2 정도만 사용하는 것을 추천 (경량화)
+                # pretrained_model.layer3, # 필요에 따라 더 깊은 레이어를 추가할 수 있습니다.
+                # pretrained_model.layer4,
+            )
+            for name, param in self.encoder.named_parameters():
+                if 'conv1' not in name :
+                    param.requires_grad = False
+                
         elif encoder.lower() == 'resnet34':
             self.encoder = models.resnet34(pretrained=True)
         elif encoder.lower() == 'resnet50':
@@ -35,24 +54,52 @@ class CFModel(nn.Module):
         elif encoder.lower() == 'vgg16':
             self.encoder = models.vgg16(pretrained=True)
         elif encoder.lower() == 'convnext':
-            self.encoder = models.convnext_base(pretrained=True)
+            self.extractor = True
+            pretrained_model = models.convnext_tiny(pretrained=True)
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
+            new_stem = nn.Sequential(
+                        nn.Conv2d(in_channels= 3, out_channels= 96, kernel_size=3, stride=1, padding=1),
+                        # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
+                        nn.LayerNorm([96, 10, 8]))
+            pretrained_model.features[0] = new_stem
+            self.encoder = nn.Sequential(
+                pretrained_model.features[0],
+                pretrained_model.features[1]
+            )
+            for param in self.encoder[1].parameters():
+                param.requires_grad = False
+            self.input_size = 96
         elif encoder.lower() == 'alexnetchange':
             self.extractor = True
             pretrained_alexnet = models.alexnet(weights='DEFAULT')
-            self.encoder = pretrained_alexnet.features[:3]
+            self.input_size = 64
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
+            if image_size == (10,8) :
+                feature_layers = list(pretrained_alexnet.features[:3].children())
+                feature_layers[0] = nn.Conv2d(in_channels=3, 
+                              out_channels=64, 
+                              kernel_size=3, 
+                              stride=1, 
+                              padding=1)
+                feature_layers[2] = nn.MaxPool2d(kernel_size=2, stride=2)
+                self.encoder = nn.Sequential(*feature_layers)
+            else : 
+                self.encoder = pretrained_alexnet.features[:3]
+            for name, param in self.encoder.named_parameters():
+                if not name.startswith('0.') :
+                    param.requires_grad = False
         else: raise Exception('Unknown encoder type')
-        for param in self.encoder.parameters():
-            param.requires_grad = False
+        # for param in self.encoder.parameters():
+        #     param.requires_grad = False
 
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
         
         # Decoder
         if decoder == 'lstm':
-            self.decoder = LSTM(input_size=64, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
+            self.decoder = LSTM(input_size=self.input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
         elif decoder == 'bidirectional_lstm':
-            self.decoder = LSTM(input_size=64, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
+            self.decoder = LSTM(input_size=self.input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
         elif decoder == 'gru':
-            self.decoder = GRU(input_size=64, output_size=decoder_output, h_RNN_layers=decoder_layer)
+            self.decoder = GRU(input_size=self.input_size, output_size=decoder_output, h_RNN_layers=decoder_layer)
         
         else: raise Exception('Unknown rnn type')
 
