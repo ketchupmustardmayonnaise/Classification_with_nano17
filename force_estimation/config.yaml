@@ -8,7 +8,7 @@ encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16,
 # encoder_output: 256
 
 # decoder
-decoder: bidirectional_lstm # [lstm, gru, bidirectional_lstm]
+decoder: transformer # [lstm, transformer, bidirectional_lstm]
 decoder_layer: 2
 decoder_dimension : 128
 decoder_output: 3
@@ -26,10 +26,12 @@ image_size: !!python/tuple
   - 10
   - 8
 
+
+
 # directory
-train_data_dir: ./dataset/alexnet_10_8_Zscore/train_dataset.h5
-val_data_dir: ./dataset/alexnet_10_8_Zscore/val_dataset.h5
-test_data_dir: ./dataset/alexnet_10_8_Zscore/test_dataset.h5
+train_data_dir: ./dataset/alexnet_zscore/train_dataset.h5
+val_data_dir: ./dataset/alexnet_zscore/val_dataset.h5
+test_data_dir: ./dataset/alexnet_zscore/test_dataset.h5
 
 save_dir: ../saved_models
 model_dir: ../saved_models/alexnetchange_bidirectional_lstm_08-20_08-51-22/best_model.pt # 확장자: .pt 또는 .pth
@@ -38,8 +40,13 @@ optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None
 loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
 
+loss_weights :
+  - 1.0
+  - 1.0
+  - 1.0
+
 batch_size: 8
 num_epoch: 50
 learning_rate: 0.0001
-weight_decay: 0.00
+weight_decay: 0.001
 dropout: 0.3

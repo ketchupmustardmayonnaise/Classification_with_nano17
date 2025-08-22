@@ -54,7 +54,8 @@ def z_score_of_image(img: np.array, mean: list, std: list):
     std_reshaped = std.reshape(1, -1, 1, 1)
     
     img = (img - mean_reshaped) / (std_reshaped + 1e-7)
-    
+    img[:, 1] = img[:, 0]
+    img[:, 2] = img[:, 0]
     return img
 
 
@@ -237,9 +238,9 @@ def preprocess(img, force, label, img_ts, force_ts,
         # 이미지를 채널별로 normalize
         img[sequence_index] = resize_image(img[sequence_index], image_size)
         
-        img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
+        # img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
         
-        # img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
+        img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
 
         
 

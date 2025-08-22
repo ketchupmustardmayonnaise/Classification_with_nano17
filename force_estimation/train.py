@@ -70,6 +70,7 @@ class ForceEstimation:
             ('optimizer_type', str),
             ('scheduler_type', str),
             ('loss_type', str),
+            ('loss_weights', list),
 
             ('model_dir', str),
             ('save_dir', str)
@@ -173,6 +174,7 @@ class ForceEstimation:
                         "weight_decay": self.weight_decay,
                         "dropout": self.dropout,
                         "loss": self.loss_type,
+                        "loss_weights" : self.loss_weights,
                     }
 
                     run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
@@ -197,7 +199,7 @@ class ForceEstimation:
                 elif self.loss_type == "MAE" :
                     self.loss = torch.nn.L1Loss()
                 elif self.loss_type == "huber" :
-                    self.loss = torch.nn.HuberLoss(delta=0.5)    
+                    self.loss = torch.nn.HuberLoss(delta=1.0)    
                     
 
                 self.run_log = wandb.init(project="rft64_2", id=cfg['resume_wandb_id'], resume="must")
@@ -242,7 +244,7 @@ class ForceEstimation:
         val_best_loss = 1e10
         patience = 10
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
-
+        loss_weights = torch.tensor(self.loss_weights).to(self.device)
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
@@ -272,6 +274,10 @@ class ForceEstimation:
                 else:
                     loss = self.loss(pred_force.float(), force.float())
 
+                loss = loss * loss_weights
+                
+                loss = loss.mean()
+                
                 loss.backward()
                 self.optimizer.step()
                 

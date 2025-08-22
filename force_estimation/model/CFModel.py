@@ -1,9 +1,8 @@
 from sys import exception
 
-from model import fsnet
-from model.gru import *
+
 from model.lstm import *
-from model.fsnet import *
+from model.transformer import *
 import torch.nn.functional as F
 from torchvision import models
 
@@ -15,14 +14,14 @@ from torchvision import models
 class CFModel(nn.Module):
     def __init__(self, encoder,
                  decoder, decoder_layer, decoder_dimension,decoder_output,  fc_num_layer,
-                 target_index, fc_hidden_dim, dropout, image_size):
+                 target_index, fc_hidden_dim, dropout, image_size, transformer_nhead=4, transformer_ff_dim=256):
         assert fc_num_layer > 0
 
         super().__init__()
         self.fc_num_layer = fc_num_layer
         self.target_indices = target_index
         self.extractor = False
-        self.input_size = 1000
+        self.decoder_input_size = 1000
         if encoder.lower() == 'resnet18':
             self.extractor = True
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -68,11 +67,11 @@ class CFModel(nn.Module):
             )
             for param in self.encoder[1].parameters():
                 param.requires_grad = False
-            self.input_size = 96
+            self.decoder_input_size = 96
         elif encoder.lower() == 'alexnetchange':
             self.extractor = True
             pretrained_alexnet = models.alexnet(weights='DEFAULT')
-            self.input_size = 64
+            self.decoder_input_size = 64
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
             if image_size == (10,8) :
                 feature_layers = list(pretrained_alexnet.features[:3].children())
@@ -95,13 +94,19 @@ class CFModel(nn.Module):
         
         # Decoder
         if decoder == 'lstm':
-            self.decoder = LSTM(input_size=self.input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
+            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
         elif decoder == 'bidirectional_lstm':
-            self.decoder = LSTM(input_size=self.input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
-        elif decoder == 'gru':
-            self.decoder = GRU(input_size=self.input_size, output_size=decoder_output, h_RNN_layers=decoder_layer)
+            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
+        elif decoder == 'transformer' :
+            self.decoder = TransformerModel(input_size=self.decoder_input_size, # encoder 출력 크기
+                                             output_size=decoder_output,
+                                             h_RNN_layers=decoder_layer, # 트랜스포머 레이어 수
+                                             nhead=transformer_nhead, # 어텐션 헤드 수
+                                             dim_feedforward=transformer_ff_dim, # 트랜스포머 내부 FF 레이어 차원
+                                             dropout=dropout,
+                                             max_len=target_index) # 시퀀스 최대 길이
         
-        else: raise Exception('Unknown rnn type')
+        else: raise Exception('Unknown decoder type')
 
         
         
