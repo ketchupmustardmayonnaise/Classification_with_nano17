@@ -422,7 +422,7 @@ class ForceEstimation:
                     if batch_start >= len(X): break
 
         train_txt_path = self.save_dir + "/train.txt"
-        plot_for_plain_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
+        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)
