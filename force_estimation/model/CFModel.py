@@ -94,7 +94,7 @@ class CFModel(nn.Module):
         
         # Decoder
         if decoder == 'lstm':
-            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
+            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, drop_out= dropout,bidirectional=False)
         elif decoder == 'bidirectional_lstm':
             self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
         elif decoder == 'transformer' :

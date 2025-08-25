@@ -1,5 +1,5 @@
 train_mode: True
-use_wandb: True
+use_wandb: False
 resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
 resume_wandb_id: a0fpam95
 
@@ -8,7 +8,7 @@ encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16,
 # encoder_output: 256
 
 # decoder
-decoder: transformer # [lstm, transformer, bidirectional_lstm]
+decoder: bidirectional_lstm # [lstm, transformer, bidirectional_lstm]
 decoder_layer: 2
 decoder_dimension : 128
 decoder_output: 3
