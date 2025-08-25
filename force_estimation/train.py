@@ -146,7 +146,7 @@ class ForceEstimation:
 
                 # loss
                 if self.loss_type != "MSE+MAE":
-                    self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+                    self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
 
                 # wandb
                 if self.use_wandb:
@@ -266,9 +266,9 @@ class ForceEstimation:
                 pred_force = self.model(X)
 
                 MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(),
-                                                       reduction='mean')
+                                                       reduction='none')
                 L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                      reduction='mean')
+                                                      reduction='none')
                 if self.loss_type == 'MSE+MAE':
                     loss = (MSEloss + L1_loss) / 2
                 else:
