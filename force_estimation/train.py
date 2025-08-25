@@ -281,8 +281,8 @@ class ForceEstimation:
                 loss.backward()
                 self.optimizer.step()
                 
-                MSE.append(MSEloss.item())
-                MAE.append(L1_loss.item())
+                MSE.append(MSEloss.mean().item())
+                MAE.append(L1_loss.mean().item())
 
                 # 현재 평균 loss를 tqdm description에 표시
                 running_loss += loss.item()
