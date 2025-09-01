@@ -16,9 +16,9 @@ for file_name in os.listdir(src_zip_path):  # 각 파일들에 대하여
 
             # 출력 ZIP 파일 이름들
             output_zips = {
-                'train': f'{src_zip_path}_train.zip',
-                'val': f'{src_zip_path}_val.zip',
-                'test': f'{src_zip_path}_test.zip'
+                'train': f'TRAIN_{file_name}.zip',
+                'val': f'VAL_{file_name}.zip',
+                'test': f'TEST_{file_name}.zip'
             }
 
             # Step 1: 원본 ZIP에서 npz 파일 리스트 가져오기
