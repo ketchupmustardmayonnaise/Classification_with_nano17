@@ -6,8 +6,9 @@ import h5py
 import numpy as np
 from torch.utils.data import Dataset
 import bisect
-
-
+import random
+import math
+import torchvision.transforms.functional as TF
 
 
 class RFTDataset(Dataset):
@@ -16,11 +17,11 @@ class RFTDataset(Dataset):
         self.dataset_type = dataset_type
         self.target_index = target_index
         self.stride = stride
-
+        self.augmentation = True
         self.img = []
         self.force = []
         self.label = []
-
+        
         self.prefix = [0]
         self.frame = []
 
@@ -42,28 +43,57 @@ class RFTDataset(Dataset):
 
     def __getitem__(self, index):
         if self.dataset_type.lower() == 'test':
-
-            img = self.img[index][:]  # (30, 3, 224, 224)
-            force = self.force[index][:, 0:3]  # (3)
-            label = self.label[index][:]  # (7)
+            img = self.img[index][:]
+            force = self.force[index][:, 0:3]
+            label = self.label[index][:]
 
             return (
-                torch.from_numpy(img).float(),  # shape: (30, 3, 224, 224)
-                torch.from_numpy(force).float(),  # shape: (6)
-                torch.from_numpy(label).float()  # shape: (7)
+                torch.from_numpy(img).float(),
+                torch.from_numpy(force).float(),
+                torch.from_numpy(label).float()
             )
         else:
             sequence_idx = bisect.bisect_right(self.prefix, index) - 1
             frame_idx = index - self.prefix[sequence_idx]
 
-            img = self.img[sequence_idx][frame_idx:frame_idx + self.target_index]
-            force = self.force[sequence_idx][frame_idx:frame_idx + self.target_index,0:3]
-            label = self.label[sequence_idx]
+            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
+            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
+            label = torch.from_numpy(self.label[sequence_idx]).float()
+
+
+            ######## Data Augmentation ########
+            if self.dataset_type.lower() == 'train' and self.augmentation == True :
+                if random.random() < 0.5:
+                    translate_x = random.randint(-3, 3)
+                    translate_y = random.randint(-3, 3)
+                    
+                    img = torch.stack([
+                        TF.affine(i, angle=0, translate=(translate_x, translate_y), scale=1, shear=0) 
+                        for i in img
+                    ])
+
+                if random.random() < 0.5:
+                    angle_deg = random.uniform(-15, 15)
+                    angle_rad = math.radians(angle_deg)
+                    
+                    img = torch.stack([
+                        TF.affine(i, angle=angle_deg, translate=(0, 0), scale=1, shear=0)
+                        for i in img
+                    ])
+
+                    cos_a = math.cos(angle_rad)
+                    sin_a = math.sin(angle_rad)
+                    
+                    rotation_matrix = torch.tensor([[cos_a, -sin_a, 0],
+                                                    [sin_a,  cos_a, 0],
+                                                    [0,      0,     1]], dtype=force.dtype)
+                    
+                    force = force @ rotation_matrix.T
 
             return (
-                torch.from_numpy(img).float(),  # shape: (30, 3, 224, 224)
-                torch.from_numpy(force).float(),  # shape: (6)
-                torch.from_numpy(label)  # shape: (7)
+                img,
+                force,
+                label
             )
 
     def __len__(self):

@@ -91,7 +91,8 @@ class ForceEstimation:
                              self.target_index,
                              self.fc_hidden_dim,
                              self.dropout,
-                             self.image_size)
+                             self.image_size,
+                             )
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
 
@@ -242,7 +243,7 @@ class ForceEstimation:
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
         val_best_loss = 1e10
-        patience = 10
+        patience = 20
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         loss_weights = torch.tensor(self.loss_weights).to(self.device)
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
@@ -361,8 +362,6 @@ class ForceEstimation:
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
         
-        f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00]
-        f_std = [0.56331648, 0.66661553, 1.36792603]
         
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
@@ -371,11 +370,6 @@ class ForceEstimation:
                 _force = _force.squeeze()
                 _force = _force.tolist()
                 
-                # mean_tensor = torch.from_numpy(np.array(f_mean)).to(_force_tensor.device)
-                # std_tensor = torch.from_numpy(np.array(f_std)).to(_force_tensor.device)
-                
-                # _force_denormalized = _force_tensor * std_tensor + mean_tensor
-                # _force = _force_denormalized.tolist()
                 
                 f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
@@ -405,11 +399,6 @@ class ForceEstimation:
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
                     
-                    # mean_tensor = torch.from_numpy(np.array(f_mean)).to(pred_force.device)
-                    # std_tensor = torch.from_numpy(np.array(f_std)).to(pred_force.device)
-                    
-                    # denormalized_force = (pred_force * std_tensor) + mean_tensor
-                    # _pred_force_detach = denormalized_force.detach().cpu().numpy().tolist()
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
                     # 각 X, Y, Z별 MSE, MAE 계산

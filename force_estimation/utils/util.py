@@ -109,6 +109,7 @@ def plot(f, pf, save_dir):
         plt.savefig(dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
                     format='png', pad_inches=0.1, transparent=False)
 
+
 def plot_for_plain_lstm(f, pf, target_index, save_dir, train_txt_path):
     # 가장 마지막 frame만 이어붙이는 식으로 예측
     f_for_plot = [] # shape: (# of sequence, # of chunk (=sliding window), 3)
