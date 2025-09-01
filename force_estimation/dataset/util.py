@@ -54,8 +54,6 @@ def z_score_of_image(img: np.array, mean: list, std: list):
     std_reshaped = std.reshape(1, -1, 1, 1)
     
     img = (img - mean_reshaped) / (std_reshaped + 1e-7)
-    img[:, 1] = img[:, 0]
-    img[:, 2] = img[:, 0]
     return img
 
 

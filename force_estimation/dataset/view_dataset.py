@@ -8,6 +8,31 @@ max = [325, 197, 279]
 mean = [23.507979081952897, -0.0011777033357894642, -0.001107316995515287]
 std = [52.62922084936881, 3.614437956765608, 4.590433433265843]
 
+
+# cap 값 표시하기 위한 텍스트 오브젝트
+text_object = []
+
+def annotateHeatMap(ax, arrData):
+    if np.any(arrData > 500):
+        print(arrData)
+
+    if (len(text_object) != 0):
+        # set text
+        nNum = 0
+        for i in range(arrData.shape[1]):
+            for j in range(arrData.shape[0]):
+                text_object[nNum].set_text(arrData[j, i])
+                nNum += 1
+    else:
+        # create text
+        for i in range(arrData.shape[1]):
+            for j in range(arrData.shape[0]):
+                txObj = ax.text(i + 0.5, j + 0.5, '%d' % arrData[j, i],
+                                horizontalalignment='center',
+                                verticalalignment='center')
+                text_object.append(txObj)
+
+
 def play_sequence(images, forces, length_of_image):
     fig = plt.figure(figsize=(20, 5))
 
@@ -15,6 +40,7 @@ def play_sequence(images, forces, length_of_image):
 
     ax_img_red = fig.add_subplot(1, 4, 1)
     img_display_red = ax_img_red.imshow(img[0, :, :, 0], cm.gray,  vmin=-127, vmax=255)
+    annotateHeatMap(ax_img_red, np.zeros((10, 8), dtype=int))
 
     ax_img_green = fig.add_subplot(1, 4, 2)
     img_display_green = ax_img_green.imshow(img[0, :, :, 1], cm.gray,  vmin=-127, vmax=255)
@@ -45,6 +71,7 @@ def play_sequence(images, forces, length_of_image):
     def init():
         img = np.transpose(images[0], (1, 2, 0))
         img_display_red.set_data(img[:, :, 0])
+        annotateHeatMap(ax_img_red, np.zeros((10, 8), dtype=int))
         img_display_green.set_data(img[:, :, 1])
         img_display_blue.set_data(img[:, :, 2])
         for i in range(3):
@@ -63,6 +90,11 @@ def play_sequence(images, forces, length_of_image):
             lines[i].set_data(x_data, y_data[i])
 
         ax_force.set_xlim([0, length_of_image])
+
+        # ===========================================
+        annotateHeatMap(ax_img_red, img[:, :, 0])
+        # ===========================================
+
         return [img_display_red, img_display_green, img_display_blue] + lines
 
     # 애니메이션 실행 및 blocking
@@ -71,7 +103,7 @@ def play_sequence(images, forces, length_of_image):
         update,
         frames=[i for i in range(length_of_image)],
         init_func=init,
-        interval=75,
+        interval=10,
         blit=False
     )
 
@@ -81,16 +113,13 @@ def play_sequence(images, forces, length_of_image):
     plt.close()
 
 
-img, force, label, img_ts, force_ts = load_data_from_npz('test', target_index)
+img, force, label, img_ts, force_ts = load_data_from_npz('train', 30)
 
 img = divide_RGB_channels(img, img_ts)
 # force data에 low-pass filter를 걺
 force = apply_butterworth_filter(force, img_ts, force_ts)
 # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
 force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-for sequence_index in range(len(img)):
-    # 이미지를 채널별로 normalize
-    img[sequence_index] = normalize_image(img[sequence_index], max, mean)
 
 
 # ---------- 전체 시퀀스 반복 재생 ----------
