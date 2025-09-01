@@ -147,7 +147,7 @@ class ForceEstimation:
 
                 # loss
                 if self.loss_type != "MSE+MAE":
-                    self.loss = torch.nn.MSELoss() if self.loss_type == "MSE" else torch.nn.L1Loss()
+                    self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
 
                 # wandb
                 if self.use_wandb:
@@ -267,9 +267,9 @@ class ForceEstimation:
                 pred_force = self.model(X)
 
                 MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(),
-                                                       reduction='mean')
+                                                       reduction='none')
                 L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                      reduction='mean')
+                                                      reduction='none')
                 if self.loss_type == 'MSE+MAE':
                     loss = (MSEloss + L1_loss) / 2
                 else:
@@ -282,8 +282,8 @@ class ForceEstimation:
                 loss.backward()
                 self.optimizer.step()
                 
-                MSE.append(MSEloss.item())
-                MAE.append(L1_loss.item())
+                MSE.append(MSEloss.mean().item())
+                MAE.append(L1_loss.mean().item())
 
                 # 현재 평균 loss를 tqdm description에 표시
                 running_loss += loss.item()
@@ -411,7 +411,7 @@ class ForceEstimation:
                     if batch_start >= len(X): break
 
         train_txt_path = self.save_dir + "/train.txt"
-        plot_for_plain_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
+        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)

@@ -26,11 +26,10 @@ from util import *
 import numpy as np
 import yaml
 import traceback
-# =====================================
+
+
+# ========================================================
 # configuration
-
-dataset_type = 'train'
-
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -48,12 +47,14 @@ img_std = [47.1993, 4.2846, 5.9486]
 f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
+z_threshold = -7
+# ========================================================
+
+
 for d_type in dataset_types :
     dataset_type = d_type
 
-
     original_image_size = (10, 8)
-    # =====================================
 
     img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
     img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std, f_mean, f_std, image_size, num_classes)
@@ -93,11 +94,11 @@ for d_type in dataset_types :
 
             if len(filtered_force.shape) == 1:
                 if filtered_force[2] > 0: filtered_force[2] = 0
-                if filtered_force[2] < -7: filtered_force[2] = -7
+                if filtered_force[2] < z_threshold: filtered_force[2] = z_threshold
             else: # test dataset
                 for i in range(filtered_force.shape[0]):
                     if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
-                    if filtered_force[i, 2] < -7: filtered_force[i, 2] = -7
+                    if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
             
