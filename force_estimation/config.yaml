@@ -1,32 +1,8 @@
 train_mode: True
 use_wandb: False
-resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
-resume_wandb_id: a0fpam95
-
-# encoder
-encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext,alexnetchange
-# encoder_output: 256
-
-# decoder
-decoder: bidirectional_lstm # [lstm, transformer, bidirectional_lstm]
-decoder_layer: 2
-decoder_dimension : 128
-decoder_output: 3
-
-# fully connected layer
-fc_num_layer: 1
-fc_hidden_dim: 1000
 
 # image
-target_index: 30 #몇 frame으로 자를 것인지
-stride: 1
-
-image_type: rgb # [origin, rgb, diff, zScore]
-image_size: !!python/tuple
-  - 10
-  - 8
-
-
+target_index: 120 #몇 frame으로 자를 것인지
 
 # directory
 train_data_dir: ./dataset/train_dataset.h5
@@ -37,13 +13,12 @@ save_dir: ../saved_models
 model_dir: ../saved_models/alexnetchange_bidirectional_lstm_08-20_08-51-22/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
-scheduler_type: None
 loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
 
 loss_weights :
   - 1.0
-  - 1.5
-  - 3.0
+  - 1.0
+  - 1.0
 
 batch_size: 8
 num_epoch: 200

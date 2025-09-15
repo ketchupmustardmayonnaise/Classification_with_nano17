@@ -157,65 +157,9 @@ def apply_butterworth_filter(force, img_ts, force_ts):
 
     return result
 
-def resize_image(input_image, size):
-    if len(input_image.shape) == 5:
-        # 만약 입력이 각 시퀀스인 경우 (test dataset)
-        chunk, frame, c, h, w = input_image.shape
-        image = input_image.reshape((chunk * frame, c, h, w))
-    else:
-        # 만약 입력이 하나의 chunk인 경우 (train/val dataset)
-        image = input_image
-
-    # print(size)
-    if size == (10, 8) :
-        pass
-    else :
-        # resize each image (cv2 expects (h, w, c), so we transpose before and after)
-        image = np.stack([
-            cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
-            for img in image
-        ])
-
-    return image.astype(np.float32)
-
-
-def normalize_image(img: np.array, max: list, mean: list):
-    '''
-    입력:
-     - img: 단일 시퀀스의 영상 이미지 (shape: (# of frame of one sequence, channel, height, width)
-     - max: 각 채널별 max값 list (shape: (3) (max of R channel, max of G channel, max of B channel)
-     - mean 각 채널별 mean값 list (shape: (3) (mean of R channel, mean of G channel, mean of B channel)
-    '''
-    with open("../config.yaml", 'r+', encoding='utf-8') as f:
-        cfg = yaml.load(f, Loader=yaml.FullLoader)
-        
-    img = img.astype('float32')
-
-    # Gray Scale 0 - 1로 정규화
-    if cfg['image_type'].lower() == 'rgb' :
-        img[:, 0] = ((img[ :, 0] * 255 / max[0]))
-        img[:, 0] -= (mean[0] * 255 / max[0])
-
-        img[:, 1] = ((img[ :, 0] * 255 / max[0]))
-        img[:, 1] -= (mean[0] * 255 / max[0])
-
-        img[:, 2] = ((img[ :, 0] * 255 / max[0]))
-        img[:, 2] -= (mean[0] * 255 / max[0])
-    elif cfg['image_type'].lower() == 'diff' :
-        img[:, 0] = ((img[ :, 0] * 255 / max[0]))
-        img[:, 0] -= (mean[0] * 255 / max[0])
-
-        img[:, 1] -= mean[1]
-
-        img[:, 2] -= mean[2]
-    else: raise Exception('Unknown rgb type')
-        
-
-    return img
-
 
 def preprocess(img, force, label, img_ts, force_ts,
-               img_max, img_mean, img_std, f_mean, f_std ,image_size, num_classes):
+               img_max, img_mean, img_std, num_classes):
     '''
     모든 전처리 여기에서 진행
     '''
@@ -227,24 +171,12 @@ def preprocess(img, force, label, img_ts, force_ts,
 
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-
-    # force = z_score_of_force(force, f_mean, f_std)
     
     frame = []
-
     for sequence_index in range(len(img)):
         # 이미지를 채널별로 normalize
-        img[sequence_index] = resize_image(img[sequence_index], image_size)
-        
-        # img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
-        
         img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
-
-        
-
         frame.append(int(len(img[sequence_index])))
-    
-    
 
     # label
     label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=num_classes)

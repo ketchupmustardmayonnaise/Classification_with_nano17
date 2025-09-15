@@ -43,7 +43,6 @@ class ForceEstimation:
         common_params = [
             ('train_mode', bool),  # train일 때만 학습 (bool)
             ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
-            ('resume', bool),
 
             ('image_type', str),  # origin, rgb, diff (str)
             ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
@@ -82,17 +81,9 @@ class ForceEstimation:
 
         # model configuration
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(self.encoder,
-                             self.decoder,
-                             self.decoder_layer,
+        self.model = CFModel(self.decoder_layer,
                              self.decoder_dimension, 
-                             self.decoder_output,                               
-                             self.fc_num_layer,
-                             self.target_index,
-                             self.fc_hidden_dim,
-                             self.dropout,
-                             self.image_size,
-                             )
+                             self.decoder_output)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
 
@@ -121,91 +112,39 @@ class ForceEstimation:
 
             # validation dataset
             self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['val_data_dir'], dataset_type='val')
-            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size,
-                                                              shuffle=False)
+            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
             
             self.learning_rate = float(self.learning_rate)
 
-            
-            # scheduler
-            if self.scheduler_type.lower() == 'step':
-                self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
-            else:
-                self.scheduler = None
+            # create directories
+            time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
+            self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
 
-            # self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
-            #                                       end_factor=args.end_factor, total_iters=args.total_iters)
+            if not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir)
+            copy_config(self.save_dir)
 
-            if not self.resume:
-                # create directories
-                time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-                self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
+            # loss
+            self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type.lower() == "mse" else torch.nn.L1Loss(reduction='none')
 
-                if not os.path.exists(self.save_dir):
-                    os.makedirs(self.save_dir)
-                copy_config(self.save_dir)
-
-                # loss
-                if self.loss_type != "MSE+MAE":
-                    self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
-
+            # wandb
+            if self.use_wandb:
                 # wandb
-                if self.use_wandb:
-                    # wandb
-                    wandb_config = {
-                        "encoder": self.encoder,
+                wandb_config = {
+                    "target_index": self.target_index,
+                    "optimizer": self.optimizer_type,
+                    "batch_size": self.batch_size,
+                    "learning_rate": self.learning_rate,
+                    "weight_decay": self.weight_decay,
+                    "dropout": self.dropout,
+                    "loss": self.loss_type,
+                    "loss_weights": self.loss_weights,
+                }
 
-                        "decoder": self.decoder,
-                        "decoder_layer": self.decoder_layer,
-                        "decoder_output": self.decoder_output,
+                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
+                self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
-                        "fc_num_layer": self.fc_num_layer,
-                        "fc_hidden_dim": self.fc_hidden_dim,
-
-                        "target_index": self.target_index,
-                        "stride": self.stride,
-
-                        "image_type": self.image_type,
-                        "image_size": self.image_size,
-
-                        "optimizer": self.optimizer_type,
-                        "scheduler": self.scheduler_type,
-                        "batch_size": self.batch_size,
-                        "learning_rate": self.learning_rate,
-                        "weight_decay": self.weight_decay,
-                        "dropout": self.dropout,
-                        "loss": self.loss_type,
-                        "loss_weights" : self.loss_weights,
-                    }
-
-                    run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
-                    self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
-
-                self.train()
-
-            else: # resume
-                self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
-                checkpoint = torch.load(cfg['model_dir'])
-                self.model.load_state_dict(checkpoint['model'])
-
-                
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-
-                # loss
-                self.loss_type = checkpoint['loss_type']
-                if self.loss_type == "MSE+MAE":
-                    pass
-                elif self.loss_type == "MSE" :
-                    self.loss = torch.nn.MSELoss()  
-                elif self.loss_type == "MAE" :
-                    self.loss = torch.nn.L1Loss()
-                elif self.loss_type == "huber" :
-                    self.loss = torch.nn.HuberLoss(delta=1.0)    
-                    
-
-                self.run_log = wandb.init(project="rft64_2", id=cfg['resume_wandb_id'], resume="must")
-
-                self.train(checkpoint['epoch'])
+            self.train()
 
         # test
         else:
@@ -225,14 +164,8 @@ class ForceEstimation:
 
                 pred_force = self.model(X)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(),
-                                                    reduction='mean')
-                if self.loss_type != "huber" :
-                    MAE += torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                    reduction='mean')
-                else :
-                    MAE += torch.nn.functional.huber_loss(pred_force.float(), force.float(),
-                                                    reduction='mean')
+                MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='mean')
+                MAE += torch.nn.functional.huber_loss(pred_force.float(), force.float(), reduction='mean')
 
         MSE /= len(dataloader)
         MAE /= len(dataloader)
@@ -247,6 +180,7 @@ class ForceEstimation:
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         loss_weights = torch.tensor(self.loss_weights).to(self.device)
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
+
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
 
@@ -260,23 +194,16 @@ class ForceEstimation:
             # X.shape =
             for batch in progress_bar:
                 X, force, y = batch
-                # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(),
-                                                       reduction='none')
-                L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(),
-                                                      reduction='none')
-                if self.loss_type == 'MSE+MAE':
-                    loss = (MSEloss + L1_loss) / 2
-                else:
-                    loss = self.loss(pred_force.float(), force.float())
+                MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='none')
+                L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='none')
 
+                loss = self.loss(pred_force.float(), force.float())
                 loss = loss * loss_weights
-                
                 loss = loss.mean()
                 
                 loss.backward()
@@ -289,19 +216,11 @@ class ForceEstimation:
                 running_loss += loss.item()
                 progress_bar.set_postfix(loss=running_loss / (progress_bar.n + 1))
 
-                
-
-            if self.scheduler is not None: self.scheduler.step()
             # validate the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)
-
             
-            if self.loss_type == 'MSE+MAE':
-                val_loss_to_monitor = (val_MSE + val_MAE) / 2
-            elif self.loss_type == 'MSE':
-                val_loss_to_monitor = val_MSE
-            else: # MAE or default
-                val_loss_to_monitor = val_MAE
+            if self.loss_type.lower() == 'mse': val_loss_to_monitor = val_MSE
+            elif self.loss_type.lower() == 'mae': val_loss_to_monitor = val_MAE
 
             early_stopping(val_loss_to_monitor, self.model)
             
@@ -353,6 +272,7 @@ class ForceEstimation:
         if self.use_wandb:
             wandb.finish()
 
+
     def test(self):
         self.model.eval()
 
@@ -401,6 +321,7 @@ class ForceEstimation:
                     
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
+
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
                                                             reduction='none').tolist())
