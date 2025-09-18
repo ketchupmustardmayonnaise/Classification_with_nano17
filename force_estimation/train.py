@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
-from force_estimation.utils.apply_img_augmentation import *
 
 class ForceEstimation:
     def __init__(self, cfg):
@@ -85,10 +84,10 @@ class ForceEstimation:
                              self.decoder_dimension, 
                              self.decoder_output)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, 10, 8))
 
         # test dataset
-        self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['test_data_dir'], dataset_type='test')
+        self.test_dataset = RFTDataset(target_index=self.target_index, path=cfg['test_data_dir'], dataset_type='test')
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
         # optimizer
@@ -106,19 +105,19 @@ class ForceEstimation:
         # train
         if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataset = RFTDataset(target_index=self.target_index, path=cfg['train_data_dir'], dataset_type='train')
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
                                                                 shuffle=True)
 
             # validation dataset
-            self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['val_data_dir'], dataset_type='val')
+            self.val_dataset = RFTDataset(target_index=self.target_index, path=cfg['val_data_dir'], dataset_type='val')
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
             
             self.learning_rate = float(self.learning_rate)
 
             # create directories
             time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
+            self.save_dir = cfg['save_dir'] + "/" + time_suffix
 
             if not os.path.exists(self.save_dir):
                 os.makedirs(self.save_dir)
@@ -141,7 +140,7 @@ class ForceEstimation:
                     "loss_weights": self.loss_weights,
                 }
 
-                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
+                run_name = f'MTM_{time_suffix}_5people'
                 self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
             self.train()

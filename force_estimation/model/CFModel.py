@@ -2,8 +2,8 @@ from sys import exception
 
 
 from model.lstm import *
-from model.transformer import *
-from model.convlstm import *
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
