@@ -92,13 +92,9 @@ for d_type in dataset_types :
             force = f[f'{key}/force']
             filtered_force = np.copy(force)
 
-            if len(filtered_force.shape) == 1:
-                if filtered_force[2] > 0: filtered_force[2] = 0
-                if filtered_force[2] < z_threshold: filtered_force[2] = z_threshold
-            else: # test dataset
-                for i in range(filtered_force.shape[0]):
-                    if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
-                    if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
+            for i in range(filtered_force.shape[0]):
+                if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
+                if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
             

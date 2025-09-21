@@ -30,7 +30,7 @@ class CFModel(nn.Module):
 
         
         # Decoder
-        self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size=2, output_size=3, h_RNN_layers=128, bidirectional=True)
+        self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size=128, output_size=3, rnn_layer=2, bidirectional=True)
 
 
     def forward(self, input):

@@ -174,8 +174,7 @@ class ForceEstimation:
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
-        val_best_loss = 1e10
-        patience = 20
+        patience = 10
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         loss_weights = torch.tensor(self.loss_weights).to(self.device)
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
