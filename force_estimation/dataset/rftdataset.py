@@ -12,10 +12,9 @@ import torchvision.transforms.functional as TF
 
 
 class RFTDataset(Dataset):
-    def __init__(self, target_index, path='./preprocessed_train_dataset', dataset_type='train'):
+    def __init__(self, path='./preprocessed_train_dataset', dataset_type='train'):
         self.path = path
         self.dataset_type = dataset_type
-        self.target_index = target_index
         self.augmentation = True
         self.img = []
         self.force = []
@@ -32,12 +31,12 @@ class RFTDataset(Dataset):
 
             for seq in sample_keys:
                 self.img.append(f[f"{seq}/img"][:])
-                self.force.append(f[f"{seq}/filtered_force"][:])
+                self.force.append(f[f"{seq}/force"][:])
                 self.label.append(f[f"{seq}/label"][:])
 
         for i in range(len(self.frame)):
-            self.frame[i] = int(self.frame[i] - target_index + 1)
             self.prefix.append(self.frame[i] + self.prefix[-1])
+
         self.len = sum(self.frame)
 
     def __getitem__(self, index):

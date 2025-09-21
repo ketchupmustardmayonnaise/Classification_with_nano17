@@ -83,6 +83,7 @@ for d_type in dataset_types :
 
         h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
 
+    '''
     with h5py.File(file_name, 'a') as f:
         sample_keys = list(f.keys())
         if 'frame' in sample_keys: sample_keys.remove('frame')
@@ -97,7 +98,7 @@ for d_type in dataset_types :
                 if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
-            
+    '''
     print(f'{d_type} complete')
 
 

@@ -7,41 +7,56 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=1)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, stride=1)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = out + x
+        out = self.relu(out)
+        return out
+
 class CFModel(nn.Module):
     def __init__(self, decoder_layer, decoder_dimension, decoder_output):
 
         super().__init__()
 
         # encoder: convNext
-        pretrained_model = models.convnext_tiny(pretrained=True)
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        new_stem = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=96, kernel_size=3, stride=1, padding=1),
-            # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
-            nn.LayerNorm([96, 10, 8]))
-        pretrained_model.features[0] = new_stem
-        self.encoder = nn.Sequential(
-            pretrained_model.features[0],
-            pretrained_model.features[1]
-        )
-        for param in self.encoder[1].parameters():
-            param.requires_grad = False
-        self.decoder_input_size = 96
+        self.conv = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1, stride=1)
+        self.resblock1 = ResBlock(32, 32)
+        self.resblock2 = ResBlock(32, 64)
+        self.fc_layer1 = nn.Linear(64 * 32 * 32, 128)
 
-        
-        # Decoder
-        self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size=128, output_size=3, rnn_layer=2, bidirectional=True)
-
+        self.fc_layer2 = nn.Linear(256, 128)
+        self.fc_layer3 = nn.Linear(128, 3)
 
     def forward(self, input):
-        # input.shape = (batch, target_index, channel, height, width)
-        b, t, c, h, w = input.shape
-        x = input.view((b * t, c, h, w))
+        # input.shape = (batch, 2, height, width)
+        # x.shape = (batch, 2, 1, height, width)
+        x = input.unsqueeze(2)
+        b, t, c, h, w = x.shape
         
-        x = self.encoder(x)
-        x = self.pool(x)
-        x = torch.flatten(x, 1)
-        x = x.reshape((b, t, -1))
-            
-        x = self.decoder(x) # x.shape = (batch_size, target_index, 3(force_vector))
+        x1 = self.conv(x[:, 0])
+        x1 = self.resblock1(x1)
+        x1 = self.resblock2(x1)
+        x1 = torch.flatten(x1, start_dim=1)
+        x1 = self.fc_layer1(x1)
+
+        x2 = self.conv(x[:, 0])
+        x2 = self.resblock1(x2)
+        x2 = self.resblock2(x2)
+        x2 = torch.flatten(x2, start_dim=1)
+        x2 = self.fc_layer1(x2)
+
+        x = torch.cat((x1, x2), dim=1)
+        x = self.fc_layer2(x)
+        x = self.fc_layer3(x)
+
         return x

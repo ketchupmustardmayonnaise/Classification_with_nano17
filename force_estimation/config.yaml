@@ -1,5 +1,5 @@
-train_mode: True
-use_wandb: True
+train_mode: False
+use_wandb: False
 
 # image
 target_index: 120 #몇 frame으로 자를 것인지

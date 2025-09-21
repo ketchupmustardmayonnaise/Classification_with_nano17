@@ -84,10 +84,10 @@ class ForceEstimation:
                              self.decoder_dimension, 
                              self.decoder_output)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, 10, 8))
+        torchinfo.summary(self.model, input_size=(self.batch_size, 2, 32, 32))
 
         # test dataset
-        self.test_dataset = RFTDataset(target_index=self.target_index, path=cfg['test_data_dir'], dataset_type='test')
+        self.test_dataset = RFTDataset(path=cfg['test_data_dir'], dataset_type='test')
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
         # optimizer
@@ -105,12 +105,11 @@ class ForceEstimation:
         # train
         if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, path=cfg['train_data_dir'], dataset_type='train')
-            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
-                                                                shuffle=True)
+            self.train_dataset = RFTDataset(path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
             # validation dataset
-            self.val_dataset = RFTDataset(target_index=self.target_index, path=cfg['val_data_dir'], dataset_type='val')
+            self.val_dataset = RFTDataset(path=cfg['val_data_dir'], dataset_type='val')
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
             
             self.learning_rate = float(self.learning_rate)
