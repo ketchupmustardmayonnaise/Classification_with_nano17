@@ -40,64 +40,113 @@ def load_data_from_npz(path, target_index):
 
     return img, force, label, img_ts, force_ts
 
-def z_score_of_image(img: np.array, mean: list, std: list):
 
-    # 일단 image는 RGB 채널로 나누어져 있으며
-    # break_images_smaller() 함수 실행함으로써 쪼개진 각 chunk라고 가정
+def divide_image_and_force(img:np.array, force:np.array):
+    # 이때 입력으로 들어오는 image는 각 시퀀스
+    # img shape: (frame 개수, 10, 8)
 
-    # mean과 std는 3차원 리스트로, 각각 R, G, B의 평균과 표준편차
+    # # ============================================
+    # (첫 번째 이미지, 두 번째 이미지)로 나누는 과정
+    # return으로 줘야 하는 image의 shape: (쌍 개수, 2, 10, 8)
+    result_image = []
 
-    mean = np.array(mean)
-    std = np.array(std)
+    # return으로 줘야 하는 force의 shape: (쌍 개수, 6)
+    result_force =  []
 
-    mean_reshaped = mean.reshape(1, -1, 1, 1)
-    std_reshaped = std.reshape(1, -1, 1, 1)
-    
-    img = (img - mean_reshaped) / (std_reshaped + 1e-7)
+    for frame_index in range(len(img) - 1):
+        result_image.append([img[frame_index], img[frame_index + 1]])
+        result_force.append(force[frame_index + 1] - force[frame_index])
+
+    result_image = np.array(result_image)
+    result_force = np.array(result_force)
+
+    return result_image, result_force
+
+
+
+def normalize_image(img: np.array):
+    # 이때 입력으로 들어오는 image는 각 시퀀스
+    # img shape: (쌍 개수, 2, 10, 8)
+
+    img = img.astype(np.float32)
+
+    # ============================================
+    # 이미지를 normalize하는 과정
+    # normalize 방법: 첫 번째 이미지의 max값으로, 첫 번째 이미지와 두 번째 이미지를 나눔.
+
+    for pair_index in range(len(img)):
+        pair_max = np.max(img[pair_index][0]) # 한 쌍의 첫 번째 이미지의 최댓값
+        img[pair_index] /= pair_max
+    # ============================================
+
     return img
 
 
-def z_score_of_force(force_list:list, mean:list, std:list):
-    
-    
-    mean = np.array(mean)
-    std = np.array(std)
-    
-    std = std + 1e-8
-    
-    normalized_force = [ (np.array(force) - mean) / std for force in force_list ]
-    
-    return normalized_force
+
+def translate_image(img: np.array):
+    # 이때 입력으로 들어오는 image는 각 시퀀스
+    # img shape: (frame 개수, 10, 8)
+
+    for frame_index in range(len(img)):
+        sum_of_image = np.sum(img[frame_index][img[frame_index] > 0]) # 양수의 값만 더함
+
+        sum_of_x = 0
+        sum_of_y = 0
+
+        for iy in range(img.shape[1]):
+            for ix in range(img.shape[2]):
+                # 양수라면
+                if img[frame_index, iy, ix] >= 0:
+                    sum_of_x += (ix * img[frame_index, iy, ix])
+                    sum_of_y += (iy * img[frame_index, iy, ix])
+
+        centroid_x = sum_of_x / sum_of_image
+        centroid_y = sum_of_y / sum_of_image
+
+        # ==============================
+        # 이미지 translation
+        dx = -(centroid_x - 3.5)
+        dy = -(centroid_y - 4.5)
+        mtrx = np.float32([[1, 0, dx],
+                           [0, 1, dy]])
+
+        dst_image = cv2.warpAffine(img[frame_index], mtrx,
+                                   (8, 10), # (width, height)
+                                   cv2.INTER_LINEAR,
+                                   cv2.BORDER_CONSTANT,
+                                   borderValue=0)
+
+        img[frame_index] = dst_image
+
+    return img
 
 
+def pad_image(img: np.array, target_shape):
+    result_image = []
+    for pair_index in range(len(img)):
+        result_image.append([])
+        for i in range(2):
+            h, w = img[pair_index][i].shape
 
-def divide_RGB_channels(img, img_ts):
-    ''' 첫 번째와 두 번째 프레임은 버리되, 나머지 프레임은 3 Chanenl 이미지로 '''
-    result = []
-    for sequence_idx in range(len(img)):
-        new_seq = []
-        for frame_idx in range(len(img[sequence_idx])):
-            # 처음 프레임이라면 시행 X
-            if frame_idx == 0 or frame_idx == 1:
-                continue
+            pad_h = target_shape[0] - h # 22
+            pad_w = target_shape[1] - w # 24
 
-            current_frame = img[sequence_idx][frame_idx]
-            previous_frame = img[sequence_idx][frame_idx - 1]
-            p_previous_frame = img[sequence_idx][frame_idx - 2]
+            # 위-아래, 좌-우 패딩 분할
+            pad_top = pad_h // 2 # 11
+            pad_bottom = pad_h - pad_top # 11
+            pad_left = pad_w // 2 # 12
+            pad_right = pad_w - pad_left
 
-            diff = current_frame - previous_frame
-            diff_ = previous_frame - p_previous_frame
-            p_diff = diff - diff_
+            # 중앙 패딩
+            padded_img = np.pad(
+                img[pair_index][i],
+                ((pad_top, pad_bottom), (pad_left, pad_right)),
+                mode='constant',  # 0으로 채움
+            )
+            result_image[pair_index].append(padded_img)
 
-            new_frame = np.vstack([current_frame.reshape((1, 10, 8)), diff.reshape((1, 10, 8)), p_diff.reshape((1, 10, 8))])
-            if np.isnan(new_frame).any():
-                continue
-            new_seq.append(new_frame)
+    return result_image
 
-        img_ts[sequence_idx] = img_ts[sequence_idx][2:]
-        result.append(np.array(new_seq))
-
-    return result
 
 
 def interpolate_nano_to_capacitance(force, img_ts, force_ts):
@@ -164,18 +213,21 @@ def preprocess(img, force, label, img_ts, force_ts,
     모든 전처리 여기에서 진행
     '''
 
-    img = divide_RGB_channels(img, img_ts)
-
     # force data에 low-pass filter를 걺
     force = apply_butterworth_filter(force, img_ts, force_ts)
 
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-    
+
+    # image 크기: (시퀀스 개수, 각 시퀀스의 프레임 개수, 2, 32, 23)
     frame = []
     for sequence_index in range(len(img)):
-        # 이미지를 채널별로 normalize
-        img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
+        # !! 주의 !!
+        # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
+        img[sequence_index] = translate_image(img[sequence_index])
+        img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index])
+        img[sequence_index] = normalize_image(img[sequence_index])
+        img[sequence_index] = pad_image(img[sequence_index], (32, 32))
         frame.append(int(len(img[sequence_index])))
 
     # label
