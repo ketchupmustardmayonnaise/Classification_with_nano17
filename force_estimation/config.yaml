@@ -1,5 +1,5 @@
-train_mode: False
-use_wandb: False
+train_mode: True
+use_wandb: True
 
 # image
 target_index: 120 #몇 frame으로 자를 것인지
@@ -22,6 +22,4 @@ loss_weights :
 
 batch_size: 8
 num_epoch: 200
-learning_rate: 0.0001
-weight_decay: 0.001
-dropout: 0.3
+learning_rate: 0.001

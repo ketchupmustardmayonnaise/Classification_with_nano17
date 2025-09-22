@@ -93,14 +93,7 @@ class ForceEstimation:
         # optimizer
         if self.optimizer_type.lower() == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
-                                              eps=1e-08, weight_decay=self.weight_decay, amsgrad=False)
-        elif self.optimizer_type.lower() == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate,
-                                                 weight_decay=self.weight_decay)
-        else:
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
-                                             weight_decay=self.weight_decay)
-            self.optimizer_type = 'sgd'
+                                              eps=1e-08, amsgrad=False)
 
         # train
         if self.train_mode:
@@ -174,9 +167,10 @@ class ForceEstimation:
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
         patience = 10
+        current_patience = 0
+        num_lr_reduces = 0
+        val_best_loss = 1e10
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
-        loss_weights = torch.tensor(self.loss_weights).to(self.device)
-        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
 
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
@@ -200,7 +194,7 @@ class ForceEstimation:
                 L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='none')
 
                 loss = self.loss(pred_force.float(), force.float())
-                loss = loss * loss_weights
+                loss = loss
                 loss = loss.mean()
                 
                 loss.backward()
@@ -219,11 +213,6 @@ class ForceEstimation:
             if self.loss_type.lower() == 'mse': val_loss_to_monitor = val_MSE
             elif self.loss_type.lower() == 'mae': val_loss_to_monitor = val_MAE
 
-            early_stopping(val_loss_to_monitor, self.model)
-            
-            if early_stopping.early_stop:
-                print("Early stopping")
-                break
             avg_train_mse = np.mean(MSE)
             avg_train_mae = np.mean(MAE)
             current_lr = self.optimizer.param_groups[0]['lr']
@@ -237,7 +226,6 @@ class ForceEstimation:
                 val_MSE,
                 val_MAE
             ))
-            
             
             train_txt_path = self.save_dir + "/train.txt"
             with open(train_txt_path, 'a') as train_txt_file:
@@ -257,6 +245,22 @@ class ForceEstimation:
                                   "validation_MSE": val_MSE, "validation_MAE": val_MAE})
                 except:
                     wandb.finish()
+
+            if val_loss_to_monitor < val_best_loss:
+                print(
+                    f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss_to_monitor:.6f}).  Saving model ...')
+                torch.save(self.model.state_dict(), self.best_model_path) # best model path에 저장
+                val_best_loss = val_loss_to_monitor
+                current_patience = 0
+            else:
+                current_patience += 1
+                if current_patience >= patience:
+                    if num_lr_reduces >= 3:
+                        break
+                    else:
+                        self.optimizer.param_groups[0]['lr'] *= 0.1
+                        num_lr_reduces += 1
+                        current_patience = 0
 
         # --- 학습 종료 후 최종 작업 ---
         print("Loading best model weights...")

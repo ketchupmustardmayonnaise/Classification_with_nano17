@@ -54,39 +54,21 @@ class RFTDataset(Dataset):
             sequence_idx = bisect.bisect_right(self.prefix, index) - 1
             frame_idx = index - self.prefix[sequence_idx]
 
-            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
-            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
+            img = torch.from_numpy(self.img[sequence_idx][frame_idx]).float()
+            force = torch.from_numpy(self.force[sequence_idx][frame_idx, 0:3]).float()
             label = torch.from_numpy(self.label[sequence_idx]).float()
 
 
             ######## Data Augmentation ########
             if self.dataset_type.lower() == 'train' and self.augmentation == True :
-                if random.random() < 0.5:
-                    translate_x = random.randint(-3, 3)
-                    translate_y = random.randint(-3, 3)
-                    
-                    img = torch.stack([
-                        TF.affine(i, angle=0, translate=(translate_x, translate_y), scale=1, shear=0) 
-                        for i in img
-                    ])
 
                 if random.random() < 0.5:
-                    angle_deg = random.uniform(-15, 15)
-                    angle_rad = math.radians(angle_deg)
+                    force[0] *= (-1) # x만 flip
                     
                     img = torch.stack([
-                        TF.affine(i, angle=angle_deg, translate=(0, 0), scale=1, shear=0)
+                        TF.hflip(i)
                         for i in img
                     ])
-
-                    cos_a = math.cos(angle_rad)
-                    sin_a = math.sin(angle_rad)
-                    
-                    rotation_matrix = torch.tensor([[cos_a, -sin_a, 0],
-                                                    [sin_a,  cos_a, 0],
-                                                    [0,      0,     1]], dtype=force.dtype)
-                    
-                    force = force @ rotation_matrix.T
 
             return (
                 img,
