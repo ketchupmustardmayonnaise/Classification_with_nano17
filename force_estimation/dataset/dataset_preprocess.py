@@ -44,8 +44,8 @@ img_max = [713.0000, 642.0000, 642.0000]
 img_mean = [17.8756, 0.0001, 0.0000]
 img_std = [47.0908, 4.2171, 5.8668]
 
-f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
-f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
+f_mean = [ 3.38455280e-07, -4.57362519e-06, -1.18898044e-05, 2.87566208e-07, 8.71646891e-08, 3.76575034e-07]
+f_std = [0.03641479, 0.05464274, 0.0668863, 0.00312084, 0.00155052, 0.00047453]
 
 z_threshold = -7
 # ========================================================
@@ -57,7 +57,8 @@ for d_type in dataset_types :
     original_image_size = (10, 8)
 
     img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
-    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std, num_classes)
+    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std,
+                                          f_mean, f_std, num_classes)
     
     file_name = f'{dataset_type}_dataset.h5'
     

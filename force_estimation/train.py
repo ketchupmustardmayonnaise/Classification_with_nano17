@@ -248,8 +248,8 @@ class ForceEstimation:
 
             if val_loss_to_monitor < val_best_loss:
                 print(
-                    f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss_to_monitor:.6f}).  Saving model ...')
-                torch.save(self.model.state_dict(), self.best_model_path) # best model path에 저장
+                    f'Validation loss decreased ({val_best_loss:.6f} --> {val_loss_to_monitor:.6f}).  Saving model ...')
+                torch.save(self.model.state_dict(), best_model_path) # best model path에 저장
                 val_best_loss = val_loss_to_monitor
                 current_patience = 0
             else:
@@ -290,38 +290,48 @@ class ForceEstimation:
               
                 _force = _force.squeeze()
                 _force = _force.tolist()
-                
-                
-                f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
-                # 각 시퀀스를 sliding window씩 자름
-                X = []
-                force = []
-                for i in range(len(_X) - self.target_index + 1):
-                    X.append(_X[i:i+self.target_index])
-                    force.append(_force[i:i+self.target_index])
-                
-                
+                f.append([]) # 리스트에 각 시퀀스마다의 force label을 전체 저장
                 pf.append([])
 
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
                 while True:
-                    if batch_start + self.batch_size < len(X):
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(force[batch_start:batch_start+self.batch_size]),\
+                    if batch_start + self.batch_size < len(_X):
+                        X_batch, force_batch, y_batch = torch.Tensor(_X[batch_start:batch_start+self.batch_size]),\
+                                                        torch.Tensor(_force[batch_start:batch_start+self.batch_size]),\
                                                         torch.Tensor(y[batch_start:batch_start+self.batch_size])
                     else:
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:len(X)]),\
-                                                        torch.Tensor(force[batch_start:len(X)]),\
-                                                        torch.Tensor(y[batch_start:len(X)])
+                        X_batch, force_batch, y_batch = torch.Tensor(_X[batch_start:len(_X)]),\
+                                                        torch.Tensor(_force[batch_start:len(_X)]),\
+                                                        torch.Tensor(y[batch_start:len(_X)])
 
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
-                    
+
+                    # ==========================================
+                    # absolute force로 변환
+                    if batch_start > 0:
+                        prev_f = f[len(f) - 1][batch_start - 1]
+                        prev_pf = pf[len(pf) - 1][batch_start - 1]
+                    else:
+                        prev_f = [0, 0, 0]
+                        prev_pf = [0, 0, 0]
+
+                    for i in range(len(force_batch)):
+                        force_batch[i] += torch.Tensor(prev_f).to(self.device)
+                        prev_f = force_batch[i]
+
+                        pred_force[i] += torch.Tensor(prev_pf).to(self.device)
+                        prev_pf = pred_force[i]
+                    # ==========================================
+
+                    force_detach = force_batch.detach().cpu().numpy().tolist()
+                    f[len(f) - 1].extend(force_detach)
+
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
-                    pf[len(pf)-1].extend(_pred_force_detach)
+                    pf[len(pf) - 1].extend(_pred_force_detach)
 
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
@@ -330,7 +340,7 @@ class ForceEstimation:
                                                             reduction='none').tolist())
 
                     batch_start += self.batch_size
-                    if batch_start >= len(X): break
+                    if batch_start >= len(_X): break
 
         train_txt_path = self.save_dir + "/train.txt"
         plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
@@ -338,8 +348,8 @@ class ForceEstimation:
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)
 
-        MSE_for_axis = torch.mean(MSE, dim=(0, 1))
-        MAE_for_axis = torch.mean(MAE, dim=(0, 1))
+        MSE_for_axis = torch.mean(MSE, dim=0)
+        MAE_for_axis = torch.mean(MAE, dim=0)
 
         print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')

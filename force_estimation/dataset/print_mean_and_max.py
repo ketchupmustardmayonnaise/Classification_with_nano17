@@ -15,34 +15,27 @@ f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
 # --- 데이터 로딩 (Data Loading) ---
 img, force, _, img_ts, force_ts = load_data_from_npz(path, target_index)
-img = divide_RGB_channels(img, img_ts) # img는 이제 NumPy 배열의 리스트
 
 force = apply_butterworth_filter(force, img_ts, force_ts)
 force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+
+for sequence_index in range(len(img)):
+    img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index])
+
 # --- 개선된 통계 계산 로직 ---
 
 
 resized_sequences = []
-# all_forces = [point for sequence in force for point in sequence]
-# force_np = np.array(all_forces)
-# print("force max :", np.max(force_np, axis=0))
-# print("force min :", np.min(force_np, axis=0))
-# force_mean = np.mean(force_np, axis=0)
-# force_std = np.std(force_np, axis=0)
-# print("force mean :",force_mean)
-# print("force std :",force_std)
+all_forces = [point for sequence in force for point in sequence]
+force_np = np.array(all_forces)
+print("force max :", np.max(force_np, axis=0))
+print("force min :", np.min(force_np, axis=0))
+force_mean = np.mean(force_np, axis=0)
+force_std = np.std(force_np, axis=0)
+print("force mean :",force_mean)
+print("force std :",force_std)
 
-# force = z_score_of_force(force, f_mean, f_std)
-
-# # # 리사이즈된 모든 프레임을 저장할 리스트
-# resized_sequences = []
-# all_forces = [point for sequence in force for point in sequence]
-# force_np = np.array(all_forces)
-
-# force_mean = np.mean(force_np, axis=0)
-# force_std = np.std(force_np, axis=0)
-# print(force_mean)
-# print(force_std)
+'''
 print("Resizing all frames...")
 # 1. 모든 시퀀스와 프레임을 순회하며 리사이즈 후 리스트에 수집
 for sequence in img:
@@ -81,6 +74,4 @@ print("\n--- Channel 2 ---")
 print(f"Mean: {mean_ch2:.4f}, Std: {std_ch2:.4f}, Max: {max_ch2:.4f}")
 print("\n--- Channel 3 ---")
 print(f"Mean: {mean_ch3:.4f}, Std: {std_ch3:.4f}, Max: {max_ch3:.4f}")
-
-sns.kdeplot(channel_1.flatten())
-plt.show()
+'''

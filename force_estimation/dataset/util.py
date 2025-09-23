@@ -82,6 +82,12 @@ def normalize_image(img: np.array):
     return img
 
 
+def normalize_force(force: np.array, mean, std):
+    # 이때의 force는 sequence별로
+    force = (force - np.array(mean)) / np.array(std)
+    return force
+
+
 
 def translate_image(img: np.array):
     # 이때 입력으로 들어오는 image는 각 시퀀스
@@ -208,7 +214,8 @@ def apply_butterworth_filter(force, img_ts, force_ts):
 
 
 def preprocess(img, force, label, img_ts, force_ts,
-               img_max, img_mean, img_std, num_classes):
+               img_max, img_mean, img_std,
+               force_mean, force_std, num_classes):
     '''
     모든 전처리 여기에서 진행
     '''
@@ -227,6 +234,7 @@ def preprocess(img, force, label, img_ts, force_ts,
         img[sequence_index] = translate_image(img[sequence_index])
         img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index])
         img[sequence_index] = normalize_image(img[sequence_index])
+        force[sequence_index] = normalize_force(force[sequence_index], force_mean, force_std)
         img[sequence_index] = pad_image(img[sequence_index], (32, 32))
         frame.append(int(len(img[sequence_index])))
 
