@@ -1,6 +1,8 @@
 import pathlib
 import sys
 import time
+
+import torch
 import torchinfo
 import yaml
 from tqdm import tqdm
@@ -14,6 +16,9 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
+
+f_mean = [ 3.38455280e-07, -4.57362519e-06, -1.18898044e-05]
+f_std = [0.03641479, 0.05464274, 0.0668863]
 
 class ForceEstimation:
     def __init__(self, cfg):
@@ -282,8 +287,7 @@ class ForceEstimation:
 
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
-        
-        
+
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
@@ -293,6 +297,9 @@ class ForceEstimation:
 
                 f.append([]) # 리스트에 각 시퀀스마다의 force label을 전체 저장
                 pf.append([])
+
+                prev_f = [0, 0, 0]
+                prev_pf = [0, 0, 0]
 
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
@@ -312,18 +319,11 @@ class ForceEstimation:
 
                     # ==========================================
                     # absolute force로 변환
-                    if batch_start > 0:
-                        prev_f = f[len(f) - 1][batch_start - 1]
-                        prev_pf = pf[len(pf) - 1][batch_start - 1]
-                    else:
-                        prev_f = [0, 0, 0]
-                        prev_pf = [0, 0, 0]
-
                     for i in range(len(force_batch)):
-                        force_batch[i] += torch.Tensor(prev_f).to(self.device)
+                        force_batch[i] = torch.Tensor(prev_f).to(self.device) + (force_batch[i] * torch.Tensor(f_std).to(self.device) + torch.Tensor(f_mean).to(self.device))
                         prev_f = force_batch[i]
 
-                        pred_force[i] += torch.Tensor(prev_pf).to(self.device)
+                        pred_force[i] = torch.Tensor(prev_pf).to(self.device) + (pred_force[i] * torch.Tensor(f_std).to(self.device) + torch.Tensor(f_mean).to(self.device))
                         prev_pf = pred_force[i]
                     # ==========================================
 
