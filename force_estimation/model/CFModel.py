@@ -63,7 +63,7 @@ class CFModel(nn.Module):
         x1 = torch.flatten(x1, start_dim=1)
         x1 = self.fc_layer1(x1)
 
-        x2 = self.conv(x[:, 0])
+        x2 = self.conv(x[:, 1])
         x2 = self.resblock1(x2)
         x2 = self.resblock2(x2)
         x2 = torch.flatten(x2, start_dim=1)
