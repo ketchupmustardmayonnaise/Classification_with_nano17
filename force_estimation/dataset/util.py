@@ -58,7 +58,7 @@ def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_typ
     start_and_end = []
 
     # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
-    for frame_index in range(len(img) - 1):
+    for frame_index in range(len(img)):
         if start is None:
             if np.max(img[frame_index]) >= threshold:
                 start = frame_index
@@ -78,7 +78,7 @@ def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_typ
         # 이제 start부터 end까지 쌍을 냄
         for (start_frame, end_frame) in start_and_end:
             for s_index in range(start_frame, end_frame):
-                for e_index in range(s_index, end_frame, 2): # 홀수는 홀수대로, 짝수는 짝수대로
+                for e_index in range(s_index+2, end_frame, 2): # 홀수는 홀수대로, 짝수는 짝수대로
                     result_image.append([img[s_index], img[e_index]])
                     result_force.append(force[e_index] - force[s_index])
 
@@ -167,30 +167,26 @@ def translate_image(img: np.array):
 
 def pad_image(img: np.array, target_shape):
     result_image = []
-    for pair_index in range(len(img)):
-        result_image.append([])
-        for i in range(2):
-            h, w = img[pair_index][i].shape
+    for frame_index in range(len(img)):
+        h, w = img[frame_index].shape
 
-            pad_h = target_shape[0] - h # 22
-            pad_w = target_shape[1] - w # 24
+        pad_h = target_shape[0] - h  # 22
+        pad_w = target_shape[1] - w  # 24
 
-            # 위-아래, 좌-우 패딩 분할
-            pad_top = pad_h // 2 # 11
-            pad_bottom = pad_h - pad_top # 11
-            pad_left = pad_w // 2 # 12
-            pad_right = pad_w - pad_left
+        # 위-아래, 좌-우 패딩 분할
+        pad_top = pad_h // 2  # 11
+        pad_bottom = pad_h - pad_top  # 11
+        pad_left = pad_w // 2  # 12
+        pad_right = pad_w - pad_left
 
-            # 중앙 패딩
-            padded_img = np.pad(
-                img[pair_index][i],
-                ((pad_top, pad_bottom), (pad_left, pad_right)),
-                mode='constant',  # 0으로 채움
-            )
-            result_image[pair_index].append(padded_img)
-
+        # 중앙 패딩
+        padded_img = np.pad(
+            img[frame_index],
+            ((pad_top, pad_bottom), (pad_left, pad_right)),
+            mode='constant',  # 0으로 채움
+        )
+        result_image.append(padded_img)
     return result_image
-
 
 
 def interpolate_nano_to_capacitance(force, img_ts, force_ts):
@@ -271,10 +267,10 @@ def preprocess(img, force, label, img_ts, force_ts,
         # !! 주의 !!
         # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
         img[sequence_index] = translate_image(img[sequence_index])
+        img[sequence_index] = pad_image(img[sequence_index], (32, 32))
         img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index], data_type=data_type)
         img[sequence_index] = normalize_image(img[sequence_index])
         # force[sequence_index] = normalize_force(force[sequence_index], force_mean, force_std)
-        img[sequence_index] = pad_image(img[sequence_index], (32, 32))
         frame.append(int(len(img[sequence_index])))
 
     # label
