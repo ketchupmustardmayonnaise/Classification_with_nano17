@@ -257,6 +257,12 @@ class ForceEstimation:
                 torch.save(self.model.state_dict(), best_model_path) # best model path에 저장
                 val_best_loss = val_loss_to_monitor
                 current_patience = 0
+
+                if self.use_wandb:
+                    artifact = wandb.Artifact('model', type='model')
+                    artifact.add_file(best_model_path)
+                    self.run_log.log_artifact(artifact)
+                    self.run_log.join()
             else:
                 current_patience += 1
                 if current_patience >= patience:
