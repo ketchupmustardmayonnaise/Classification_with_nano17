@@ -9,55 +9,70 @@ import bisect
 import random
 import math
 import torchvision.transforms.functional as TF
+import pandas as pd
 
 
 class RFTDataset(Dataset):
-    def __init__(self, path='./preprocessed_train_dataset', dataset_type='train'):
-        self.path = path
+    def __init__(self, path='./dataset/preprocessed_images', dataset_type='train'):
+        self.data_list = pd.read_csv(f'{path}/{dataset_type}.csv', encoding='utf-8')
         self.dataset_type = dataset_type
         self.augmentation = True
-        self.img = []
-        self.force = []
-        self.label = []
-        
-        self.prefix = [0]
-        self.frame = []
+        self.path = path
 
-        with h5py.File(self.path, 'r') as f:
-            sample_keys = list(f.keys())
-            if 'frame' in sample_keys:
-                self.frame = f[f"frame"][:]
-                sample_keys.remove('frame')
+        if dataset_type == 'test':
+            self.len = len(set(self.data_list.iloc[:, [0]])) # 시퀀스 개수
+        else:
+            self.len = len(self.data_list)
 
-            for seq in sample_keys:
-                self.img.append(f[f"{seq}/img"][:])
-                self.force.append(f[f"{seq}/force"][:])
-                self.label.append(f[f"{seq}/label"][:])
-
-        for i in range(len(self.frame)):
-            self.prefix.append(self.frame[i] + self.prefix[-1])
-
-        self.len = sum(self.frame)
 
     def __getitem__(self, index):
         if self.dataset_type.lower() == 'test':
-            img = self.img[index][:]
-            force = self.force[index][:, 0:3]
-            label = self.label[index][:]
+            # test는 시퀀스 내 pair를 모두 반환함
+            selected_sequence = self.data_list[self.data_list.iloc[:, 0] == index] # 첫 번째 열이 index와 맞는지
+            temporal_path = os.path.join(self.path, f'{self.dataset_type}/sequence_{index:03d}')
+
+            img = []
+            force = []
+            for pair_index in range(len(selected_sequence)):
+
+                first_image = np.load(os.path.join(temporal_path, selected_sequence[pair_index][1]))
+                second_image = np.load(os.path.join(temporal_path, selected_sequence[pair_index][2]))
+
+                temp_img = np.stack((first_image, second_image), axis=0)
+                temp_force = [selected_sequence[pair_index][3],
+                              selected_sequence[pair_index][4],
+                              selected_sequence[pair_index][5]]
+
+                max_of_image = selected_sequence[pair_index][6]
+                temp_img = temp_img.astype(np.float64)
+                temp_img /= max_of_image
+
+                img.append(temp_img)
+                force.append(temp_force)
+
+            img = np.array(img)
+            force = np.array(force)
 
             return (
-                torch.from_numpy(img).float(),
-                torch.from_numpy(force).float(),
-                torch.from_numpy(label).float()
+                torch.from_numpy(img),
+                torch.from_numpy(force),
             )
+
         else:
-            sequence_idx = bisect.bisect_right(self.prefix, index) - 1
-            frame_idx = index - self.prefix[sequence_idx]
+            # train, valiation은 pair별로 반환함.
+            selected_data = self.data_list.iloc[index]
+            temporal_path = os.path.join(self.path, f'{self.dataset_type}/sequence_{selected_data[0]:03d}')
 
-            img = torch.from_numpy(self.img[sequence_idx][frame_idx]).float()
-            force = torch.from_numpy(self.force[sequence_idx][frame_idx, 0:3]).float()
-            label = torch.from_numpy(self.label[sequence_idx]).float()
+            first_image = np.load(os.path.join(temporal_path, selected_data[1]))
+            second_image = np.load(os.path.join(temporal_path, selected_data[2]))
 
+            img = np.stack((first_image, second_image), axis=0)
+            force = [selected_data[3], selected_data[4], selected_data[5]]
+
+            max_of_image = selected_data[6]
+            img = img.astype(np.float64)
+            img /= max_of_image
+            img = torch.from_numpy(img)
 
             ######## Data Augmentation ########
             if self.dataset_type.lower() == 'train' and self.augmentation == True :
@@ -72,8 +87,7 @@ class RFTDataset(Dataset):
 
             return (
                 img,
-                force,
-                label
+                torch.Tensor(force)
             )
 
     def __len__(self):

@@ -92,7 +92,7 @@ class ForceEstimation:
         torchinfo.summary(self.model, input_size=(self.batch_size, 2, 32, 32))
 
         # test dataset
-        self.test_dataset = RFTDataset(path=cfg['test_data_dir'], dataset_type='test')
+        self.test_dataset = RFTDataset(dataset_type='test')
         self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
         # optimizer
@@ -103,11 +103,11 @@ class ForceEstimation:
         # train
         if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataset = RFTDataset(dataset_type='train')
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
             # validation dataset
-            self.val_dataset = RFTDataset(path=cfg['val_data_dir'], dataset_type='val')
+            self.val_dataset = RFTDataset(dataset_type='val')
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
             
             self.learning_rate = float(self.learning_rate)
@@ -189,8 +189,8 @@ class ForceEstimation:
 
             # X.shape =
             for batch in progress_bar:
-                X, force, y = batch
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, force = batch
+                X, force = X.float().to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
@@ -289,7 +289,7 @@ class ForceEstimation:
         MAE = [] # shape: (num of chunks, target_index, 3)
 
         with torch.no_grad():
-            for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
+            for _X, _force in self.test_dataloader: # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
               
                 _force = _force.squeeze()
@@ -305,15 +305,13 @@ class ForceEstimation:
                 batch_start = 0
                 while True:
                     if batch_start + self.batch_size < len(_X):
-                        X_batch, force_batch, y_batch = torch.Tensor(_X[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(_force[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(y[batch_start:batch_start+self.batch_size])
+                        X_batch, force_batch = torch.Tensor(_X[batch_start:batch_start+self.batch_size]),\
+                                                torch.Tensor(_force[batch_start:batch_start+self.batch_size])
                     else:
-                        X_batch, force_batch, y_batch = torch.Tensor(_X[batch_start:len(_X)]),\
-                                                        torch.Tensor(_force[batch_start:len(_X)]),\
-                                                        torch.Tensor(y[batch_start:len(_X)])
+                        X_batch, force_batch = torch.Tensor(_X[batch_start:len(_X)]),\
+                                                torch.Tensor(_force[batch_start:len(_X)])
 
-                    X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
+                    X_batch, force_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
 

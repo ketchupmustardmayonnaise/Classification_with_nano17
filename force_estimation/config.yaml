@@ -1,13 +1,5 @@
 train_mode: True
-use_wandb: True
-
-# image
-target_index: 120 #몇 frame으로 자를 것인지
-
-# directory
-train_data_dir: ./dataset/train_dataset.h5
-val_data_dir: ./dataset/val_dataset.h5
-test_data_dir: ./dataset/test_dataset.h5
+use_wandb: False
 
 save_dir: ../saved_models
 model_dir: ../saved_models/_09-24_02-16-26/best_model.pt # 확장자: .pt 또는 .pth
@@ -20,6 +12,6 @@ loss_weights :
   - 1.0
   - 1.0
 
-batch_size: 8
+batch_size: 64
 num_epoch: 200
 learning_rate: 0.001

@@ -1,3 +1,5 @@
+import shutil
+
 import numpy as np
 import cv2
 from scipy import signal
@@ -7,8 +9,9 @@ import torch
 import torch.nn.functional as F
 import zipfile
 import yaml
+import pandas as pd
 
-def load_data_from_npz(path, target_index):
+def load_data_from_npz(path):
     img = []
     force = []
 
@@ -25,7 +28,6 @@ def load_data_from_npz(path, target_index):
                     with zf.open(npzfile) as nf:
                         data = np.load(nf)
                         if len(data['img_ts']) > len(data['force_ts']): continue
-                        if len(data['img']) < target_index: continue
 
                         img.append(data['img'])
                         force.append(data['force'])
@@ -41,7 +43,43 @@ def load_data_from_npz(path, target_index):
     return img, force, label, img_ts, force_ts
 
 
-def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_type='train'):
+def save_frame_sequences(sequence, seq_index, base_dir):
+    """
+    영상 시퀀스 데이터를 시퀀스별 폴더와 프레임별 .npz 파일로 저장합니다.
+
+    Args:
+        sequences (list of numpy.ndarray): (frame_count, height, width) 형태의 시퀀스 리스트.
+        base_dir (str): 모든 출력을 저장할 기본 디렉토리 이름.
+    """
+    # 최상위 출력 폴더 생성
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+        print(f"✅ 최상위 출력 폴더 생성: '{base_dir}'")
+
+    sequence_dir_name = f'sequence_{seq_index:03d}'
+    sequence_path = os.path.join(base_dir, sequence_dir_name)
+
+    # 시퀀스별 폴더 생성
+    if not os.path.exists(sequence_path):
+        os.makedirs(sequence_path)
+
+    # 시퀀스 내의 각 프레임 반복
+    for frame_index in range(len(sequence)):
+        # (32, 32) 크기의 프레임 데이터 추출
+        frame_data = sequence[frame_index]
+
+        # 파일 이름 설정 (예: 0000.npz)
+        file_name = f'{frame_index:04d}.npy'
+        file_path = os.path.join(sequence_path, file_name)
+
+        # .npz 파일로 저장
+        # np.savez는 키-값 쌍으로 저장하며, 불러올 때 키로 접근합니다.
+        # 일반적으로 'frame'이라는 키를 사용합니다.
+        np.save(file_path, frame_data)
+
+
+def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequence_index,
+    threshold=130, data_type='train'):
     # 이때 입력으로 들어오는 image는 각 시퀀스
     # img shape: (frame 개수, 10, 8)
 
@@ -50,8 +88,7 @@ def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_typ
     # return으로 줘야 하는 image의 shape: (쌍 개수, 2, 10, 8)
     # return으로 줘야 하는 force의 shape: (쌍 개수, 6)
 
-    result_image = []
-    result_force = []
+    frame_count = 0
 
     start = None
     end = None
@@ -73,58 +110,41 @@ def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_typ
             start = None
             end = None
 
-    if data_type in ['train', 'val', 'validation']:
+    # 만약 시퀀스의 끝이 threshold 이상으로 끝난 경우 처리
+    if start is not None and end is None:
+        start_and_end.append((start, len(img)))
 
-        # 이제 start부터 end까지 쌍을 냄
+    # pair_list 기록
+    if data_type in ['train', 'val', 'validation']:
         for (start_frame, end_frame) in start_and_end:
             for s_index in range(start_frame, end_frame):
-                for e_index in range(s_index+2, end_frame, 2): # 홀수는 홀수대로, 짝수는 짝수대로
-                    result_image.append([img[s_index], img[e_index]])
-                    result_force.append(force[e_index] - force[s_index])
+                for e_index in range(s_index + 2, min(end_frame, s_index + 79), 2):
 
-        result_image = np.array(result_image)
-        result_force = np.array(result_force)
+                    first_filename = f'{s_index:04d}.npy'
+                    second_filename = f'{e_index:04d}.npy'
+                    diff_of_force = force[e_index] - force[s_index]
+                    max_of_first_image = np.max(img[s_index])
 
-        return result_image, result_force
+                    pair_list.append([sequence_index, first_filename, second_filename,
+                                          diff_of_force[0], diff_of_force[1], diff_of_force[2],
+                                          max_of_first_image])
+                    frame_count += 1
 
     elif data_type == 'test':
+        for (s_index, end_frame) in start_and_end:
+            for e_index in range(s_index + 1, end_frame):
 
-        # 이제 start부터 end까지 쌍을 냄
-        for (start_frame, end_frame) in start_and_end:
-            for e_index in range(start_frame, end_frame):
-                result_image.append([img[start_frame], img[e_index]])
-                result_force.append(force[e_index] - force[start_frame])
+                first_filename = f'{s_index:04d}.npy'
+                second_filename = f'{e_index:04d}.npy'
+                diff_of_force = force[e_index] - force[s_index]
+                max_of_first_image = np.max(img[s_index])
 
-        result_image = np.array(result_image)
-        result_force = np.array(result_force)
+                pair_list.append([sequence_index, first_filename, second_filename,
+                                      diff_of_force[0], diff_of_force[1], diff_of_force[2],
+                                      max_of_first_image])
+                frame_count += 1
 
-        return result_image, result_force
-
-
-
-def normalize_image(img: np.array):
-    # 이때 입력으로 들어오는 image는 각 시퀀스
-    # img shape: (쌍 개수, 2, 10, 8)
-
-    img = img.astype(np.float32)
-
-    # ============================================
-    # 이미지를 normalize하는 과정
-    # normalize 방법: 첫 번째 이미지의 max값으로, 첫 번째 이미지와 두 번째 이미지를 나눔.
-
-    for pair_index in range(len(img)):
-        pair_max = np.max(img[pair_index][0]) # 한 쌍의 첫 번째 이미지의 최댓값
-        img[pair_index] /= pair_max
-    # ============================================
-
-    return img
-
-
-def normalize_force(force: np.array, mean, std):
-    # 이때의 force는 sequence별로
-    force = (force - np.array(mean)) / np.array(std)
-    return force
-
+    return frame_count
 
 
 def translate_image(img: np.array):
@@ -254,6 +274,11 @@ def preprocess(img, force, label, img_ts, force_ts,
     '''
     모든 전처리 여기에서 진행
     '''
+    path = f'./preprocessed_images/{data_type}'
+
+    # 먼저 이전 데이터와 지금 데이터와 섞이지 않기 위해, npy 파일들을 저장할 디렉토리를 삭제함.
+    if os.path.exists(path):
+        shutil.rmtree(path)
 
     # force data에 low-pass filter를 걺
     force = apply_butterworth_filter(force, img_ts, force_ts)
@@ -263,15 +288,19 @@ def preprocess(img, force, label, img_ts, force_ts,
 
     # image 크기: (시퀀스 개수, 각 시퀀스의 프레임 개수, 2, 32, 23)
     frame = []
+    pair_list = []
     for sequence_index in range(len(img)):
         # !! 주의 !!
         # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
         img[sequence_index] = translate_image(img[sequence_index])
         img[sequence_index] = pad_image(img[sequence_index], (32, 32))
-        img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index], data_type=data_type)
-        img[sequence_index] = normalize_image(img[sequence_index])
-        # force[sequence_index] = normalize_force(force[sequence_index], force_mean, force_std)
-        frame.append(int(len(img[sequence_index])))
+        save_frame_sequences(img[sequence_index], sequence_index, path)
+        frame_count = divide_image_and_force(img[sequence_index], force[sequence_index],
+                                             pair_list, sequence_index, data_type=data_type)
+        frame.append(frame_count)
+
+    pair_list = pd.DataFrame(pair_list)
+    pair_list.to_csv(f'preprocessed_images/{data_type}.csv', index=False)
 
     # label
     label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=num_classes)
