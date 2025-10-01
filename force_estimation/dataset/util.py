@@ -41,26 +41,64 @@ def load_data_from_npz(path, target_index):
     return img, force, label, img_ts, force_ts
 
 
-def divide_image_and_force(img:np.array, force:np.array):
+def divide_image_and_force(img:np.array, force:np.array, threshold=130, data_type='train'):
     # 이때 입력으로 들어오는 image는 각 시퀀스
     # img shape: (frame 개수, 10, 8)
 
     # # ============================================
     # (첫 번째 이미지, 두 번째 이미지)로 나누는 과정
     # return으로 줘야 하는 image의 shape: (쌍 개수, 2, 10, 8)
-    result_image = []
-
     # return으로 줘야 하는 force의 shape: (쌍 개수, 6)
-    result_force =  []
 
+    result_image = []
+    result_force = []
+
+    start = None
+    end = None
+    start_and_end = []
+
+    # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
     for frame_index in range(len(img) - 1):
-        result_image.append([img[frame_index], img[frame_index + 1]])
-        result_force.append(force[frame_index + 1] - force[frame_index])
+        if start is None:
+            if np.max(img[frame_index]) >= threshold:
+                start = frame_index
 
-    result_image = np.array(result_image)
-    result_force = np.array(result_force)
+        elif end is None:
+            if np.max(img[frame_index]) < threshold:
+                end = frame_index
 
-    return result_image, result_force
+        # 'start' variable and 'end' variable is determined
+        if start is not None and end is not None:
+            start_and_end.append((start, end))
+            start = None
+            end = None
+
+    if data_type in ['train', 'val', 'validation']:
+
+        # 이제 start부터 end까지 쌍을 냄
+        for (start_frame, end_frame) in start_and_end:
+            for s_index in range(start_frame, end_frame):
+                for e_index in range(s_index, end_frame, 2): # 홀수는 홀수대로, 짝수는 짝수대로
+                    result_image.append([img[s_index], img[e_index]])
+                    result_force.append(force[e_index] - force[s_index])
+
+        result_image = np.array(result_image)
+        result_force = np.array(result_force)
+
+        return result_image, result_force
+
+    elif data_type == 'test':
+
+        # 이제 start부터 end까지 쌍을 냄
+        for (start_frame, end_frame) in start_and_end:
+            for e_index in range(start_frame, end_frame):
+                result_image.append([img[start_frame], img[e_index]])
+                result_force.append(force[e_index] - force[start_frame])
+
+        result_image = np.array(result_image)
+        result_force = np.array(result_force)
+
+        return result_image, result_force
 
 
 
@@ -215,7 +253,8 @@ def apply_butterworth_filter(force, img_ts, force_ts):
 
 def preprocess(img, force, label, img_ts, force_ts,
                img_max, img_mean, img_std,
-               force_mean, force_std, num_classes):
+               force_mean, force_std, num_classes,
+               data_type):
     '''
     모든 전처리 여기에서 진행
     '''
@@ -232,9 +271,9 @@ def preprocess(img, force, label, img_ts, force_ts,
         # !! 주의 !!
         # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
         img[sequence_index] = translate_image(img[sequence_index])
-        img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index])
+        img[sequence_index], force[sequence_index] = divide_image_and_force(img[sequence_index], force[sequence_index], data_type=data_type)
         img[sequence_index] = normalize_image(img[sequence_index])
-        force[sequence_index] = normalize_force(force[sequence_index], force_mean, force_std)
+        # force[sequence_index] = normalize_force(force[sequence_index], force_mean, force_std)
         img[sequence_index] = pad_image(img[sequence_index], (32, 32))
         frame.append(int(len(img[sequence_index])))
 

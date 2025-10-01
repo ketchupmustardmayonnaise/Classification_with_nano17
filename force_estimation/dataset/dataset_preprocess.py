@@ -58,7 +58,7 @@ for d_type in dataset_types :
 
     img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
     img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std,
-                                          f_mean, f_std, num_classes)
+                                          f_mean, f_std, num_classes, d_type)
     
     file_name = f'{dataset_type}_dataset.h5'
     

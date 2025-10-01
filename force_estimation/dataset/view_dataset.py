@@ -36,21 +36,11 @@ def annotateHeatMap(ax, arrData):
 def play_sequence(images, forces, length_of_image):
     fig = plt.figure(figsize=(20, 5))
 
-    img = np.transpose(images, (0, 2, 3, 1))
-
     ax_img_red = fig.add_subplot(1, 4, 1)
-    img_display_red = ax_img_red.imshow(img[0, :, :, 0], cm.gray,  vmin=-127, vmax=255)
+    img_display_red = ax_img_red.imshow(images[0], cm.gray,  vmin=-127, vmax=255)
     annotateHeatMap(ax_img_red, np.zeros((10, 8), dtype=int))
 
-    ax_img_green = fig.add_subplot(1, 4, 2)
-    img_display_green = ax_img_green.imshow(img[0, :, :, 1], cm.gray,  vmin=-127, vmax=255)
-
-    ax_img_blue = fig.add_subplot(1, 4, 3)
-    img_display_blue = ax_img_blue.imshow(img[0, :, :, 2], cm.gray,  vmin=-127, vmax=255)
-
     ax_img_red.set_title("origin")
-    ax_img_green.set_title("diff")
-    ax_img_blue.set_title("diff1 - diff2")
     ax_img_red.axis("off")
 
     ax_force = fig.add_subplot(1, 4, 4)
@@ -69,20 +59,16 @@ def play_sequence(images, forces, length_of_image):
     y_data = [[], [], []]  # Fx, Fy, Fz
 
     def init():
-        img = np.transpose(images[0], (1, 2, 0))
-        img_display_red.set_data(img[:, :, 0])
+        img = np.expand_dims(images[0], axis=2)
+        img_display_red.set_data(img)
         annotateHeatMap(ax_img_red, np.zeros((10, 8), dtype=int))
-        img_display_green.set_data(img[:, :, 1])
-        img_display_blue.set_data(img[:, :, 2])
         for i in range(3):
             lines[i].set_data([], [])
-        return [img_display_red, img_display_green, img_display_blue] + lines
+        return [img_display_red] + lines
 
     def update(frame):
-        img = np.transpose(images[frame], (1, 2, 0))
-        img_display_red.set_data(img[:, :, 0])
-        img_display_green.set_data(img[:, :, 1])
-        img_display_blue.set_data(img[:, :, 2])
+        img = np.expand_dims(images[frame], axis=2)
+        img_display_red.set_data(img)
 
         x_data.append(frame)
         for i in range(3):
@@ -95,7 +81,7 @@ def play_sequence(images, forces, length_of_image):
         annotateHeatMap(ax_img_red, img[:, :, 0])
         # ===========================================
 
-        return [img_display_red, img_display_green, img_display_blue] + lines
+        return [img_display_red] + lines
 
     # 애니메이션 실행 및 blocking
     ani = FuncAnimation(
@@ -115,7 +101,6 @@ def play_sequence(images, forces, length_of_image):
 
 img, force, label, img_ts, force_ts = load_data_from_npz('train', 30)
 
-img = divide_RGB_channels(img, img_ts)
 # force data에 low-pass filter를 걺
 force = apply_butterworth_filter(force, img_ts, force_ts)
 # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
