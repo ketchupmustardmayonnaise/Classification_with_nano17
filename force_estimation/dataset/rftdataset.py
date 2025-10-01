@@ -19,7 +19,6 @@ class RFTDataset(Dataset):
         self.augmentation = True
         self.img = []
         self.force = []
-        self.label = []
         
         self.prefix = [0]
         self.frame = []
@@ -33,7 +32,6 @@ class RFTDataset(Dataset):
             for seq in sample_keys:
                 self.img.append(f[f"{seq}/img"][:])
                 self.force.append(f[f"{seq}/filtered_force"][:])
-                self.label.append(f[f"{seq}/label"][:])
 
         for i in range(len(self.frame)):
             self.frame[i] = int(self.frame[i] - target_index + 1)
@@ -44,12 +42,10 @@ class RFTDataset(Dataset):
         if self.dataset_type.lower() == 'test':
             img = self.img[index][:]
             force = self.force[index][:, 0:3]
-            label = self.label[index][:]
 
             return (
                 torch.from_numpy(img).float(),
-                torch.from_numpy(force).float(),
-                torch.from_numpy(label).float()
+                torch.from_numpy(force).float()
             )
         else:
             sequence_idx = bisect.bisect_right(self.prefix, index) - 1
@@ -57,8 +53,6 @@ class RFTDataset(Dataset):
 
             img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
             force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
-            label = torch.from_numpy(self.label[sequence_idx]).float()
-
 
             ######## Data Augmentation ########
             if self.dataset_type.lower() == 'train' and self.augmentation == True :
@@ -91,8 +85,7 @@ class RFTDataset(Dataset):
 
             return (
                 img,
-                force,
-                label
+                force
             )
 
     def __len__(self):

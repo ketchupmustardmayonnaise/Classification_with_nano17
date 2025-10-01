@@ -19,14 +19,15 @@ img = divide_RGB_channels(img, img_ts) # img는 이제 NumPy 배열의 리스트
 
 force = apply_butterworth_filter(force, img_ts, force_ts)
 force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+img, force = extract_frame_segments(img, force)
 # --- 개선된 통계 계산 로직 ---
 
 
 resized_sequences = []
-# all_forces = [point for sequence in force for point in sequence]
-# force_np = np.array(all_forces)
-# print("force max :", np.max(force_np, axis=0))
-# print("force min :", np.min(force_np, axis=0))
+all_forces = [point for sequence in force for point in sequence]
+force_np = np.array(all_forces)
+print("force max :", np.max(force_np, axis=0))
+print("force min :", np.min(force_np, axis=0))
 # force_mean = np.mean(force_np, axis=0)
 # force_std = np.std(force_np, axis=0)
 # print("force mean :",force_mean)

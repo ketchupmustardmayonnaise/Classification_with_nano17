@@ -158,8 +158,8 @@ class ForceEstimation:
         MAE = 0
 
         with torch.no_grad():
-            for X, force, y in dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+            for X, force in dataloader:
+                X, force = X.float().to(self.device), force.to(self.device)
 
                 pred_force = self.model(X)
 
@@ -177,7 +177,7 @@ class ForceEstimation:
         patience = 10
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         loss_weights = torch.tensor(self.loss_weights).to(self.device)
-        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
+        early_stopping = EarlyStopping(self.use_wandb, self.run_log if self.use_wandb else None, patience = patience, verbose=True, path = best_model_path)
 
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
@@ -191,8 +191,8 @@ class ForceEstimation:
 
             # X.shape =
             for batch in progress_bar:
-                X, force, y = batch
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, force = batch
+                X, force = X.float().to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
@@ -282,7 +282,7 @@ class ForceEstimation:
         
         
         with torch.no_grad():
-            for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
+            for _X, _force in self.test_dataloader: # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
               
                 _force = _force.squeeze()
@@ -305,15 +305,13 @@ class ForceEstimation:
                 batch_start = 0
                 while True:
                     if batch_start + self.batch_size < len(X):
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(force[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(y[batch_start:batch_start+self.batch_size])
+                        X_batch, force_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
+                                                torch.Tensor(force[batch_start:batch_start+self.batch_size])
                     else:
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:len(X)]),\
-                                                        torch.Tensor(force[batch_start:len(X)]),\
-                                                        torch.Tensor(y[batch_start:len(X)])
+                        X_batch, force_batch = torch.Tensor(X[batch_start:len(X)]),\
+                                                        torch.Tensor(force[batch_start:len(X)])
 
-                    X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
+                    X_batch, force_batch = X_batch.to(self.device), force_batch.to(self.device)
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
                     

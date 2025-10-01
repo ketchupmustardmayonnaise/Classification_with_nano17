@@ -41,8 +41,8 @@ num_classes = 7
 dataset_types = ['train', 'val', 'test']
 
 img_max = [713.0000, 642.0000, 642.0000]
-img_mean = [17.8756, 0.0001, 0.0000]
-img_std = [47.0908, 4.2171, 5.8668]
+img_mean = [23.4373, 0.0217, -0.0014]
+img_std = [52.8054, 4.1116, 5.6942]
 
 f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
@@ -71,7 +71,6 @@ for d_type in dataset_types :
                 # 저장
                 group.create_dataset('img', data=img[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 3, 224, 224), float32
                 group.create_dataset('force', data=force[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 6), float
-                group.create_dataset('label', data=label[index], compression='gzip', compression_opts=9) # shape: (# of sequence, 7), int
 
                 if index % 10 == 0:
                     print(f"save {index} / {len(img)} data...")
@@ -83,6 +82,7 @@ for d_type in dataset_types :
 
         h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
 
+    '''
     with h5py.File(file_name, 'a') as f:
         sample_keys = list(f.keys())
         if 'frame' in sample_keys: sample_keys.remove('frame')
@@ -97,7 +97,8 @@ for d_type in dataset_types :
                 if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
-            
+    '''
+
     print(f'{d_type} complete')
 
 

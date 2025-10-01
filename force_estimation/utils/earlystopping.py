@@ -3,7 +3,7 @@ import torch
 
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self, patience=7, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
+    def __init__(self, use_wandb, wandb_run_log, patience=7, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -17,6 +17,8 @@ class EarlyStopping:
             trace_func (function): trace print function.
                                    Default: print            
         """
+        self.use_wandb = use_wandb
+        self.wandb_run_log = wandb_run_log
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -50,3 +52,12 @@ class EarlyStopping:
             self.trace_func(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss
+
+        if self.use_wandb:
+            try:
+                artifact = self.use_wandb.Artifact('model', type='model')
+                artifact.add_file(self.path)
+                self.wandb_run_log.log_artifact(artifact)
+                self.wandb_run_log.join()
+            except:
+                pass

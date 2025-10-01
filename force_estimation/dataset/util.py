@@ -158,6 +158,74 @@ def apply_butterworth_filter(force, img_ts, force_ts):
     return result
 
 
+def extract_frame_segments(
+        original_img,
+        original_force,
+        threshold=130):
+    """
+    비디오 시퀀스에서 지정된 (start, end) 범위의 프레임 세그먼트들을 추출합니다.
+
+    Args:
+        video_sequence (FrameSequence):
+            전체 프레임 시퀀스. Shape은 [총 프레임 수, height, width, ...]여야 합니다.
+        frame_ranges (FrameRanges):
+            추출할 프레임 범위의 (start, end) 튜플 리스트.
+            'start'는 포함되고 'end'는 제외됩니다 (Python 슬라이싱 관례: [start:end]).
+
+    Returns:
+        Tuple[FrameSequence, ...]:
+            각 범위에 해당하는 프레임 시퀀스 세그먼트들을 담고 있는 튜플.
+    """
+
+    result_img = []
+    result_force = []
+
+    for sequence_index in range(len(original_img)):
+
+        # ===============================
+        # 1. start와 end 쌍 찾기
+        # ===============================
+        start = None
+        end = None
+        start_and_end = []
+
+        # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
+        for frame_index in range(len(original_img[sequence_index])):
+            if start is None:
+                if np.max(original_img[sequence_index][frame_index]) >= threshold:
+                    start = frame_index
+
+            elif end is None:
+                if np.max(original_img[sequence_index][frame_index]) < threshold:
+                    end = frame_index
+
+            # 'start' variable and 'end' variable is determined
+            if start is not None and end is not None:
+                if end - start >= 120:
+                    start_and_end.append((start, end))
+                start = None
+                end = None
+
+        # 만약 시퀀스의 끝이 threshold 이상으로 끝난 경우 처리
+        if start is not None and end is None:
+            start_and_end.append((start, len(original_img[sequence_index])))
+
+        # ===============================
+        # 2. segment들로 나누기
+        # ===============================
+
+        # 각 (start, end) 쌍에 대해 반복
+        for s_index, e_index in start_and_end:
+
+            img_segment = original_img[sequence_index][s_index:e_index]
+            force_segment = original_force[sequence_index][s_index:e_index]
+
+            result_img.append(img_segment)
+            result_force.append(force_segment)
+
+    return result_img, result_force
+
+
 def preprocess(img, force, label, img_ts, force_ts,
                img_max, img_mean, img_std, num_classes):
     '''
@@ -171,6 +239,8 @@ def preprocess(img, force, label, img_ts, force_ts,
 
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+
+    img, force = extract_frame_segments(img, force)
     
     frame = []
     for sequence_index in range(len(img)):
