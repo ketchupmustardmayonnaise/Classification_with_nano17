@@ -106,7 +106,8 @@ def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequenc
 
         # 'start' variable and 'end' variable is determined
         if start is not None and end is not None:
-            start_and_end.append((start, end))
+            if end - start >= 120:
+                start_and_end.append((start, end))
             start = None
             end = None
 

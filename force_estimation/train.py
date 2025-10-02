@@ -155,8 +155,8 @@ class ForceEstimation:
         MAE = 0
 
         with torch.no_grad():
-            for X, force, y in dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+            for X, force in dataloader:
+                X, force = X.float().to(self.device), force.to(self.device)
 
                 pred_force = self.model(X)
 
@@ -244,10 +244,15 @@ class ForceEstimation:
                     float(val_MAE)
                 ) + '\n')
 
+            torch.save(self.model.state_dict(), "current_model.pt")  # best model path에 저장
             if self.use_wandb:
                 try:
                     wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
                                   "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+                    artifact = wandb.Artifact('model', type='model')
+                    artifact.add_file("current_model.pt")
+                    wandb.save("current_model.pt")
+                    self.run_log.log_artifact(artifact)
                 except:
                     wandb.finish()
 
@@ -262,8 +267,8 @@ class ForceEstimation:
                     try:
                         artifact = wandb.Artifact('model', type='model')
                         artifact.add_file(best_model_path)
+                        wandb.save(best_model_path)
                         self.run_log.log_artifact(artifact)
-                        self.run_log.join()
                     except:
                         pass
             else:
