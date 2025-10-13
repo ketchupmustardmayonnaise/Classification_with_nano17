@@ -138,8 +138,9 @@ class CFModel(nn.Module):
                 if not name.startswith('0.') :
                     param.requires_grad = False
         else: raise Exception('Unknown encoder type')
-        # for param in self.encoder.parameters():
-        #     param.requires_grad = False
+
+        for param in self.encoder.parameters():
+            param.requires_grad = False
 
         
         # Decoder

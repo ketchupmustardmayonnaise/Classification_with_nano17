@@ -240,8 +240,6 @@ def preprocess(img, force, label, img_ts, force_ts,
         
         img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
 
-        
-
         frame.append(int(len(img[sequence_index])))
     
     
