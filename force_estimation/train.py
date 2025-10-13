@@ -14,7 +14,6 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
-from force_estimation.utils.apply_img_augmentation import *
 
 class ForceEstimation:
     def __init__(self, cfg):
@@ -138,7 +137,7 @@ class ForceEstimation:
 
             if not self.resume:
                 # create directories
-                time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
+                time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
                 self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
 
                 if not os.path.exists(self.save_dir):

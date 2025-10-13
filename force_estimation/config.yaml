@@ -1,10 +1,10 @@
 train_mode: True
-use_wandb: False
+use_wandb: True
 resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
 resume_wandb_id: a0fpam95
 
 # encoder
-encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext,alexnetchange
+encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange
 # encoder_output: 256
 
 # decoder
@@ -42,8 +42,8 @@ loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
 
 loss_weights :
   - 1.0
-  - 1.5
-  - 3.0
+  - 1.0
+  - 1.0
 
 batch_size: 8
 num_epoch: 200

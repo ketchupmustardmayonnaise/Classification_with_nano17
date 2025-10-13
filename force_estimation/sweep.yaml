@@ -62,10 +62,8 @@ parameters:
   fc_num_layer:
     values: [1, 2, 3, 4]
   fc_hidden_dim:
-    values: [64, 128, 256]  
+    values: [64, 128, 256]
 
-  optimizer:
-    values: [Adam, SGD, rmsprop]
   learning_rate:
     min: 0.000001
     max: 0.01

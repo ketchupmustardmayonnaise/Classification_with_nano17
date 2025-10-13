@@ -15,10 +15,15 @@ f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
 # --- 데이터 로딩 (Data Loading) ---
 img, force, _, img_ts, force_ts = load_data_from_npz(path, target_index)
+img_frequency, force_frequency = measure_image_and_force_frequency(img_ts, force_ts)
+
+print(f"이미지 수집 주기: {img_frequency}")
+print(f"force 수집 주기: {force_frequency}")
 img = divide_RGB_channels(img, img_ts) # img는 이제 NumPy 배열의 리스트
 
 force = apply_butterworth_filter(force, img_ts, force_ts)
 force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
+
 # --- 개선된 통계 계산 로직 ---
 
 
