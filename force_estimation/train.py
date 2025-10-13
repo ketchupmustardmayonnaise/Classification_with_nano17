@@ -178,7 +178,7 @@ class ForceEstimation:
                     }
 
                     run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
-                    self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
+                    self.run_log = wandb.init(project="compare_model", config=wandb_config, name=run_name)
 
                 self.train()
 
