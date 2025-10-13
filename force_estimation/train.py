@@ -303,41 +303,28 @@ class ForceEstimation:
         MAE = [] # shape: (num of chunks, target_index, 3)
 
         with torch.no_grad():
-            for _X, _force in self.test_dataloader: # 한 시퀀스씩 추정
+            for _X, _force in self.test_dataloader:  # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
-              
+
                 _force = _force.squeeze()
                 _force = _force.tolist()
 
-                f.append([]) # 리스트에 각 시퀀스마다의 force label을 전체 저장
+                f.append([])  # 리스트에 각 시퀀스마다의 force label을 전체 저장
                 pf.append([])
-
-                prev_f = [0, 0, 0]
-                prev_pf = [0, 0, 0]
 
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
                 while True:
                     if batch_start + self.batch_size < len(_X):
-                        X_batch, force_batch = torch.Tensor(_X[batch_start:batch_start+self.batch_size]),\
-                                                torch.Tensor(_force[batch_start:batch_start+self.batch_size])
+                        X_batch, force_batch = torch.Tensor(_X[batch_start:batch_start + self.batch_size]), \
+                            torch.Tensor(_force[batch_start:batch_start + self.batch_size])
                     else:
-                        X_batch, force_batch = torch.Tensor(_X[batch_start:len(_X)]),\
-                                                torch.Tensor(_force[batch_start:len(_X)])
+                        X_batch, force_batch = torch.Tensor(_X[batch_start:len(_X)]), \
+                            torch.Tensor(_force[batch_start:len(_X)])
 
-                    X_batch, force_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
+                    X_batch, force_batch = X_batch.to(self.device), force_batch.to(self.device)
 
-                    pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
-
-                    # ==========================================
-                    # absolute force로 변환
-                    for i in range(len(force_batch)):
-                        force_batch[i] = torch.Tensor(prev_f).to(self.device) + (force_batch[i] * torch.Tensor(f_std).to(self.device) + torch.Tensor(f_mean).to(self.device))
-                        prev_f = force_batch[i]
-
-                        pred_force[i] = torch.Tensor(prev_pf).to(self.device) + (pred_force[i] * torch.Tensor(f_std).to(self.device) + torch.Tensor(f_mean).to(self.device))
-                        prev_pf = pred_force[i]
-                    # ==========================================
+                    pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
 
                     force_detach = force_batch.detach().cpu().numpy().tolist()
                     f[len(f) - 1].extend(force_detach)
@@ -349,7 +336,7 @@ class ForceEstimation:
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
                                                             reduction='none').tolist())
                     MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch,
-                                                            reduction='none').tolist())
+                                                           reduction='none').tolist())
 
                     batch_start += self.batch_size
                     if batch_start >= len(_X): break

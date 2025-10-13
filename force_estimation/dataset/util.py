@@ -78,8 +78,7 @@ def save_frame_sequences(sequence, seq_index, base_dir):
         np.save(file_path, frame_data)
 
 
-def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequence_index,
-    threshold=130, data_type='train'):
+def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequence_index, data_type='train'):
     # 이때 입력으로 들어오는 image는 각 시퀀스
     # img shape: (frame 개수, 10, 8)
 
@@ -90,60 +89,32 @@ def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequenc
 
     frame_count = 0
 
-    start = None
-    end = None
-    start_and_end = []
-
-    # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
-    for frame_index in range(len(img)):
-        if start is None:
-            if np.max(img[frame_index]) >= threshold:
-                start = frame_index
-
-        elif end is None:
-            if np.max(img[frame_index]) < threshold:
-                end = frame_index
-
-        # 'start' variable and 'end' variable is determined
-        if start is not None and end is not None:
-            if end - start >= 120:
-                start_and_end.append((start, end))
-            start = None
-            end = None
-
-    # 만약 시퀀스의 끝이 threshold 이상으로 끝난 경우 처리
-    if start is not None and end is None:
-        start_and_end.append((start, len(img)))
-
     # pair_list 기록
     if data_type in ['train', 'val', 'validation']:
-        for (start_frame, end_frame) in start_and_end:
-            for s_index in range(start_frame, end_frame):
-                for e_index in range(s_index + 2, min(end_frame, s_index + 79), 2):
-
-                    first_filename = f'{s_index:04d}.npy'
-                    second_filename = f'{e_index:04d}.npy'
-                    diff_of_force = force[e_index] - force[s_index]
-                    max_of_first_image = np.max(img[s_index])
-
-                    pair_list.append([sequence_index, first_filename, second_filename,
-                                          diff_of_force[0], diff_of_force[1], diff_of_force[2],
-                                          max_of_first_image])
-                    frame_count += 1
-
-    elif data_type == 'test':
-        for (s_index, end_frame) in start_and_end:
-            for e_index in range(s_index + 1, end_frame):
-
-                first_filename = f'{s_index:04d}.npy'
-                second_filename = f'{e_index:04d}.npy'
-                diff_of_force = force[e_index] - force[s_index]
-                max_of_first_image = np.max(img[s_index])
+        for start_frame in range(len(img)):
+            for end_frame in range(start_frame + 2, min(len(img), start_frame + 50), 2):
+                first_filename = f'{start_frame:04d}.npy'
+                second_filename = f'{end_frame:04d}.npy'
+                diff_of_force = force[end_frame] - force[start_frame]
+                max_of_first_image = np.max(img[start_frame])
 
                 pair_list.append([sequence_index, first_filename, second_filename,
-                                      diff_of_force[0], diff_of_force[1], diff_of_force[2],
-                                      max_of_first_image])
+                                  diff_of_force[0], diff_of_force[1], diff_of_force[2],
+                                  max_of_first_image])
                 frame_count += 1
+
+    elif data_type == 'test':
+        start_frame = 0
+        for end_frame in range(start_frame + 1, len(img)):
+            first_filename = f'{start_frame:04d}.npy'
+            second_filename = f'{end_frame:04d}.npy'
+            diff_of_force = force[end_frame] - force[start_frame]
+            max_of_first_image = np.max(img[start_frame])
+
+            pair_list.append([sequence_index, first_filename, second_filename,
+                              diff_of_force[0], diff_of_force[1], diff_of_force[2],
+                              max_of_first_image])
+            frame_count += 1
 
     return frame_count
 
@@ -268,10 +239,71 @@ def apply_butterworth_filter(force, img_ts, force_ts):
     return result
 
 
-def preprocess(img, force, label, img_ts, force_ts,
-               img_max, img_mean, img_std,
-               force_mean, force_std, num_classes,
-               data_type):
+def extract_frame_segments(
+        original_img,
+        original_force,
+        frame=120,
+        threshold=130):
+    '''
+    이미지 전체를 보면서, 이미지의 최대 capacitance value가 threshold를 넘지 못하는 경우
+    터치가 안 된 순간으로 간주하고, 이를 제외함.
+
+    즉 터치를 시작한 순간부터 뗀 순간까지로 모두 분할함
+
+    또한 frame 이하인 것 또한 지움 (우리 모델의 LSTM은 sliding window 미만인 프레임은 학습하지 못하기 때문에, 동등한 비교를 위하여)
+    '''
+
+    result_img = []
+    result_force = []
+
+    for sequence_index in range(len(original_img)):
+
+        # ===============================
+        # 1. start와 end 쌍 찾기
+        # ===============================
+        start = None
+        end = None
+        start_and_end = []
+
+        # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
+        for frame_index in range(len(original_img[sequence_index])):
+            if start is None:
+                if np.max(original_img[sequence_index][frame_index]) >= threshold:
+                    start = frame_index
+
+            elif end is None:
+                if np.max(original_img[sequence_index][frame_index]) < threshold:
+                    end = frame_index
+
+            # 'start' variable and 'end' variable is determined
+            if start is not None and end is not None:
+                if end - start >= frame:
+                    start_and_end.append((start, end))
+                start = None
+                end = None
+
+        # 만약 시퀀스의 끝이 threshold 이상으로 끝난 경우 처리
+        if start is not None and end is None:
+            start_and_end.append((start, len(original_img[sequence_index])))
+
+        # ===============================
+        # 2. segment들로 나누기
+        # ===============================
+
+        # 각 (start, end) 쌍에 대해 반복
+        for s_index, e_index in start_and_end:
+
+            img_segment = original_img[sequence_index][s_index:e_index]
+            force_segment = original_force[sequence_index][s_index:e_index]
+
+            result_img.append(img_segment)
+            result_force.append(force_segment)
+
+    return result_img, result_force
+
+
+
+def preprocess(img, force, label, img_ts, force_ts, data_type, num_classes=7):
     '''
     모든 전처리 여기에서 진행
     '''
@@ -287,14 +319,16 @@ def preprocess(img, force, label, img_ts, force_ts,
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
 
+    img, force = extract_frame_segments(img, force, frame=120)
+
     # image 크기: (시퀀스 개수, 각 시퀀스의 프레임 개수, 2, 32, 23)
     frame = []
     pair_list = []
     for sequence_index in range(len(img)):
         # !! 주의 !!
         # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
-        img[sequence_index] = translate_image(img[sequence_index])
-        img[sequence_index] = pad_image(img[sequence_index], (32, 32))
+        img[sequence_index] = translate_image(img[sequence_index]) # 이미지를 중심 정렬
+        img[sequence_index] = pad_image(img[sequence_index], (32, 32)) # 이미지를 32 * 32로 padding
         save_frame_sequences(img[sequence_index], sequence_index, path)
         frame_count = divide_image_and_force(img[sequence_index], force[sequence_index],
                                              pair_list, sequence_index, data_type=data_type)

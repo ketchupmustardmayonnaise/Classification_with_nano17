@@ -49,26 +49,6 @@ def lists_for_plot(f, pf, target_index, plot_index):
     return f_result, predicted_force_sequence, mse, mae
 
 
-# chunk들끼리 겹치는 부분은 평균 내어 리스트를 재정렬함.
-def lists_for_plot_mean(f, pf):
-    # plot을 위해, 시퀀스 별로 predicted force 리스트를 정리함
-    predicted_force_sequence = [[] for _ in range(len(f))]
-
-    # predicted force의 모든 값을 리스트에 append함.
-    for i in range(0, len(pf)):
-        for j in range(0, len(pf[i])):
-            predicted_force_sequence[i+j].append(pf[i][j])
-
-    for i in range(0, len(predicted_force_sequence)):
-        predicted_force_sequence[i] = np.mean(np.array(predicted_force_sequence[i]), axis=0)
-
-    mse = torch.nn.functional.mse_loss(torch.Tensor(predicted_force_sequence).float(), torch.Tensor(f).float(),
-                                       reduction='none').tolist()
-    mae = torch.nn.functional.l1_loss(torch.Tensor(predicted_force_sequence).float(), torch.Tensor(f).float(),
-                                      reduction='none').tolist()
-
-    return f, predicted_force_sequence, mse, mae
-
 
 # 재정렬된 force와 predicted force가 주어지면, 이를 plot하여 저장함.
 # 때문에 force 리스트와 predicted force 리스트의 shape은 완전히 같아야 함. (# of sequence, frames of each sequence, 3)
@@ -142,11 +122,11 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         mae_for_plot.extend(mae)
 
     with open(train_txt_path, 'a') as train_txt_file:
-        train_txt_file.write("\nTest: mean frame\n")
+        train_txt_file.write("\nTest: plot\n")
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n\n')
 
-    plot(f, pf, save_dir + "/mean_frame")
+    plot(f, pf, save_dir + "/plot")
     # ===============================================================
 
 
