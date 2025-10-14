@@ -76,7 +76,7 @@ class CFModel(nn.Module):
         self.extractor = False
         self.decoder_input_size = 1000
         self.decoder_type = decoder
-        
+
         if encoder.lower() == 'resnet18':
             self.extractor = True
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
