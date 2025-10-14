@@ -76,6 +76,7 @@ class CFModel(nn.Module):
         self.extractor = False
         self.decoder_input_size = 1000
         self.decoder_type = decoder
+        
         if encoder.lower() == 'resnet18':
             self.extractor = True
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -94,14 +95,29 @@ class CFModel(nn.Module):
                 
         elif encoder.lower() == 'resnet34':
             self.encoder = models.resnet34(pretrained=True)
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         elif encoder.lower() == 'resnet50':
             self.encoder = models.resnet50(pretrained=True)
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         elif encoder.lower() == 'densenet121':
             self.encoder = models.densenet121(pretrained=True)
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         elif encoder.lower() == 'alexnet':
             self.encoder = models.alexnet(pretrained=True)
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         elif encoder.lower() == 'vgg16':
             self.encoder = models.vgg16(pretrained=True)
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
         elif encoder.lower() == 'convnext':
             self.extractor = True
             pretrained_model = models.convnext_tiny(pretrained=True)
@@ -118,6 +134,7 @@ class CFModel(nn.Module):
             for param in self.encoder[1].parameters():
                 param.requires_grad = False
             self.decoder_input_size = 96
+
         elif encoder.lower() == 'alexnetchange':
             self.extractor = True
             pretrained_alexnet = models.alexnet(weights='DEFAULT')
@@ -138,9 +155,6 @@ class CFModel(nn.Module):
                 if not name.startswith('0.') :
                     param.requires_grad = False
         else: raise Exception('Unknown encoder type')
-
-        for param in self.encoder.parameters():
-            param.requires_grad = False
 
         
         # Decoder

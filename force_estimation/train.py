@@ -197,7 +197,7 @@ class ForceEstimation:
                 elif self.loss_type == "MSE" :
                     self.loss = torch.nn.MSELoss()  
                 elif self.loss_type == "MAE" :
-                    self.loss = torch.nn.L1Loss()
+                    self.loss = torch.nn.L1Loss()ii
                 elif self.loss_type == "huber" :
                     self.loss = torch.nn.HuberLoss(delta=1.0)    
                     
