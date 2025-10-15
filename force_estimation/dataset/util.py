@@ -78,7 +78,7 @@ def save_frame_sequences(sequence, seq_index, base_dir):
         np.save(file_path, frame_data)
 
 
-def divide_image_and_force(img:np.array, force:np.array, pair_list:list, sequence_index, data_type='train'):
+def make_pairs(img:np.array, force:np.array, pair_list:list, sequence_index, data_type='train'):
     # 이때 입력으로 들어오는 image는 각 시퀀스
     # img shape: (frame 개수, 10, 8)
 
@@ -330,11 +330,15 @@ def preprocess(img, force, label, img_ts, force_ts, data_type, num_classes=7):
         img[sequence_index] = translate_image(img[sequence_index]) # 이미지를 중심 정렬
         img[sequence_index] = pad_image(img[sequence_index], (32, 32)) # 이미지를 32 * 32로 padding
         save_frame_sequences(img[sequence_index], sequence_index, path)
-        frame_count = divide_image_and_force(img[sequence_index], force[sequence_index],
+        frame_count = make_pairs(img[sequence_index], force[sequence_index],
                                              pair_list, sequence_index, data_type=data_type)
         frame.append(frame_count)
 
-    pair_list = pd.DataFrame(pair_list)
+    header = ['sequence index', 'first image', 'second image',
+              'difference of Fx', 'difference of Fy', 'difference of Fz',
+              'max capacitance value of the first image']
+    pair_list = pd.DataFrame(data=pair_list,
+                             columns=header)
     pair_list.to_csv(f'preprocessed_images/{data_type}.csv', index=False)
 
     # label

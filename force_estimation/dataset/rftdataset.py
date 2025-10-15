@@ -20,7 +20,7 @@ class RFTDataset(Dataset):
         self.path = path
 
         if dataset_type == 'test':
-            self.len = len(set(self.data_list.iloc[:, [0]])) # 시퀀스 개수
+            self.len = len(set(self.data_list.loc[:, 'sequence index'])) # 시퀀스 개수
         else:
             self.len = len(self.data_list)
 
@@ -28,22 +28,22 @@ class RFTDataset(Dataset):
     def __getitem__(self, index):
         if self.dataset_type.lower() == 'test':
             # test는 시퀀스 내 pair를 모두 반환함
-            selected_sequence = self.data_list[self.data_list.iloc[:, 0] == index] # 첫 번째 열이 index와 맞는지
+            selected_sequence = self.data_list.loc[self.data_list['sequence index'] == index] # 해당 sequence 모두를 가져옴
             temporal_path = os.path.join(self.path, f'{self.dataset_type}/sequence_{index:03d}')
 
             img = []
             force = []
             for pair_index in range(len(selected_sequence)):
-
-                first_image = np.load(os.path.join(temporal_path, selected_sequence[pair_index][1]))
-                second_image = np.load(os.path.join(temporal_path, selected_sequence[pair_index][2]))
+                a = selected_sequence.iloc[pair_index]['first image']
+                first_image = np.load(os.path.join(temporal_path, selected_sequence.iloc[pair_index]['first image']))
+                second_image = np.load(os.path.join(temporal_path, selected_sequence.iloc[pair_index]['second image']))
 
                 temp_img = np.stack((first_image, second_image), axis=0)
-                temp_force = [selected_sequence[pair_index][3],
-                              selected_sequence[pair_index][4],
-                              selected_sequence[pair_index][5]]
+                temp_force = [selected_sequence.iloc[pair_index]['difference of Fx'],
+                              selected_sequence.iloc[pair_index]['difference of Fy'],
+                              selected_sequence.iloc[pair_index]['difference of Fz']]
 
-                max_of_image = selected_sequence[pair_index][6]
+                max_of_image = selected_sequence.iloc[pair_index]['max capacitance value of the first image']
                 temp_img = temp_img.astype(np.float64)
                 temp_img /= max_of_image
 
@@ -91,6 +91,4 @@ class RFTDataset(Dataset):
             )
 
     def __len__(self):
-        if self.dataset_type.lower() == 'test':
-            return len(self.frame)
-        else: return self.len
+        return self.len
