@@ -135,12 +135,11 @@ class ForceEstimation:
                     "batch_size": self.batch_size,
                     "learning_rate": self.learning_rate,
                     "weight_decay": self.weight_decay,
-                    "dropout": self.dropout,
                     "loss": self.loss_type,
                     "loss_weights": self.loss_weights,
                 }
 
-                run_name = f'MTM_{time_suffix}_5people'
+                run_name = f'compare_3dtouchforce'
                 self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
 
             self.train()
@@ -174,7 +173,7 @@ class ForceEstimation:
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
-        patience = 10
+        patience = 20
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         loss_weights = torch.tensor(self.loss_weights).to(self.device)
         early_stopping = EarlyStopping(self.use_wandb, self.run_log if self.use_wandb else None, patience = patience, verbose=True, path = best_model_path)

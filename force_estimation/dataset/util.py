@@ -192,11 +192,11 @@ def extract_frame_segments(
         # 이미지의 끝까지 가면서, (start, end) 쌍을 찾음
         for frame_index in range(len(original_img[sequence_index])):
             if start is None:
-                if np.max(original_img[sequence_index][frame_index]) >= threshold:
+                if np.max(original_img[sequence_index][frame_index][0]) >= threshold:
                     start = frame_index
 
             elif end is None:
-                if np.max(original_img[sequence_index][frame_index]) < threshold:
+                if np.max(original_img[sequence_index][frame_index][0]) < threshold:
                     end = frame_index
 
             # 'start' variable and 'end' variable is determined

@@ -40,9 +40,9 @@ num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
 
-img_max = [713.0000, 642.0000, 642.0000]
-img_mean = [23.4373, 0.0217, -0.0014]
-img_std = [52.8054, 4.1116, 5.6942]
+img_max = [281.0000, 251.0000, 251.0000]
+img_mean = [18.2207, 0.0346, -0.0139]
+img_std = [43.1450, 4.8452, 6.2904]
 
 f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
@@ -82,7 +82,6 @@ for d_type in dataset_types :
 
         h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
 
-    '''
     with h5py.File(file_name, 'a') as f:
         sample_keys = list(f.keys())
         if 'frame' in sample_keys: sample_keys.remove('frame')
@@ -94,10 +93,9 @@ for d_type in dataset_types :
 
             for i in range(filtered_force.shape[0]):
                 if filtered_force[i, 2] > 0: filtered_force[i, 2] = 0
-                if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
+                # if filtered_force[i, 2] < z_threshold: filtered_force[i, 2] = z_threshold
 
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
-    '''
 
     print(f'{d_type} complete')
 
