@@ -303,8 +303,9 @@ def extract_frame_segments(
 
 
 def filter_force(force):
-    force[force[:, 2] > 0, 2] = 0
-    return force
+    clipping_force = force.copy()
+    clipping_force[force[:, 2] > 0, 2] = 0
+    return clipping_force
 
 
 
