@@ -18,7 +18,7 @@ fc_num_layer: 1
 fc_hidden_dim: 0
 
 # image
-target_index: 30 #몇 frame으로 자를 것인지
+target_index: 120 #몇 frame으로 자를 것인지
 stride: 1
 
 image_type: rgb # [origin, rgb, diff, zScore]
@@ -49,4 +49,3 @@ batch_size: 8
 num_epoch: 200
 learning_rate: 0.0001
 weight_decay: 0.001
-dropout: 0.3

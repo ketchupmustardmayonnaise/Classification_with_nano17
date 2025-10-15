@@ -63,7 +63,6 @@ class ForceEstimation:
             ('batch_size', int),
             ('learning_rate', float),
             ('weight_decay', float),
-            ('dropout', float),
             ('num_epoch', int),
 
             ('optimizer_type', str),
@@ -89,7 +88,6 @@ class ForceEstimation:
                              self.fc_num_layer,
                              self.target_index,
                              self.fc_hidden_dim,
-                             self.dropout,
                              self.image_size,
                              )
         self.model = self.model.to(self.device)
@@ -172,7 +170,6 @@ class ForceEstimation:
                         "batch_size": self.batch_size,
                         "learning_rate": self.learning_rate,
                         "weight_decay": self.weight_decay,
-                        "dropout": self.dropout,
                         "loss": self.loss_type,
                         "loss_weights" : self.loss_weights,
                     }

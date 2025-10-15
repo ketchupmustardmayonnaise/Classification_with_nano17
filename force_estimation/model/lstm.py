@@ -2,7 +2,7 @@ import torch.nn as nn
 from torch.nn.functional import relu
 
 class LSTM(nn.Module):
-    def __init__(self, input_size=256, hidden_size = 256, output_size=3, h_RNN_layers=2, fc_dim = 1000, drop_out = 0.3,bidirectional=False):
+    def __init__(self, input_size=256, hidden_size = 256, output_size=3, h_RNN_layers=2, fc_dim = 1000, bidirectional=False):
         super(LSTM, self).__init__()
 
         # self.linear_input = nn.Linear(in_features=input_size, out_features=hidden_size)

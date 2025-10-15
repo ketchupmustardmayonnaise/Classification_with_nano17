@@ -65,7 +65,7 @@ class ConvLSTMDecoder(nn.Module):
 class CFModel(nn.Module):
     def __init__(self, encoder,
                  decoder, decoder_layer, decoder_dimension,decoder_output,  fc_num_layer,
-                 target_index, fc_hidden_dim, dropout, image_size, transformer_nhead=2, transformer_ff_dim=192,
+                 target_index, fc_hidden_dim, image_size, transformer_nhead=2, transformer_ff_dim=192,
                  convlstm_hidden_dims=[64, 32], convlstm_kernel_sizes=[(3,3), (3,3)]
                  ):
         assert fc_num_layer > 0
@@ -159,7 +159,7 @@ class CFModel(nn.Module):
         
         # Decoder
         if self.decoder_type == 'lstm':
-            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim,drop_out= dropout,bidirectional=False)
+            self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, fc_dim=fc_hidden_dim, bidirectional=False)
         elif self.decoder_type == 'bidirectional_lstm':
             self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size = decoder_dimension, output_size=decoder_output, h_RNN_layers=decoder_layer, bidirectional=True)
         elif self.decoder_type == 'transformer' :
