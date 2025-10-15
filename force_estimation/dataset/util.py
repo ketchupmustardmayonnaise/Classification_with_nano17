@@ -302,6 +302,11 @@ def extract_frame_segments(
     return result_img, result_force
 
 
+def filter_force(force):
+    force[force[:, 2] > 0, 2] = 0
+    return force
+
+
 
 def preprocess(img, force, label, img_ts, force_ts, data_type, num_classes=7):
     '''
@@ -325,6 +330,7 @@ def preprocess(img, force, label, img_ts, force_ts, data_type, num_classes=7):
     frame = []
     pair_list = []
     for sequence_index in range(len(img)):
+        force[sequence_index] = filter_force(force[sequence_index]) # z force가 0 이상은 것은 0으로
         # !! 주의 !!
         # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
         img[sequence_index] = translate_image(img[sequence_index]) # 이미지를 중심 정렬
