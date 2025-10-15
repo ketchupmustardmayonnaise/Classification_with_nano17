@@ -84,7 +84,7 @@ class RFTDataset(Dataset):
                     force = force @ rotation_matrix.T
 
                 if random.random() < 0.5:
-                    force[0] *= (-1)  # x만 flip
+                    force[:, 0] *= (-1)  # x만 flip
 
                     img = torch.stack([
                         TF.hflip(i)

@@ -1,7 +1,6 @@
 import numpy as np
 import cv2  # 리사이즈를 위해 OpenCV 사용 (예시)
 from util import *
-import seaborn as sns
 import matplotlib.pyplot as plt
 
 # --- 설정 (Configuration) ---
@@ -82,6 +81,3 @@ print("\n--- Channel 2 ---")
 print(f"Mean: {mean_ch2:.4f}, Std: {std_ch2:.4f}, Max: {max_ch2:.4f}")
 print("\n--- Channel 3 ---")
 print(f"Mean: {mean_ch3:.4f}, Std: {std_ch3:.4f}, Max: {max_ch3:.4f}")
-
-sns.kdeplot(channel_1.flatten())
-plt.show()

@@ -123,50 +123,6 @@ def plot(f, pf, save_dir):
 def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
 
     # ===============================================================
-    # 중간 frame만 이어붙이는 식으로 예측
-    f_for_plot = [] # shape: (# of sequence, frame of sequence, 3)
-    pf_for_plot = []
-    mse_for_plot = []
-    mae_for_plot = []
-    for seq_index in range(len(f)):
-        _f, _pf, _mse, _mae = lists_for_plot(f[seq_index], pf[seq_index], target_index, target_index // 2)
-        f_for_plot.append(_f)
-        pf_for_plot.append(_pf)
-        mse_for_plot.extend(_mse)
-        mae_for_plot.extend(_mae)
-
-    with open(train_txt_path, 'a') as train_txt_file:
-        train_txt_file.write("\nTest: median frame\n")
-        train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
-        train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
-
-    plot(f_for_plot, pf_for_plot, save_dir + "/median_frame")
-    # ===============================================================
-
-
-    # ===============================================================
-    # 가장 마지막 frame만 이어붙이는 식으로 예측
-    f_for_plot = []  # shape: (# of sequence, frame of sequence, 3)
-    pf_for_plot = []
-    mse_for_plot = []
-    mae_for_plot = []
-    for seq_index in range(len(f)):
-        _f, _pf, _mse, _mae = lists_for_plot(f[seq_index], pf[seq_index], target_index, target_index)
-        f_for_plot.append(_f)
-        pf_for_plot.append(_pf)
-        mse_for_plot.extend(_mse)
-        mae_for_plot.extend(_mae)
-
-    with open(train_txt_path, 'a') as train_txt_file:
-        train_txt_file.write("\nTest: last frame\n")
-        train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
-        train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
-
-    plot(f_for_plot, pf_for_plot, save_dir + "/last_frame")
-    # ===============================================================
-
-
-    # ===============================================================
     # chunk끼리 겹치는 frame은 stack하여 평균 냄
     f_for_plot = []  # shape: (# of sequence, frame of sequence, 3)
     pf_for_plot = []
@@ -179,10 +135,15 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         mse_for_plot.extend(_mse)
         mae_for_plot.extend(_mae)
 
+    mse = torch.mean(torch.Tensor(mse_for_plot), dim=0)
+    mae = torch.mean(torch.Tensor(mae_for_plot), dim=0)
+
     with open(train_txt_path, 'a') as train_txt_file:
         train_txt_file.write("\nTest: mean frame\n")
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
-        train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n\n')
+        train_txt_file.write(f'X: {mse[0]}, Y: {mse[1]}, Z: {mse[2]}\n')
+        train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
+        train_txt_file.write(f'X: {mae[0]}, Y: {mae[1]}, Z: {mae[2]}\n\n')
 
     plot(f_for_plot, pf_for_plot, save_dir + "/mean_frame")
     # ===============================================================
