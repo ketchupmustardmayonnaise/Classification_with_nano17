@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: True
 resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
 resume_wandb_id: a0fpam95
@@ -18,7 +18,7 @@ fc_num_layer: 1
 fc_hidden_dim: 0
 
 # image
-target_index: 120 #몇 frame으로 자를 것인지
+target_index: 90 #몇 frame으로 자를 것인지
 stride: 1
 
 image_type: rgb # [origin, rgb, diff, zScore]
@@ -34,7 +34,7 @@ val_data_dir: ./dataset/val_dataset.h5
 test_data_dir: ./dataset/test_dataset.h5
 
 save_dir: ../saved_models
-model_dir: ../saved_models/alexnetchange_bidirectional_lstm_08-20_08-51-22/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ../saved_models/convnext_bidirectional_lstm_90frames_10-14_15-58-22/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None

@@ -418,11 +418,15 @@ class ForceEstimation:
         print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+        std_MSE = torch.std(MSE)
+        std_MAE = torch.std(MAE)
+        print(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
 
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)) + '\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+            train_txt_file.write(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
 
         return MSE, MAE
 
