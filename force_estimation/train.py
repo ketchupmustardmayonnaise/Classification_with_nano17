@@ -44,10 +44,10 @@ class ForceEstimation:
             ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
 
             ('image_type', str),  # origin, rgb, diff (str)
-            ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
+            ('image_size', list),  # 이미지를 몇 size로 할 것인지 (int, int)
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
             ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
-            ('xflip', bool)
+            ('xflip', bool),
             # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
 
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
