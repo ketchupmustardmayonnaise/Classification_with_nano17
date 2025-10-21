@@ -42,7 +42,6 @@ class ForceEstimation:
         common_params = [
             ('train_mode', bool),  # train일 때만 학습 (bool)
             ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
-            ('resume', bool),
 
             ('image_type', str),  # origin, rgb, diff (str)
             ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
