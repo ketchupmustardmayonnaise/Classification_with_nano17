@@ -112,7 +112,7 @@ class ForceEstimation:
         # train
         if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=cfg['train_data_dir'], dataset_type='train', xflip=self.xflip)
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
                                                                 shuffle=True)
 

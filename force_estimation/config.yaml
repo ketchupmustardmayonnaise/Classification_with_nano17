@@ -25,6 +25,7 @@ image_type: rgb # [origin, rgb, diff, zScore]
 image_size: !!python/tuple
   - 10
   - 8
+xflip: True
 
 
 

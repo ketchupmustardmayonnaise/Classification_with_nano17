@@ -12,7 +12,7 @@ import torchvision.transforms.functional as TF
 
 
 class RFTDataset(Dataset):
-    def __init__(self, target_index, stride, path='./preprocessed_train_dataset', dataset_type='train'):
+    def __init__(self, target_index, stride, path='./preprocessed_train_dataset', dataset_type='train', xflip=True):
         self.path = path
         self.dataset_type = dataset_type
         self.target_index = target_index
@@ -21,6 +21,7 @@ class RFTDataset(Dataset):
         self.img = []
         self.force = []
         self.label = []
+        self.xflip = xflip
         
         self.prefix = [0]
         self.frame = []
@@ -63,6 +64,16 @@ class RFTDataset(Dataset):
 
             ######## Data Augmentation ########
             if self.dataset_type.lower() == 'train' and self.augmentation == True :
+
+                if self.xflip and random.random() < 0.5:
+                    force[:, 0] *= (-1)  # x만 flip
+
+                    img = torch.stack([
+                        TF.hflip(i)
+                        for i in img
+                    ])
+
+
                 if random.random() < 0.5:
                     translate_x = random.randint(-3, 3)
                     translate_y = random.randint(-3, 3)
