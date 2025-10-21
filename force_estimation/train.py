@@ -48,6 +48,7 @@ class ForceEstimation:
             ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
             ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
+            ('xflip', bool)
             # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
 
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
@@ -133,75 +134,52 @@ class ForceEstimation:
             # self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0,
             #                                       end_factor=args.end_factor, total_iters=args.total_iters)
 
-            if not self.resume:
-                # create directories
-                time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
-                self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
 
-                if not os.path.exists(self.save_dir):
-                    os.makedirs(self.save_dir)
-                copy_config(self.save_dir)
+            # create directories
+            time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+            self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + time_suffix
 
-                # loss
-                if self.loss_type != "MSE+MAE":
-                    self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
+            if not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir)
+            copy_config(self.save_dir)
 
+            # loss
+            if self.loss_type != "MSE+MAE":
+                self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
+
+            # wandb
+            if self.use_wandb:
                 # wandb
-                if self.use_wandb:
-                    # wandb
-                    wandb_config = {
-                        "encoder": self.encoder,
+                wandb_config = {
+                    "encoder": self.encoder,
 
-                        "decoder": self.decoder,
-                        "decoder_layer": self.decoder_layer,
-                        "decoder_output": self.decoder_output,
+                    "decoder": self.decoder,
+                    "decoder_layer": self.decoder_layer,
+                    "decoder_output": self.decoder_output,
 
-                        "fc_num_layer": self.fc_num_layer,
-                        "fc_hidden_dim": self.fc_hidden_dim,
+                    "fc_num_layer": self.fc_num_layer,
+                    "fc_hidden_dim": self.fc_hidden_dim,
 
-                        "target_index": self.target_index,
-                        "stride": self.stride,
+                    "target_index": self.target_index,
+                    "stride": self.stride,
+                    "xflip": self.xflip,
 
-                        "image_type": self.image_type,
-                        "image_size": self.image_size,
+                    "image_type": self.image_type,
+                    "image_size": self.image_size,
 
-                        "optimizer": self.optimizer_type,
-                        "scheduler": self.scheduler_type,
-                        "batch_size": self.batch_size,
-                        "learning_rate": self.learning_rate,
-                        "weight_decay": self.weight_decay,
-                        "loss": self.loss_type,
-                        "loss_weights" : self.loss_weights,
-                    }
+                    "optimizer": self.optimizer_type,
+                    "scheduler": self.scheduler_type,
+                    "batch_size": self.batch_size,
+                    "learning_rate": self.learning_rate,
+                    "weight_decay": self.weight_decay,
+                    "loss": self.loss_type,
+                    "loss_weights" : self.loss_weights,
+                }
 
-                    run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
-                    self.run_log = wandb.init(project="compare_model", config=wandb_config, name=run_name)
+                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
+                self.run_log = wandb.init(project="compare_model", config=wandb_config, name=run_name)
 
                 self.train()
-
-            else: # resume
-                self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
-                checkpoint = torch.load(cfg['model_dir'])
-                self.model.load_state_dict(checkpoint['model'])
-
-                
-                self.optimizer.load_state_dict(checkpoint['optimizer'])
-
-                # loss
-                self.loss_type = checkpoint['loss_type']
-                if self.loss_type == "MSE+MAE":
-                    pass
-                elif self.loss_type == "MSE" :
-                    self.loss = torch.nn.MSELoss()  
-                elif self.loss_type == "MAE" :
-                    self.loss = torch.nn.L1Loss()
-                elif self.loss_type == "huber" :
-                    self.loss = torch.nn.HuberLoss(delta=1.0)    
-                    
-
-                self.run_log = wandb.init(project="rft64_2", id=cfg['resume_wandb_id'], resume="must")
-
-                self.train(checkpoint['epoch'])
 
         # test
         else:

@@ -1,7 +1,5 @@
 train_mode: False
 use_wandb: True
-resume: False # 만약 True라면, model_dir의 모델을 불러와서 학습 재개함.
-resume_wandb_id: a0fpam95
 
 # encoder
 encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange
