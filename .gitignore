@@ -3,3 +3,5 @@ __pycache__
 saved_models
 force_estimation/wandb
 *.h5
+force_estimation/artifacts
+force_estimation/dataset/wandb

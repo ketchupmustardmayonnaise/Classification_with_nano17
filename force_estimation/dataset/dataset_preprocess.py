@@ -34,7 +34,7 @@ import wandb
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-image_size = [10, 8]
+image_size = (24, 12)
 num_classes = 7
 
 dataset_types = ['train', 'val', 'test']

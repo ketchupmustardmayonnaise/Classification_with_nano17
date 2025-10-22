@@ -160,7 +160,7 @@ class ForceEstimation:
             else: path=cfg['dataset_dir']
 
             test_data_dir = f"{path}/test_dataset.h5"
-            train_data_dir = f"{path}/train.h5"
+            train_data_dir = f"{path}/train_dataset.h5"
             val_data_dir = f"{path}/val_dataset.h5"
 
             # test dataset
@@ -217,7 +217,7 @@ class ForceEstimation:
 
         patience = 20
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
-        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
+        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path, use_wandb=self.use_wandb)
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
 
@@ -257,7 +257,6 @@ class ForceEstimation:
             # validate the model
             val_MSE, val_MAE = self.validate(self.val_dataloader)
 
-            
             if self.loss_type == 'MSE+MAE':
                 val_loss_to_monitor = (val_MSE + val_MAE) / 2
             elif self.loss_type == 'MSE':

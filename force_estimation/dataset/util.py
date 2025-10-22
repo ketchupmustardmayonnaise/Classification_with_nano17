@@ -157,25 +157,18 @@ def apply_butterworth_filter(force, img_ts, force_ts):
     return result
 
 def resize_image(input_image, size):
-    if len(input_image.shape) == 5:
-        # 만약 입력이 각 시퀀스인 경우 (test dataset)
-        chunk, frame, c, h, w = input_image.shape
-        image = input_image.reshape((chunk * frame, c, h, w))
-    else:
-        # 만약 입력이 하나의 chunk인 경우 (train/val dataset)
-        image = input_image
-
     # print(size)
-    if size == (10, 8) :
+    if size == (10, 8) or size == [10, 8]:
         pass
     else :
-        # resize each image (cv2 expects (h, w, c), so we transpose before and after)
-        image = np.stack([
-            cv2.resize(img.astype(np.float32).transpose(1, 2, 0), size).transpose(2, 0, 1)
-            for img in image
+        # src (원본 이미지)는 (h, w, c) 순서로 입력해 줘야 함.
+        # size는, (h, w) 순서가 아니라 (w, h) 순서로 입력해 줘야 함.
+        input_image = np.stack([
+            cv2.resize(img.astype(np.float32).transpose(1, 2, 0), (size[1], size[0])).transpose(2, 0, 1)
+            for img in input_image
         ])
 
-    return image.astype(np.float32)
+    return input_image.astype(np.float32)
 
 
 def normalize_image(img: np.array, max: list, mean: list):
@@ -234,9 +227,7 @@ def preprocess(img, force, label, img_ts, force_ts,
     for sequence_index in range(len(img)):
         # 이미지를 채널별로 normalize
         img[sequence_index] = resize_image(img[sequence_index], image_size)
-        
         # img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
-        
         img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
 
         frame.append(int(len(img[sequence_index])))
