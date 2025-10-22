@@ -6,7 +6,7 @@ encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16,
 # encoder_output: 256
 
 # decoder
-decoder: lstm # [lstm, transformer, bidirectional_lstm]
+decoder: bidirectional_lstm # [lstm, transformer, bidirectional_lstm]
 decoder_layer: 2
 decoder_dimension : 128
 decoder_output: 3
@@ -16,7 +16,7 @@ fc_num_layer: 1
 fc_hidden_dim: 0
 
 # image
-target_index: 120 #몇 frame으로 자를 것인지
+target_index: 30 #몇 frame으로 자를 것인지
 stride: 1
 
 image_type: rgb # [origin, rgb, diff, zScore]
