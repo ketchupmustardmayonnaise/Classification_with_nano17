@@ -5,6 +5,10 @@ import ast
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import wandb
+
+from force_estimation.dataset.rftdataset import RFTDataset
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -72,7 +76,7 @@ def lists_for_plot_mean(f, pf):
 
 # 재정렬된 force와 predicted force가 주어지면, 이를 plot하여 저장함.
 # 때문에 force 리스트와 predicted force 리스트의 shape은 완전히 같아야 함. (# of sequence, frames of each sequence, 3)
-def plot(f, pf, save_dir, wandb_artifact=None):
+def plot(f, pf, save_dir, use_wandb=False):
     # 모든 sequence에 대해서 수행
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -115,15 +119,13 @@ def plot(f, pf, save_dir, wandb_artifact=None):
         plt.legend()
         plt.savefig(f'{save_dir}/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
                     format='png', pad_inches=0.1, transparent=False)
-
-        if wandb_artifact is not None:
-            wandb_artifact.add_file(local_path=f'{save_dir}/test_{index}th_data.png',
-                                name=f'{save_dir}/test_{index}th_data.png',
-                                metadata={"MSE": mse, "MAE": mae})
+        if use_wandb: wandb.log({"test_{index}th_data":
+                        wandb.Image(plt.imread(f'{save_dir}/test_{index}th_data.png'),
+                                    metadata={"mse": mse, "mae": mae}) })
 
 
 # force와, chunk 상태의 predicted force가 주어지면, 각기 다른 방식으로 plot하여 저장하고 MSE & MAE를 계산함.
-def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, wandb_artifact=None):
+def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, use_wandb=False):
 
     # ===============================================================
     # 중간 frame만 이어붙이는 식으로 예측
@@ -143,7 +145,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, wandb_artifact=
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/median_frame", wandb_artifact)
+    plot(f_for_plot, pf_for_plot, save_dir + "/median_frame", use_wandb=use_wandb)
     # ===============================================================
 
 
@@ -165,7 +167,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, wandb_artifact=
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/last_frame", wandb_artifact)
+    plot(f_for_plot, pf_for_plot, save_dir + "/last_frame", use_wandb=use_wandb)
     # ===============================================================
 
 
@@ -187,7 +189,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, wandb_artifact=
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/mean_frame", wandb_artifact)
+    plot(f_for_plot, pf_for_plot, save_dir + "/mean_frame", use_wandb=use_wandb)
     # ===============================================================
 
 
@@ -257,3 +259,8 @@ def parse_args():
     parser.add_argument('--dropout', default=None, type=float)
     parser.add_argument('--loss', default=None, type=str)
     return parser.parse_args()
+
+def read(data_dir, split):
+    filename = split + ".pt"
+    x, y = torch.load(os.path.join(data_dir, filename))
+    return RFTDataset(x, y)

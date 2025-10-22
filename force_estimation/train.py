@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
 
+
 class ForceEstimation:
     def __init__(self, cfg):
         # parameters
@@ -87,26 +88,9 @@ class ForceEstimation:
                              self.fc_num_layer,
                              self.target_index,
                              self.fc_hidden_dim,
-                             self.image_size,
-                             )
+                             self.image_size)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
-
-        # test dataset
-        self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=self.test_data_dir, dataset_type='test')
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
-
-        # optimizer
-        if self.optimizer_type.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
-                                              eps=1e-08, weight_decay=self.weight_decay, amsgrad=False)
-        elif self.optimizer_type.lower() == 'rmsprop':
-            self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate,
-                                                 weight_decay=self.weight_decay)
-        else:
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate,
-                                             weight_decay=self.weight_decay)
-            self.optimizer_type = 'sgd'
 
         # train
         if self.train_mode:
@@ -118,27 +102,26 @@ class ForceEstimation:
             if not os.path.exists(self.save_dir): os.makedirs(self.save_dir)
             copy_config(self.save_dir)
 
-            # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=self.train_data_dir, dataset_type='train', xflip=self.xflip)
-            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
-
-            # validation dataset
-            self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=self.train_data_dir, dataset_type='val')
-            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
-            
-            self.learning_rate = float(self.learning_rate)
-
-            
             # scheduler
-            if self.scheduler_type.lower() == 'step':
-                self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
+            if self.scheduler_type.lower() == 'step': self.scheduler = lr_scheduler.StepLR(self.optimizer, step_size=5, gamma=0.99)
             else: self.scheduler = None
 
-            # loss
-            if self.loss_type != "MSE+MAE":
-                self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
+            # optimizer
+            if self.optimizer_type.lower() == 'adam':
+                self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
+                                                  eps=1e-08, weight_decay=self.weight_decay, amsgrad=False)
+            elif self.optimizer_type.lower() == 'rmsprop':
+                self.optimizer = torch.optim.RMSprop(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            else:
+                self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+                self.optimizer_type = 'sgd'
 
-            # wandb
+            # loss
+            self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
+
+            self.learning_rate = float(self.learning_rate)
+
+            # wandb 사용한다면
             if self.use_wandb:
                 # wandb
                 wandb_config = {
@@ -168,16 +151,45 @@ class ForceEstimation:
                 }
 
                 run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
-                self.run_log = wandb.init(project="compare_model", config=wandb_config, name=run_name)
+                self.run_log = wandb.init(project="compare_model", job_type="train_model", config=wandb_config, name=run_name)
+
+                raw_data_artifact = self.run_log.use_artifact('pinkmiro-kyung-hee-university/compare_model/dataset:latest', type='dataset')
+                path = raw_data_artifact.download()
+
+            # wandb 사용하지 않는다면
+            else: path=cfg['dataset_dir']
+
+            test_data_dir = f"{path}/test_dataset.h5"
+            train_data_dir = f"{path}/train.h5"
+            val_data_dir = f"{path}/val_dataset.h5"
+
+            # test dataset
+            self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=test_data_dir, dataset_type='test')
+            self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
+
+            # train dataset
+            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=train_data_dir, dataset_type='train', xflip=self.xflip)
+            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
+
+            # validation dataset
+            self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=val_data_dir, dataset_type='val')
+            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             self.train()
 
         # test
         else:
+            self.use_wandb = False
+            self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=f"{cfg['dataset_dir']}/test_dataset.h5", dataset_type='test')
+            self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
+
             self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
             checkpoint = torch.load(cfg['model_dir'])
             self.model.load_state_dict(checkpoint)
             self.test()
+
+
+
 
     def validate(self, dataloader):
         self.model.eval()
@@ -195,6 +207,9 @@ class ForceEstimation:
         MSE /= len(dataloader)
         MAE /= len(dataloader)
         return MSE, MAE
+
+
+
 
     def train(self, start_epoch=0):
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
@@ -299,6 +314,9 @@ class ForceEstimation:
         
         if self.use_wandb: wandb.finish()
 
+
+
+
     def test(self):
         self.model.eval()
 
@@ -351,13 +369,10 @@ class ForceEstimation:
                     if batch_start >= len(X): break
 
         # wandb에 test 이미지를 저장할 artifact를 만듦
-        # artifact_for_save_test = wandb.Artifact(name=)
+        # artifact_for_save_test = wandb.Artifact("")
 
         train_txt_path = self.save_dir + "/train.txt"
-        if wandb.run is not None:
-            artifact = wandb.Artifact(name="test_result", type="test_result")
-            plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path, artifact)
-        else: plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
+        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)
