@@ -15,7 +15,6 @@ from torch.utils.data import DataLoader
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
 
-
 class ForceEstimation:
     def __init__(self, cfg):
         # parameters
@@ -152,6 +151,7 @@ class ForceEstimation:
 
                 run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
                 self.run_log = wandb.init(project="compare_model", job_type="train_model", config=wandb_config, name=run_name)
+                self.model_artifact = wandb.Artifact(f"model_{self.run_log.id}", type="model")
 
                 raw_data_artifact = self.run_log.use_artifact('pinkmiro-kyung-hee-university/compare_model/dataset:latest', type='dataset')
                 path = raw_data_artifact.download()
@@ -217,7 +217,7 @@ class ForceEstimation:
 
         patience = 20
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
-        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path, use_wandb=self.use_wandb)
+        early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
 
@@ -264,7 +264,13 @@ class ForceEstimation:
             else: # MAE or default
                 val_loss_to_monitor = val_MAE
 
-            early_stopping(val_loss_to_monitor, self.model)
+            if early_stopping(val_loss_to_monitor, self.model):
+                torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "best_model.pt"))
+                self.model_artifact.add_file(os.path.join(wandb.run.dir, "best_model.pt"))
+
+            torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "current_model.pt"))
+            self.model_artifact.add_file(os.path.join(wandb.run.dir, "current_model.pt"))
+            wandb.log_artifact(self.model_artifact)
             
             if early_stopping.early_stop:
                 print("Early stopping")

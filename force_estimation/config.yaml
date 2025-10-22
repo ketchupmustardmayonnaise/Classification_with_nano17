@@ -36,6 +36,6 @@ scheduler_type: None
 loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
 
 batch_size: 8
-num_epoch: 200
+num_epoch: 1
 learning_rate: 0.0001
 weight_decay: 0.001
