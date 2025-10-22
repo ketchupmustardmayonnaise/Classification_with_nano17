@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import zipfile
 import yaml
 
-def load_data_from_npz(path, target_index):
+def load_data_from_npz(path):
     img = []
     force = []
 
@@ -25,7 +25,6 @@ def load_data_from_npz(path, target_index):
                     with zf.open(npzfile) as nf:
                         data = np.load(nf)
                         if len(data['img_ts']) > len(data['force_ts']): continue
-                        if len(data['img']) < target_index: continue
 
                         img.append(data['img'])
                         force.append(data['force'])

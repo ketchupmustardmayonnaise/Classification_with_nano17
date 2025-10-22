@@ -1,0 +1,49 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            g595pkev864y88hm1336v92mn5p4xwhl:
+                codePath: force_estimation\dataset\dataset_preprocess.py
+                codePathLocal: dataset_preprocess.py
+                cpu_count: 6
+                cpu_count_logical: 12
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "999286632448"
+                        used: "471897358336"
+                email: pinkmiro@khu.ac.kr
+                executable: C:\Users\user\.conda\envs\capacitive_screen\python.exe
+                git:
+                    commit: 582ebb3d2dd3ddc44f6104bc054dcb576be59dfd
+                    remote: https://github.com/ketchupmustardmayonnaise/Classification_with_nano17.git
+                gpu: NVIDIA GeForce RTX 4070 SUPER
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 7168
+                      memoryTotal: "12878610432"
+                      name: NVIDIA GeForce RTX 4070 SUPER
+                      uuid: GPU-16677b19-5290-ff43-2b99-8d17474979f9
+                host: DESKTOP-DAB4DR7
+                memory:
+                    total: "33396543488"
+                os: Windows-10-10.0.26100-SP0
+                program: C:\Users\user\PycharmProjects\Classification_with_nano17\force_estimation\dataset\dataset_preprocess.py
+                python: CPython 3.11.9
+                root: C:\Users\user\PycharmProjects\Classification_with_nano17\force_estimation\dataset
+                startedAt: "2025-10-22T05:16:11.063258Z"
+                writerId: g595pkev864y88hm1336v92mn5p4xwhl
+        m: []
+        python_version: 3.11.9
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "4": 3.11.9
+            "5": 0.21.0
+            "8":
+                - 3
+            "12": 0.21.0
+            "13": windows-amd64

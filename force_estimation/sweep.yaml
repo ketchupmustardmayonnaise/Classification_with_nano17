@@ -51,8 +51,6 @@ parameters:
     value: None
   loss_type:
     value: "MSE"
-  loss_weights:
-    value: [1.0, 1.0, 1.0]
 
   batch_size:
     value: 8

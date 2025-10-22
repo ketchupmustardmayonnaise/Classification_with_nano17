@@ -72,12 +72,10 @@ def lists_for_plot_mean(f, pf):
 
 # 재정렬된 force와 predicted force가 주어지면, 이를 plot하여 저장함.
 # 때문에 force 리스트와 predicted force 리스트의 shape은 완전히 같아야 함. (# of sequence, frames of each sequence, 3)
-def plot(f, pf, save_dir):
+def plot(f, pf, save_dir, wandb_artifact=None):
     # 모든 sequence에 대해서 수행
-
-    dir = f'{save_dir}/test'
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
     for index in range(len(f)):
         fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
@@ -88,10 +86,10 @@ def plot(f, pf, save_dir):
         plt.suptitle(f"{index}th test sequence data")
 
         # 해당 plot에 대해서만 MSE, MAE
-        mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                                      reduction='none'), axis=0)
-        mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
-                                                     reduction='none'), axis=0)
+        mse = torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                                      reduction='none')
+        mae = torch.nn.functional.l1_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(),
+                                                     reduction='none')
 
         for num_data in range(3):  # 3개 Fx, Fy, Fz에 대하여
             axes[num_data].plot(np.array(_f)[:, num_data], color='r', label='force')
@@ -102,7 +100,7 @@ def plot(f, pf, save_dir):
             elif num_data == 2: axes[num_data].set_ylim([-5, 0.5])
 
             axes[num_data].text(x=0.05, y=0.05,
-                                s=f'MSE: {mse[num_data]:.4f}, MAE: {mae[num_data]:.4f}',
+                                s=f'MSE: {torch.mean(mse, axis=0)[num_data]:.4f}, MAE: {torch.mean(mae, axis=0)[num_data]:.4f}',
                                 transform=axes[num_data].transAxes,
                                 horizontalalignment='left',
                                 verticalalignment='top')
@@ -115,12 +113,17 @@ def plot(f, pf, save_dir):
                 axes[num_data].set_title('FZ')
 
         plt.legend()
-        plt.savefig(dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
+        plt.savefig(f'{save_dir}/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
                     format='png', pad_inches=0.1, transparent=False)
+
+        if wandb_artifact is not None:
+            wandb_artifact.add_file(local_path=f'{save_dir}/test_{index}th_data.png',
+                                name=f'{save_dir}/test_{index}th_data.png',
+                                metadata={"MSE": mse, "MAE": mae})
 
 
 # force와, chunk 상태의 predicted force가 주어지면, 각기 다른 방식으로 plot하여 저장하고 MSE & MAE를 계산함.
-def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
+def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, wandb_artifact=None):
 
     # ===============================================================
     # 중간 frame만 이어붙이는 식으로 예측
@@ -140,7 +143,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/median_frame")
+    plot(f_for_plot, pf_for_plot, save_dir + "/median_frame", wandb_artifact)
     # ===============================================================
 
 
@@ -162,7 +165,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/last_frame")
+    plot(f_for_plot, pf_for_plot, save_dir + "/last_frame", wandb_artifact)
     # ===============================================================
 
 
@@ -184,7 +187,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n\n')
 
-    plot(f_for_plot, pf_for_plot, save_dir + "/mean_frame")
+    plot(f_for_plot, pf_for_plot, save_dir + "/mean_frame", wandb_artifact)
     # ===============================================================
 
 

@@ -26,6 +26,7 @@ from util import *
 import numpy as np
 import yaml
 import traceback
+import wandb
 
 
 # ========================================================
@@ -33,9 +34,7 @@ import traceback
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-image_size = config.get('image_size')
-target_index = config.get('target_index')
-stride = config.get('stride')
+image_size = [10, 8]
 num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
@@ -50,13 +49,15 @@ f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 z_threshold = -7
 # ========================================================
 
+wandb.login()
+run = wandb.init(project="compare_model", job_type="upload-dataset", name="dataset")
 
 for d_type in dataset_types :
     dataset_type = d_type
 
     original_image_size = (10, 8)
 
-    img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type, target_index)
+    img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type)
     img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std, f_mean, f_std, image_size, num_classes)
     
     file_name = f'{dataset_type}_dataset.h5'
@@ -103,6 +104,18 @@ for d_type in dataset_types :
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
             
     print(f'{d_type} complete')
+
+    '''
+    # wandb에 artifact로 저장
+    artifact = wandb.Artifact(name=file_name, type="dataset",
+                              metadata={"image_size": image_size,
+                                        "z_threshold": z_threshold,
+                                        "img_max": img_max,
+                                        "img_mean": img_mean,
+                                        "img_std": img_std})
+    artifact.add_file(local_path=file_name)
+    run.log_artifact(artifact)
+    '''
 
 
 print("Complete to resize lots of images and save")

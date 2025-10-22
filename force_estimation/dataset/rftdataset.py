@@ -42,6 +42,7 @@ class RFTDataset(Dataset):
             self.prefix.append(self.frame[i] + self.prefix[-1])
         self.len = sum(self.frame)
 
+
     def __getitem__(self, index):
         if self.dataset_type.lower() == 'test':
             img = self.img[index][:]
