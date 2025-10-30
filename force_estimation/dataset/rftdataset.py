@@ -74,7 +74,7 @@ class RFTDataset(Dataset):
                         for i in img
                     ])
 
-
+                '''
                 if random.random() < 0.5:
                     translate_x = random.randint(-3, 3)
                     translate_y = random.randint(-3, 3)
@@ -101,6 +101,7 @@ class RFTDataset(Dataset):
                                                     [0,      0,     1]], dtype=force.dtype)
                     
                     force = force @ rotation_matrix.T
+                '''
 
             return (
                 img,

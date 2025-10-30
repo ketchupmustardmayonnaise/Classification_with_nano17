@@ -95,8 +95,8 @@ class ForceEstimation:
         if self.train_mode:
 
             # create directories
-            time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + "_" + time_suffix
+            self.time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+            self.save_dir = cfg['save_dir'] + "/" + self.encoder + "_" + self.decoder + "_" + self.time_suffix
 
             if not os.path.exists(self.save_dir): os.makedirs(self.save_dir)
             copy_config(self.save_dir)
@@ -149,7 +149,7 @@ class ForceEstimation:
                     "loss": self.loss_type
                 }
 
-                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{time_suffix}_{self.fc_num_layer}layer_{self.loss_type}'
+                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{self.time_suffix}_{self.fc_num_layer}layer_{self.loss_type}_onlyxflipdataaugmentation'
                 self.run_log = wandb.init(project="compare_model", job_type="train_model", config=wandb_config, name=run_name)
                 self.model_artifact = wandb.Artifact(f"model_{self.run_log.id}", type="model")
 
@@ -258,13 +258,19 @@ class ForceEstimation:
             else: # MAE or default
                 val_loss_to_monitor = val_MAE
 
-            if early_stopping(val_loss_to_monitor, self.model):
-                torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "best_model.pt"))
-                self.model_artifact.add_file(os.path.join(wandb.run.dir, "best_model.pt"))
+            is_best_loss =  early_stopping(val_loss_to_monitor, self.model)
+            # wandb 에 업로드
+            if self.use_wandb:
+                new_version_artifact = wandb.Artifact(f"{self.encoder}_{self.decoder}_{self.time_suffix}_{self.target_index}frames", type="model")
+                if is_best_loss:
+                    torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "best_model.pt"))
+                    new_version_artifact.add_file(os.path.join(wandb.run.dir, "best_model.pt"))
 
-            torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "current_model.pt"))
-            self.model_artifact.add_file(os.path.join(wandb.run.dir, "current_model.pt"))
-            wandb.log_artifact(self.model_artifact)
+                else: new_version_artifact.add_file(os.path.join(wandb.run.dir, "best_model.pt"))
+
+                torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "current_model.pt"))
+                new_version_artifact.add_file(os.path.join(wandb.run.dir, "current_model.pt"))
+                wandb.log_artifact(new_version_artifact)
             
             if early_stopping.early_stop:
                 print("Early stopping")
