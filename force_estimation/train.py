@@ -153,15 +153,9 @@ class ForceEstimation:
                 self.run_log = wandb.init(project="compare_model", job_type="train_model", config=wandb_config, name=run_name)
                 self.model_artifact = wandb.Artifact(f"model_{self.run_log.id}", type="model")
 
-                raw_data_artifact = self.run_log.use_artifact('pinkmiro-kyung-hee-university/compare_model/dataset:latest', type='dataset')
-                path = raw_data_artifact.download()
-
-            # wandb 사용하지 않는다면
-            else: path=cfg['dataset_dir']
-
-            test_data_dir = f"{path}/test_dataset.h5"
-            train_data_dir = f"{path}/train_dataset.h5"
-            val_data_dir = f"{path}/val_dataset.h5"
+            test_data_dir = f"{cfg['dataset_dir']}/test_dataset.h5"
+            train_data_dir = f"{cfg['dataset_dir']}/train_dataset.h5"
+            val_data_dir = f"{cfg['dataset_dir']}/val_dataset.h5"
 
             # test dataset
             self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=test_data_dir, dataset_type='test')
