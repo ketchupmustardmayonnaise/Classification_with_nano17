@@ -34,30 +34,20 @@ import wandb
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-image_size = (10, 8)
+image_size = (224, 224)
 num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
 
-img_max = [281.0000, 264.0000, 264.0000]
+img_max = [275.2952, 259.5615, 259.5615]
 img_mean = [12.6907, -0.0000, -0.0000]
-img_std = [36.3523, 5.6774, 7.6739]
+img_std = [31.8587, 4.3563, 5.7511]
 
 f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
 z_threshold = -7
 # ========================================================
-
-# wandb에 artifact로 저장
-wandb.login()
-run = wandb.init(project="compare_model", job_type="upload-dataset", name="dataset")
-artifact = wandb.Artifact(name=f"dataset", type="dataset",
-                          metadata={"image_size": image_size,
-                                    "z_threshold": z_threshold,
-                                    "img_max": img_max,
-                                    "img_mean": img_mean,
-                                    "img_std": img_std})
 
 for d_type in dataset_types :
     dataset_type = d_type
@@ -111,7 +101,3 @@ for d_type in dataset_types :
             base_group.create_dataset('filtered_force', data=filtered_force, compression='gzip', compression_opts=9)
             
     print(f'{d_type} complete')
-    artifact.add_file(local_path=file_name)
-
-run.log_artifact(artifact)
-print("Complete to resize lots of images and save")

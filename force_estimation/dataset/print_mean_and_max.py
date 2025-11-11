@@ -1,7 +1,6 @@
 import numpy as np
 import cv2  # 리사이즈를 위해 OpenCV 사용 (예시)
 from util import *
-import seaborn as sns
 import matplotlib.pyplot as plt
 
 # --- 설정 (Configuration) ---
@@ -14,7 +13,7 @@ f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.8673
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
 
 # --- 데이터 로딩 (Data Loading) ---
-img, force, _, img_ts, force_ts = load_data_from_npz(path, target_index)
+img, force, _, img_ts, force_ts = load_data_from_npz(path)
 img_frequency, force_frequency = measure_image_and_force_frequency(img_ts, force_ts)
 
 print(f"이미지 수집 주기: {img_frequency}")
@@ -52,7 +51,7 @@ print("Resizing all frames...")
 # 1. 모든 시퀀스와 프레임을 순회하며 리사이즈 후 리스트에 수집
 for sequence in img:
     # sequence의 shape: (frames, 3, H, W)
-    resized_sequences.append(sequence)
+    resized_sequences.append(resize_image(sequence, image_size))
 
 # 2. 수집된 프레임 리스트를 하나의 거대한 NumPy 배열로 통합
 #    이 과정이 메모리를 가장 많이 사용하지만, 기존 코드보다 훨씬 효율적입니다.
@@ -86,6 +85,3 @@ print("\n--- Channel 2 ---")
 print(f"Mean: {mean_ch2:.4f}, Std: {std_ch2:.4f}, Max: {max_ch2:.4f}")
 print("\n--- Channel 3 ---")
 print(f"Mean: {mean_ch3:.4f}, Std: {std_ch3:.4f}, Max: {max_ch3:.4f}")
-
-sns.kdeplot(channel_1.flatten())
-plt.show()
