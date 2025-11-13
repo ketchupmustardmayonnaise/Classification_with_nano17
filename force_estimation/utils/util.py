@@ -95,8 +95,8 @@ def plot(f, pf, save_dir):
                 axes[num_data].set_title('FZ')
 
         plt.legend()
-        plt.savefig(dir + f'/test_{index}th_data.png', dpi=300, facecolor='white', edgecolor='black',
-                    format='png', pad_inches=0.1, transparent=False)
+        plt.savefig(dir + f'/test_{index}th_data.svg', dpi=300, facecolor='white', edgecolor='black',
+                    format='svg', pad_inches=0.1, transparent=True)
 
 
 # force와, chunk 상태의 predicted force가 주어지면, 각기 다른 방식으로 plot하여 저장하고 MSE & MAE를 계산함.

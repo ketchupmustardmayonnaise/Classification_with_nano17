@@ -243,7 +243,7 @@ def extract_frame_segments(
         original_img,
         original_force,
         frame=120,
-        threshold=130):
+        threshold=100):
     '''
     이미지 전체를 보면서, 이미지의 최대 capacitance value가 threshold를 넘지 못하는 경우
     터치가 안 된 순간으로 간주하고, 이를 제외함.
