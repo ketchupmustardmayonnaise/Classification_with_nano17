@@ -1,4 +1,4 @@
-train_mode: False
+train_mode: True
 use_wandb: True
 
 # image
@@ -8,9 +8,10 @@ target_index: 120 #몇 frame으로 자를 것인지
 train_data_dir: ./dataset/train_dataset.h5
 val_data_dir: ./dataset/val_dataset.h5
 test_data_dir: ./dataset/test_dataset.h5
+xflip: True
 
 save_dir: ../saved_models
-model_dir: ../saved_models/_10-16_00-19-33/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ../saved_models/_11-02_07-12-36/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 loss_type: MSE # [MSE, MAE, MSE+MAE, huber]

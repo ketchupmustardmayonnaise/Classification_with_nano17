@@ -161,7 +161,7 @@ def apply_butterworth_filter(force, img_ts, force_ts):
 def extract_frame_segments(
         original_img,
         original_force,
-        threshold=130):
+        threshold=100):
     """
     비디오 시퀀스에서 지정된 (start, end) 범위의 프레임 세그먼트들을 추출합니다.
 

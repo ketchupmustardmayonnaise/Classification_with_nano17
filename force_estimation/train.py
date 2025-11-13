@@ -48,6 +48,7 @@ class ForceEstimation:
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
             ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
             # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
+            ('xflip', bool),
 
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
 
@@ -105,7 +106,7 @@ class ForceEstimation:
         # train
         if self.train_mode:
             # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, path=cfg['train_data_dir'], dataset_type='train')
+            self.train_dataset = RFTDataset(target_index=self.target_index, path=cfg['train_data_dir'], dataset_type='train', xflip=self.xflip)
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
                                                                 shuffle=True)
 
@@ -338,11 +339,17 @@ class ForceEstimation:
         print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
+        std_MSE = torch.std(MSE)
+        std_MAE = torch.std(MAE)
+        print(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
 
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)) + '\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+            std_MSE = torch.std(MSE)
+            std_MAE = torch.std(MAE)
+            train_txt_file.write(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
 
         return MSE, MAE
 
