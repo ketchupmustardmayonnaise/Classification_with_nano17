@@ -2,7 +2,7 @@ train_mode: False
 use_wandb: True
 
 save_dir: ../saved_models
-model_dir: ../saved_models/3DTouchForce_10-15_23-00-57/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ../saved_models/3DTouchForce_threshold=100_11-14_01-34-35/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 loss_type: MSE # [MSE, MAE, MSE+MAE, huber]

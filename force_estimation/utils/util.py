@@ -113,13 +113,13 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path):
         f_for_plot.append(f[seq_index])
         pf_for_plot.append(pf[seq_index])
 
-        mse = torch.mean(torch.nn.functional.mse_loss(torch.Tensor(f[seq_index]).float(), torch.Tensor(pf[seq_index]).float(),
-                                                      reduction='none'), axis=0)
-        mae = torch.mean(torch.nn.functional.l1_loss(torch.Tensor(f[seq_index]).float(), torch.Tensor(pf[seq_index]).float(),
-                                                     reduction='none'), axis=0)
+        mse = torch.nn.functional.mse_loss(torch.Tensor(f[seq_index]).float(), torch.Tensor(pf[seq_index]).float(),
+                                            reduction='none')
+        mae = torch.nn.functional.l1_loss(torch.Tensor(f[seq_index]).float(), torch.Tensor(pf[seq_index]).float(),
+                                                     reduction='none')
 
-        mse_for_plot.extend(mse)
-        mae_for_plot.extend(mae)
+        mse_for_plot.extend(mse.tolist())
+        mae_for_plot.extend(mae.tolist())
 
     with open(train_txt_path, 'a') as train_txt_file:
         train_txt_file.write("\nTest: plot\n")
