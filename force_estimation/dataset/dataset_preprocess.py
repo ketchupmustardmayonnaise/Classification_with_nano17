@@ -34,14 +34,14 @@ import wandb
 with open("../config.yaml", 'r+', encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-image_size = (224, 224)
+image_size = (10, 8)
 num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
 
-img_max = [275.2952, 259.5615, 259.5615]
-img_mean = [12.6907, -0.0000, -0.0000]
-img_std = [31.8587, 4.3563, 5.7511]
+img_max = [572.0000, 527.0000, 525.0000]
+img_mean = [54.7387, -0.0007, 0.0000]
+img_std = [129.8699, 9.8517, 10.8983]
 
 f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
 f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
