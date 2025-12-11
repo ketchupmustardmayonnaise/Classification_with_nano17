@@ -89,7 +89,7 @@ class ForceEstimation:
                              self.fc_hidden_dim,
                              self.image_size)
         self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
+        torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 1, self.image_size[0], self.image_size[1]))
 
         # train
         if self.train_mode:
@@ -192,7 +192,7 @@ class ForceEstimation:
 
         with torch.no_grad():
             for X, force, y in dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force[:, 2:, :].to(self.device)
                 pred_force = self.model(X)
 
                 MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='mean')
@@ -226,7 +226,7 @@ class ForceEstimation:
             for batch in progress_bar:
                 X, force, y = batch
                 # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force[:, 2:, :].to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)

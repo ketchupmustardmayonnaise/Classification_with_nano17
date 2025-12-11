@@ -1,11 +1,14 @@
 from sys import exception
-
-
 from model.lstm import *
 from model.transformer import *
 from model.convlstm import *
 import torch.nn.functional as F
+from model.capcontact_generator import Generator
 from torchvision import models
+import torch
+
+img_mean = [0.0461, 0.0000, -0.0000]
+img_std = [0.1575, 0.0239, 0.0338]
 
 class ConvLSTMDecoder(nn.Module):
     def __init__(self, input_dim, hidden_dims, kernel_sizes, num_layers, output_size):
@@ -77,6 +80,12 @@ class CFModel(nn.Module):
         self.decoder_input_size = 1000
         self.decoder_type = decoder
 
+        self.generator = Generator()
+        checkpoint = torch.load('model/A.tar')
+        self.generator.load_state_dict(checkpoint['generator_state_dict'])
+        for param in self.generator.parameters():
+            param.requires_grad = False
+
         if encoder.lower() == 'resnet18':
             self.extractor = True
             self.pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -125,7 +134,7 @@ class CFModel(nn.Module):
             new_stem = nn.Sequential(
                         nn.Conv2d(in_channels= 3, out_channels= 96, kernel_size=3, stride=1, padding=1),
                         # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
-                        nn.LayerNorm([96, 10, 8]))
+                        nn.LayerNorm([96, 80, 64]))
             pretrained_model.features[0] = new_stem
             self.encoder = nn.Sequential(
                 pretrained_model.features[0],
@@ -188,6 +197,30 @@ class CFModel(nn.Module):
         # input.shape = (batch, target_index, channel, height, width)
         b, t, c, h, w = input.shape
         x = input.view((b * t, c, h, w))
+
+        # generator
+        x /= 2048 # normalize
+        x = self.generator(x)
+
+        # RGB로 나눔
+        x = x.view((b, t, c, h*8, w*8))
+        f_t = x[:, 2:, :, :, :]
+        f_t_1 = x[:, 1:-1, :, :, :]
+        diff1 = f_t - f_t_1
+
+        f_t_2 = x[:, 0:-2, :, :, :]
+        diff2 = diff1 - (f_t_1 - f_t_2)
+
+        x = torch.cat([f_t, diff1, diff2], dim=2)
+
+        # convnext는 각 이미지를 normalize해야 하기 때문에, 사전에 구해 놓았던 train dataset에서의 평균을 뺌
+        x -= torch.Tensor(img_mean).to('cuda').reshape(1, 1, -1, 1, 1)
+        x /= torch.Tensor(img_std).to('cuda').reshape(1, 1, -1, 1, 1)
+
+
+        # 다시 shape 변경
+        b, t, c, h, w = x.shape
+        x = x.view((b * t, c, h, w))
         
         x = self.encoder(x)
         if self.decoder_type in ['lstm', 'gru', 'transformer', 'bidirectional_lstm']:

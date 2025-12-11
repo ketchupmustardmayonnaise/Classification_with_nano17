@@ -206,30 +206,21 @@ def normalize_image(img: np.array, max: list, mean: list):
     return img
 
 
-def preprocess(img, force, label, img_ts, force_ts,
-               img_max, img_mean, img_std, f_mean, f_std ,image_size, num_classes):
+def preprocess(img, force, label, img_ts, force_ts, num_classes):
     '''
     모든 전처리 여기에서 진행
     '''
-
-    img = divide_RGB_channels(img, img_ts)
 
     # force data에 low-pass filter를 걺
     force = apply_butterworth_filter(force, img_ts, force_ts)
 
     # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
     force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-
-    # force = z_score_of_force(force, f_mean, f_std)
     
     frame = []
 
     for sequence_index in range(len(img)):
-        # 이미지를 채널별로 normalize
-        img[sequence_index] = resize_image(img[sequence_index], image_size)
-        # img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
-        img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
-
+        img[sequence_index] = np.expand_dims(img[sequence_index], 1)
         frame.append(int(len(img[sequence_index])))
     
     

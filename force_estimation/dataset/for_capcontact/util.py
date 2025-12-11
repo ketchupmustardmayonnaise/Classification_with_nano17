@@ -70,7 +70,7 @@ def z_score_of_force(force_list:list, mean:list, std:list):
 
 
 
-def divide_RGB_channels(img, img_ts):
+def divide_RGB_channels(img):
     ''' 첫 번째와 두 번째 프레임은 버리되, 나머지 프레임은 3 Chanenl 이미지로 '''
     result = []
     for sequence_idx in range(len(img)):
@@ -88,12 +88,10 @@ def divide_RGB_channels(img, img_ts):
             diff_ = previous_frame - p_previous_frame
             p_diff = diff - diff_
 
-            new_frame = np.vstack([current_frame.reshape((1, 10, 8)), diff.reshape((1, 10, 8)), p_diff.reshape((1, 10, 8))])
+            new_frame = np.vstack([current_frame.reshape((1, 80, 64)), diff.reshape((1, 80, 64)), p_diff.reshape((1, 80, 64))])
             if np.isnan(new_frame).any():
                 continue
             new_seq.append(new_frame)
-
-        img_ts[sequence_idx] = img_ts[sequence_idx][2:]
         result.append(np.array(new_seq))
 
     return result
@@ -207,13 +205,10 @@ def normalize_image(img: np.array, max: list, mean: list):
 
 
 def preprocess(img, force, label, img_ts, force_ts,
-               img_max, img_mean, img_std, f_mean, f_std ,image_size, num_classes):
+               image_size, num_classes):
     '''
     모든 전처리 여기에서 진행
     '''
-
-    img = divide_RGB_channels(img, img_ts)
-
     # force data에 low-pass filter를 걺
     force = apply_butterworth_filter(force, img_ts, force_ts)
 
@@ -225,11 +220,6 @@ def preprocess(img, force, label, img_ts, force_ts,
     frame = []
 
     for sequence_index in range(len(img)):
-        # 이미지를 채널별로 normalize
-        img[sequence_index] = resize_image(img[sequence_index], image_size)
-        # img[sequence_index] = normalize_image(img[sequence_index], img_max, img_mean)
-        img[sequence_index] = z_score_of_image(img[sequence_index], img_mean, img_std)
-
         frame.append(int(len(img[sequence_index])))
     
     

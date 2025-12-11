@@ -39,13 +39,6 @@ num_classes = 7
 
 dataset_types = ['train', 'val', 'test']
 
-img_max = [572.0000, 527.0000, 525.0000]
-img_mean = [54.7387, -0.0007, 0.0000]
-img_std = [129.8699, 9.8517, 10.8983]
-
-f_mean = [1.51290077e-01,4.33448139e-02,-1.19329080e+00, 7.06875598e-03, -1.86735749e-02, 2.39680678e-05]
-f_std = [0.56331648, 0.66661553, 1.36792603, 0.02959986, 0.02169826, 0.00322406]
-
 z_threshold = -7
 # ========================================================
 
@@ -55,7 +48,7 @@ for d_type in dataset_types :
     original_image_size = (10, 8)
 
     img, force, label, img_ts, force_ts = load_data_from_npz(dataset_type)
-    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, img_max, img_mean, img_std, f_mean, f_std, image_size, num_classes)
+    img, force, label, frame = preprocess(img, force, label, img_ts, force_ts, num_classes)
     
     file_name = f'{dataset_type}_dataset.h5'
     
