@@ -192,7 +192,7 @@ class ForceEstimation:
 
         with torch.no_grad():
             for X, force, y in dataloader:
-                X, y, force = X.float().to(self.device), y.to(self.device), force[:, 2:, :].to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
                 pred_force = self.model(X)
 
                 MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='mean')
@@ -209,7 +209,7 @@ class ForceEstimation:
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
-        patience = 20
+        patience = 5
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
         for epoch in range(start_epoch, self.num_epoch):
@@ -226,7 +226,7 @@ class ForceEstimation:
             for batch in progress_bar:
                 X, force, y = batch
                 # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
-                X, y, force = X.float().to(self.device), y.to(self.device), force[:, 2:, :].to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
@@ -333,17 +333,17 @@ class ForceEstimation:
         
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
-                _X = _X.squeeze().tolist()
-                _force = _force.squeeze().tolist()
+                _X = _X.squeeze(0).tolist()
+                _force = _force.squeeze(0).tolist()
 
-                f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
+                f.append(_force[2:]) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
                 # 각 시퀀스를 sliding window씩 자름
                 X = []
                 force = []
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i+self.target_index])
-                    force.append(_force[i:i+self.target_index])
+                    force.append(_force[i+2:i+self.target_index])
                 
                 
                 pf.append([])
@@ -377,7 +377,7 @@ class ForceEstimation:
         # artifact_for_save_test = wandb.Artifact("")
 
         train_txt_path = self.save_dir + "/train.txt"
-        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
+        plot_for_lstm(f, pf, self.target_index - 2, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)

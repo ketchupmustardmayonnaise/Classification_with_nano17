@@ -7,9 +7,6 @@ from model.capcontact_generator import Generator
 from torchvision import models
 import torch
 
-img_mean = [0.0461, 0.0000, -0.0000]
-img_std = [0.1575, 0.0239, 0.0338]
-
 class ConvLSTMDecoder(nn.Module):
     def __init__(self, input_dim, hidden_dims, kernel_sizes, num_layers, output_size):
         super().__init__()
@@ -214,8 +211,8 @@ class CFModel(nn.Module):
         x = torch.cat([f_t, diff1, diff2], dim=2)
 
         # convnext는 각 이미지를 normalize해야 하기 때문에, 사전에 구해 놓았던 train dataset에서의 평균을 뺌
-        x -= torch.Tensor(img_mean).to('cuda').reshape(1, 1, -1, 1, 1)
-        x /= torch.Tensor(img_std).to('cuda').reshape(1, 1, -1, 1, 1)
+        # x -= torch.Tensor(img_mean).to('cuda').reshape(1, 1, -1, 1, 1)
+        # x /= torch.Tensor(img_std).to('cuda').reshape(1, 1, -1, 1, 1)
 
 
         # 다시 shape 변경

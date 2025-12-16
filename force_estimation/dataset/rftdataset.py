@@ -61,7 +61,7 @@ class RFTDataset(Dataset):
             frame_idx = index - self.prefix[sequence_idx]
 
             img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
-            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
+            force = torch.from_numpy(self.force[sequence_idx][frame_idx+2:frame_idx + self.target_index, 0:3]).float()
             label = torch.from_numpy(self.label[sequence_idx]).float()
 
             img[img < 0] = 0
