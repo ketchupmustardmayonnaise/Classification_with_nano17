@@ -1,28 +1,22 @@
 train_mode: True
 use_wandb: False
+wandb_project: compare_model
 
 # encoder
-encoder: "convnext" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange
-# encoder_output: 256
+encoder: "lightweight_convnexttiny" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange
 
 # decoder
 decoder: bidirectional_lstm # [lstm, transformer, bidirectional_lstm]
-decoder_layer: 2
-decoder_dimension : 128
-decoder_output: 3
-
-# fully connected layer
-fc_num_layer: 1
-fc_hidden_dim: 0
+num_rnn_layer: 2
+dim_decoder_hidden : 128
 
 # image
 target_index: 30 #몇 frame으로 자를 것인지
-stride: 1
 
 image_type: rgb # [origin, rgb, diff, zScore]
 image_size: !!python/tuple
-  - 10
-  - 8
+  - 6
+  - 6
 xflip: True
 
 # directory

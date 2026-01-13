@@ -21,7 +21,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_size, output_size, h_RNN_layers, nhead, dim_feedforward, dropout=0.1, max_len=50):
+    def __init__(self, input_size, output_size, num_rnn_layer, nhead, dim_feedforward, dropout=0.0, max_len=50):
         super().__init__()
         
         # Positional Encoding
@@ -35,7 +35,7 @@ class TransformerModel(nn.Module):
             dropout=dropout,
             batch_first=True  # 입력 텐서의 차원 순서를 (Batch, Seq, Feature)로 설정
         )
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=h_RNN_layers)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_rnn_layer)
         
         # 최종 출력을 위한 Linear 레이어
         # 각 시퀀스 토큰마다 Force를 예측하도록 설정

@@ -9,7 +9,23 @@ import zipfile
 import traceback
 import h5py
 
+# =======================================
+# configuration
+
 dataset_types = ['train', 'val', 'test']
+
+original_image_size = (6, 6)
+resized_image_size = (6, 6)
+
+type_of_image = "rgb"
+type_of_normalize = "zscore"
+
+cutoff_filter = 6
+order_of_filter = 4
+
+num_classes = 7
+# =======================================
+
 
 class PreprocessDataset:
 
@@ -339,7 +355,14 @@ class PreprocessDataset:
 
 
 
-pd = PreprocessDataset()
+pd = PreprocessDataset(original_image_size=original_image_size,
+                       resized_image_size=resized_image_size,
+                       type_of_image=type_of_image,
+                       type_of_normalize=type_of_normalize,
+                       cutoff_filter=cutoff_filter,
+                       order_of_filter=order_of_filter,
+                       num_classes=num_classes)
+
 pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations('train')
 
 for d_type in dataset_types:

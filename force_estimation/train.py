@@ -43,23 +43,17 @@ class ForceEstimation:
         common_params = [
             ('train_mode', bool),  # train일 때만 학습 (bool)
             ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
+            ('wandb_project', str),
 
-            ('image_type', str),  # origin, rgb, diff (str)
             ('image_size', list),  # 이미지를 몇 size로 할 것인지 (int, int)
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
-            ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
             ('xflip', bool),
-            # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
 
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
 
             ('decoder', str),  # 어떤 시계열 모델을 사용할 것인지 (str)
-            ('decoder_layer', int),  # 시계열 모델 내 layer의 개수 (int)
-            ('decoder_dimension', int),
-            ('decoder_output', int),  # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
-
-            ('fc_num_layer', int),  # fully-connected layer의 개수 (int)
-            ('fc_hidden_dim', int),  # fully-connected layer의 hidden layer의 dimension 개수
+            ('num_rnn_layer', int),  # 시계열 모델 내 layer의 개수 (int)
+            ('dim_decoder_hidden', int),
 
             ('batch_size', int),
             ('learning_rate', float),
@@ -71,7 +65,8 @@ class ForceEstimation:
             ('loss_type', str),
 
             ('model_dir', str),
-            ('save_dir', str)
+            ('save_dir', str),
+            ('dataset_dir', str)
         ]
 
         # 3. 반복문을 통해 공통 파라미터 한 번에 초기화
@@ -82,12 +77,9 @@ class ForceEstimation:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = CFModel(self.encoder,
                              self.decoder,
-                             self.decoder_layer,
-                             self.decoder_dimension, 
-                             self.decoder_output,                               
-                             self.fc_num_layer,
+                             self.num_decoder_layer,
+                             self.dim_decoder_hidden,
                              self.target_index,
-                             self.fc_hidden_dim,
                              self.image_size)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
@@ -128,17 +120,11 @@ class ForceEstimation:
                     "encoder": self.encoder,
 
                     "decoder": self.decoder,
-                    "decoder_layer": self.decoder_layer,
-                    "decoder_output": self.decoder_output,
-
-                    "fc_num_layer": self.fc_num_layer,
-                    "fc_hidden_dim": self.fc_hidden_dim,
+                    "num_rnn_layer": self.num_rnn_layer,
+                    "dim_decoder_hidden": self.dim_decoder_hidden,
 
                     "target_index": self.target_index,
-                    "stride": self.stride,
                     "xflip": self.xflip,
-
-                    "image_type": self.image_type,
                     "image_size": self.image_size,
 
                     "optimizer": self.optimizer_type,
@@ -150,7 +136,7 @@ class ForceEstimation:
                     "loss": self.loss_type
                 }
 
-                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{self.time_suffix}_{self.fc_num_layer}layer_{self.loss_type}_onlyxflipdataaugmentation'
+                run_name = f'MTM_{self.encoder}_{self.decoder}_{self.target_index}frames_{self.time_suffix}'
                 self.run_log = wandb.init(project="compare_model", job_type="train_model", config=wandb_config, name=run_name)
                 self.model_artifact = wandb.Artifact(f"model_{self.run_log.id}", type="model")
 
@@ -159,15 +145,15 @@ class ForceEstimation:
             val_data_dir = f"{cfg['dataset_dir']}/val_dataset.h5"
 
             # test dataset
-            self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=test_data_dir, dataset_type='test')
+            self.test_dataset = RFTDataset(target_index=self.target_index, path=test_data_dir, dataset_type='test')
             self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
             # train dataset
-            self.train_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=train_data_dir, dataset_type='train', xflip=self.xflip)
+            self.train_dataset = RFTDataset(target_index=self.target_index, path=train_data_dir, dataset_type='train', xflip=self.xflip)
             self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
 
             # validation dataset
-            self.val_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=val_data_dir, dataset_type='val')
+            self.val_dataset = RFTDataset(target_index=self.target_index, path=val_data_dir, dataset_type='val')
             self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
 
             self.train()
@@ -175,7 +161,7 @@ class ForceEstimation:
         # test
         else:
             self.use_wandb = False
-            self.test_dataset = RFTDataset(target_index=self.target_index, stride=self.stride, path=f"{cfg['dataset_dir']}/test_dataset.h5", dataset_type='test')
+            self.test_dataset = RFTDataset(target_index=self.target_index, path=f"{cfg['dataset_dir']}/test_dataset.h5", dataset_type='test')
             self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
 
             self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
