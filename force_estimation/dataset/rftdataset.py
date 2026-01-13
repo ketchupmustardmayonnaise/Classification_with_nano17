@@ -34,7 +34,7 @@ class RFTDataset(Dataset):
 
             for seq in sample_keys:
                 self.img.append(f[f"{seq}/img"][:])
-                self.force.append(f[f"{seq}/filtered_force"][:])
+                self.force.append(f[f"{seq}/force"][:])
                 self.label.append(f[f"{seq}/label"][:])
 
         for i in range(len(self.frame)):

@@ -11,6 +11,7 @@ from utils.earlystopping import *
 import wandb
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from torchmetrics.regression import MeanAbsolutePercentageError
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
@@ -330,6 +331,8 @@ class ForceEstimation:
 
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
+        MAPE = []
+        mape_func = MeanAbsolutePercentageError()
         
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
@@ -369,6 +372,7 @@ class ForceEstimation:
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch, reduction='none').tolist())
                     MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch, reduction='none').tolist())
+                    MAPE.extend(mape_func(pred_force, force_batch))
 
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
