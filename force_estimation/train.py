@@ -52,7 +52,7 @@ class ForceEstimation:
             ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
 
             ('decoder', str),  # 어떤 시계열 모델을 사용할 것인지 (str)
-            ('num_rnn_layer', int),  # 시계열 모델 내 layer의 개수 (int)
+            ('num_decoder_layer', int),  # 시계열 모델 내 layer의 개수 (int)
             ('dim_decoder_hidden', int),
 
             ('batch_size', int),
@@ -120,7 +120,7 @@ class ForceEstimation:
                     "encoder": self.encoder,
 
                     "decoder": self.decoder,
-                    "num_rnn_layer": self.num_rnn_layer,
+                    "num_decoder_layer": self.num_decoder_layer,
                     "dim_decoder_hidden": self.dim_decoder_hidden,
 
                     "target_index": self.target_index,
