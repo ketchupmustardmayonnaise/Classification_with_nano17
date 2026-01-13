@@ -1,12 +1,24 @@
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.animation import FuncAnimation
-from util import *
+from force_estimation.dataset.preprocess import PreprocessDataset
 
-# 각 채널별 train dataset에 대한 max, mean
-max = [325, 197, 279]
-mean = [23.507979081952897, -0.0011777033357894642, -0.001107316995515287]
-std = [52.62922084936881, 3.614437956765608, 4.590433433265843]
+# =======================================
+# configuration
+
+dataset_types = ['train', 'val', 'test']
+
+original_image_size = (6, 6)
+resized_image_size = (6, 6)
+
+type_of_image = "rgb"
+type_of_normalize = "zscore"
+
+cutoff_filter = 6
+order_of_filter = 4
+
+num_classes = 7
+# =======================================
 
 
 # cap 값 표시하기 위한 텍스트 오브젝트
@@ -112,25 +124,15 @@ def play_sequence(images, forces, length_of_image):
     plt.pause(75 * length_of_image / 1000)
     plt.close()
 
-
-img, force, label, img_ts, force_ts = load_data_from_npz('train', 30)
-
-img = divide_RGB_channels(img, img_ts)
-# force data에 low-pass filter를 걺
-force = apply_butterworth_filter(force, img_ts, force_ts)
-# cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
-force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-
-
-# ---------- 전체 시퀀스 반복 재생 ----------
-
-'''
-d = [0, 1, 6, 10, 13, 15, 16, 18, 19, 20, 26, 29, 31, 37]
-while True:
-    for index in range(len(d)):
-        print(f"Playing sequence {d[index]}/{len(d)}...")
-        play_sequence(img[d[index]], force[d[index]], len(img[d[index]]))
-'''
+pd = PreprocessDataset(original_image_size=original_image_size,
+                       resized_image_size=resized_image_size,
+                       type_of_image=type_of_image,
+                       type_of_normalize=type_of_normalize,
+                       cutoff_filter=cutoff_filter,
+                       order_of_filter=order_of_filter,
+                       num_classes=num_classes)
+pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations('train')
+img, force, _, frame = pd.preprocess('test', is_save=False)
 
 for index in range(0, len(img)):
     print(f"Playing sequence {index}/{len(img)}...")

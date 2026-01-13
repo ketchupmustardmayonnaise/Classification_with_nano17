@@ -34,6 +34,15 @@ def copy_config(dir):
     shutil.copy(src_path, dst_path)
 
 
+def mape_per_sample(y_true, y_pred, eps=1e-8):
+    """
+    y_true, y_pred: 같은 shape의 torch.Tensor
+    반환: 각 데이터마다의 MAPE (shape 유지)
+    """
+    return 2 * torch.abs(y_true - y_pred) / (torch.abs(y_true) + torch.abs(y_pred) + eps) * 100
+
+
+
 # plot index가 주어지면, 해당 plot index를 기준으로 리스트를 재정렬함.
 # ex) target_index = 60, plot_index = 30으로 주어지면, 60 프레임의 chunk들 중에서 중간 frame의 force들을 plot함.
 def lists_for_plot(f, pf, target_index, plot_index):

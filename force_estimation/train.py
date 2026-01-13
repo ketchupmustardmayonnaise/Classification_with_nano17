@@ -358,7 +358,7 @@ class ForceEstimation:
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch, reduction='none').tolist())
                     MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch, reduction='none').tolist())
-                    MAPE.extend(mape_func(pred_force, force_batch))
+                    MAPE.extend(mape_per_sample(pred_force, force_batch).tolist())
 
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
@@ -371,16 +371,17 @@ class ForceEstimation:
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)
+        MAPE = torch.Tensor(MAPE)
 
         MSE_for_axis = torch.mean(MSE, dim=(0, 1))
         MAE_for_axis = torch.mean(MAE, dim=(0, 1))
 
-        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
+        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tMAPE: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.mean(MAPE)))
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
 
         with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)) + '\n')
+            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}}\tMAPE: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.mean(MAPE)) + '\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
 
