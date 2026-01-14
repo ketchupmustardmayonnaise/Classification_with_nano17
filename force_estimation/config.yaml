@@ -1,6 +1,6 @@
 train_mode: False
-use_wandb: False
-wandb_project: compare_model
+use_wandb: True
+wandb_project: Ticwatch Pro 3
 
 # encoder
 encoder: "lightweight_convnexttiny" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange

@@ -121,7 +121,9 @@ def plot(f, pf, save_dir, folder_name, use_wandb=False):
             elif num_data == 2: axes[num_data].set_ylim([-5, 0.5])
 
             axes[num_data].text(x=0.05, y=0.05,
-                                s=f'MSE: {torch.mean(mse, axis=0)[num_data]:.4f}, MAE: {torch.mean(mae, axis=0)[num_data]:.4f}',
+                                s=f'RMSE: {torch.sqrt_(torch.mean(mse, axis=0)[num_data]):4f},'
+                                  f'MSE: {torch.mean(mse, axis=0)[num_data]:.4f},'
+                                  f'MAE: {torch.mean(mae, axis=0)[num_data]:.4f}',
                                 transform=axes[num_data].transAxes,
                                 horizontalalignment='left',
                                 verticalalignment='top')
@@ -161,6 +163,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, use_wandb=False
 
     with open(train_txt_path, 'a') as train_txt_file:
         train_txt_file.write("\nTest: median frame\n")
+        train_txt_file.write(f'RMSE: {torch.sqrt(torch.mean(torch.Tensor(mse_for_plot)))}\n')
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
@@ -183,6 +186,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, use_wandb=False
 
     with open(train_txt_path, 'a') as train_txt_file:
         train_txt_file.write("\nTest: last frame\n")
+        train_txt_file.write(f'RMSE: {torch.sqrt(torch.mean(torch.Tensor(mse_for_plot)))}\n')
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n')
 
@@ -205,6 +209,7 @@ def plot_for_lstm(f, pf, target_index, save_dir, train_txt_path, use_wandb=False
 
     with open(train_txt_path, 'a') as train_txt_file:
         train_txt_file.write("\nTest: mean frame\n")
+        train_txt_file.write(f'RMSE: {torch.sqrt(torch.mean(torch.Tensor(mse_for_plot)))}\n')
         train_txt_file.write(f'MSE: {torch.mean(torch.Tensor(mse_for_plot))}\n')
         train_txt_file.write(f'MAE: {torch.mean(torch.Tensor(mae_for_plot))}\n\n')
 
