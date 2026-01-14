@@ -366,4 +366,4 @@ pd = PreprocessDataset(original_image_size=original_image_size,
 pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations('train')
 
 for d_type in dataset_types:
-    pd.preprocess(d_type, is_save=True)
+    pd.preprocess(d_type, is_save=False)

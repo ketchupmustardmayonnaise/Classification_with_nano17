@@ -47,6 +47,7 @@ class RFTDataset(Dataset):
         if self.dataset_type.lower() == 'test':
             img = self.img[index][:]
             force = self.force[index][:, 0:3]
+            force[:, 2] = np.maximum(force[:, 2], -4) # -4로 clipping
             label = self.label[index][:]
 
             return (
@@ -113,3 +114,9 @@ class RFTDataset(Dataset):
         if self.dataset_type.lower() == 'test':
             return len(self.frame)
         else: return self.len
+
+    def get_mean_of_test_dataset(self):
+        assert self.dataset_type.lower() == 'test'
+
+        force = np.concatenate(self.force, axis=0)[:, 0:3]
+        return torch.from_numpy(np.mean(force, axis=0))

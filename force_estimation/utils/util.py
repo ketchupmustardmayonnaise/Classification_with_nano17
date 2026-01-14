@@ -34,12 +34,20 @@ def copy_config(dir):
     shutil.copy(src_path, dst_path)
 
 
-def mape_per_sample(y_true, y_pred, eps=1e-8):
+def rmse(y_true, y_pred, eps=1e-8):
     """
     y_true, y_pred: 같은 shape의 torch.Tensor
     반환: 각 데이터마다의 MAPE (shape 유지)
     """
     return 2 * torch.abs(y_true - y_pred) / (torch.abs(y_true) + torch.abs(y_pred) + eps) * 100
+
+
+def mape_per_sample(y_true, y_pred, eps=1e-8):
+    """
+    y_true, y_pred: 같은 shape의 torch.Tensor
+    반환: 각 데이터마다의 RMSE (shape 유지)
+    """
+    return 2 * torch.abs(y_true - y_pred) / (torch.abs(y_true) + torch.abs(y_pred) + eps)
 
 
 

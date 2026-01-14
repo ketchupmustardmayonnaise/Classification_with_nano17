@@ -1,6 +1,8 @@
 import pathlib
 import sys
 import time
+
+import torch
 import torchinfo
 import yaml
 from tqdm import tqdm
@@ -314,11 +316,12 @@ class ForceEstimation:
 
         f = [] # (# of sequences, full sequence, 3)
         pf = [] # (# of sequences, # of chunks, 30)
+        gt = [] # (# of sequences, # of chunks, 30)
 
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
-        MAPE = []
-        mape_func = MeanAbsolutePercentageError()
+
+        upper_bound_of_force = np.array(self.cfg.get('upper_bound_of_force')).astype('float32')
         
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
@@ -352,13 +355,15 @@ class ForceEstimation:
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
                     pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
-                    
+
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
+
+                    gt.extend(force_batch.detach().cpu().numpy().tolist())
+
                     # 각 X, Y, Z별 MSE, MAE 계산
                     MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch, reduction='none').tolist())
                     MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch, reduction='none').tolist())
-                    MAPE.extend(mape_per_sample(pred_force, force_batch).tolist())
 
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
@@ -371,17 +376,28 @@ class ForceEstimation:
 
         MSE = torch.Tensor(MSE)
         MAE = torch.Tensor(MAE)
-        MAPE = torch.Tensor(MAPE)
 
         MSE_for_axis = torch.mean(MSE, dim=(0, 1))
         MAE_for_axis = torch.mean(MAE, dim=(0, 1))
+        NRMSE_for_axis = torch.sqrt_(torch.mean(MSE, dim=(0, 1))) / torch.Tensor(upper_bound_of_force)
 
-        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tMAPE: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.mean(MAPE)))
+        gt = torch.Tensor(gt)
+        pred = np.concatenate(pf, axis=0)
+        mean_force_for_axis = self.test_dataset.get_mean_of_test_dataset()
+        r2_score = 1 - (torch.sum((gt - pred) ** 2) / torch.sum((gt - mean_force_for_axis) ** 2))
+
+        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tRMSE loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.sqrt(torch.mean(MSE))))
+        print("(Coefficient of Determination, R^2) ALL: {:.5f}".format(torch.mean(r2_score)))
+        print("(NRMSE) X: {:.5f}\tY: {:.5f}\tZ: {:.5f}".format(NRMSE_for_axis[0], NRMSE_for_axis[1], NRMSE_for_axis[2]))
+        print(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}')
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
 
         with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}}\tMAPE: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.mean(MAPE)) + '\n')
+            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tRMSE loss: {:.5f}\n".format(torch.mean(MSE), torch.mean(MAE), torch.sqrt(torch.mean(MSE))) + '\n')
+            train_txt_file.write("(Coefficient of Determination, R^2) ALL: {:.5f}\n".format(torch.mean(r2_score)))
+            train_txt_file.write("(NRMSE) X: {:.5f}\tY: {:.5f}\tZ: {:.5f}\n".format(NRMSE_for_axis[0], NRMSE_for_axis[1], NRMSE_for_axis[2]))
+            train_txt_file.write(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
 

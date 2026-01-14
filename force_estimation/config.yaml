@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: False
 wandb_project: compare_model
 
@@ -22,8 +22,15 @@ xflip: True
 # directory
 dataset_dir: ./dataset
 
+# upper bound of force
+# x, y 는 양방향 모두 고려할 것
+upper_bound_of_force: !!python/tuple
+  - 3.355 # x
+  - 5.184 # y
+  - 4 # z
+
 save_dir: ../saved_models
-model_dir: ../saved_models/lightweight_convnexttiny_bidirectional_lstm_01-14_02-47-47/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ../saved_models/lightweight_convnexttiny_bidirectional_lstm_01-14_04-01-54/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None
