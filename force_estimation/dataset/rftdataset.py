@@ -47,7 +47,7 @@ class RFTDataset(Dataset):
         if self.dataset_type.lower() == 'test':
             img = self.img[index][:]
             force = self.force[index][:, 0:3]
-            force[:, 2] = np.maximum(force[:, 2], -4) # -4로 clipping
+            # force[:, 2] = np.maximum(force[:, 2], -4) # -4로 clipping
             label = self.label[index][:]
 
             return (
@@ -59,9 +59,9 @@ class RFTDataset(Dataset):
             sequence_idx = bisect.bisect_right(self.prefix, index) - 1
             frame_idx = index - self.prefix[sequence_idx]
 
-            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
-            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
-            label = torch.from_numpy(self.label[sequence_idx]).float()
+            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index])
+            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3])
+            label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.target_index - 1])
 
 
             ######## Data Augmentation ########

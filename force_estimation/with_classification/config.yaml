@@ -1,0 +1,42 @@
+train_mode: True
+use_wandb: True
+wandb_project: Ticwatch Pro 3
+
+# encoder
+encoder: "lightweight_convnexttiny" # resnet18, resnet34, resnet50, densenet121, alexnet, vgg16, convnext, alexnetchange
+
+# decoder
+decoder: transformer # [lstm, transformer, bidirectional_lstm]
+num_decoder_layer: 2
+dim_decoder_hidden : 128
+
+# image
+target_index: 30 #몇 frame으로 자를 것인지
+
+image_type: rgb # [origin, rgb, diff, zScore]
+image_size: !!python/tuple
+  - 6
+  - 6
+xflip: True
+
+# directory
+dataset_dir: ./dataset
+
+# upper bound of force
+# x, y 는 양방향 모두 고려할 것
+upper_bound_of_force: !!python/tuple
+  - 1 # x
+  - 1 # y
+  - 1 # z
+
+save_dir: ./saved_models
+model_dir: ./saved_models/lightweight_convnexttiny_bidirectional_lstm_01-14_04-01-54/best_model.pt # 확장자: .pt 또는 .pth
+
+optimizer_type: Adam # [Adam, SGD, rmsprop]
+scheduler_type: None
+loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
+
+batch_size: 8
+num_epoch: 200
+learning_rate: 0.0001
+weight_decay: 0.001

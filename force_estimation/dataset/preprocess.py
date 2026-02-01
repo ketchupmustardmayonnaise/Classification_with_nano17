@@ -11,7 +11,7 @@ import h5py
 
 # =======================================
 # configuration
-
+path = 'bodypart/for_train'
 dataset_types = ['train', 'val', 'test']
 
 original_image_size = (6, 6)
@@ -23,7 +23,9 @@ type_of_normalize = "zscore"
 cutoff_filter = 6
 order_of_filter = 4
 
-num_classes = 7
+num_classes = 8
+
+touch_threshold = 35
 # =======================================
 
 
@@ -85,13 +87,54 @@ class PreprocessDataset:
     # ==================================
 
     def delete_bad_frame(self, input_image, threshold=1000) -> np.array:
-        '''
-        threshold를 넘어가는 비정상적으로 큰 값들을 포함한 프레임들 제거
-        입력: 각 시퀀스
-        '''
+        ''' threshold를 넘어가는 비정상적으로 큰 값들을 포함한 프레임들 제거 입력: 각 시퀀스 '''
+
         input_image = np.array(input_image)
         bad_frames = np.any(input_image >= threshold, axis=(1, 2))
         return input_image[~bad_frames]
+
+    def replace_bad_frame_with_previous(
+            self,
+            input_image,
+            input_ts,
+            threshold=1000
+    ):
+        """
+        비정상 프레임이 있으면 이전 프레임으로 대체
+        input_image: (frame, H, W)
+        input_ts:  (frame, D)  ex) (frame, 3)
+        """
+        input_image = np.asarray(input_image).copy()
+        input_ts = np.asarray(input_ts).copy()
+
+        assert input_image.shape[0] == input_ts.shape[0]
+
+        bad_frames = np.any(input_image >= threshold, axis=(1, 2))
+
+        for t in range(len(bad_frames)):
+            if bad_frames[t]:
+                if t == 0:
+                    # 첫 프레임이 bad인 경우 → 그대로 두거나 0으로
+                    # 필요하면 다른 정책 적용 가능
+                    continue
+                input_image[t] = input_image[t - 1]
+
+        return input_image, input_ts
+
+
+    def fix_corrupted_frames(self, video_array):
+        # video_array shape: [frame, height, width]
+        num_frames = video_array.shape[0]
+
+        # 0번 프레임은 이전 프레임이 없으므로 1번부터 확인
+        for i in range(1, num_frames):
+            # 해당 프레임의 모든 요소가 -255인지 확인
+            if np.all(video_array[i] == -255):
+                # print(f"프레임 {i}번이 누락되어 {i - 1}번 프레임으로 대체합니다.")
+                # 이전 프레임의 값으로 덮어씌우기 (복사본 생성 권장)
+                video_array[i] = video_array[i - 1].copy()
+
+        return video_array
 
 
     def clip_zero(self, input_image) -> np.array:
@@ -238,6 +281,24 @@ class PreprocessDataset:
 
 
     # ==================================
+    # label
+    # ==================================
+    def label_each_frame(self, img, label, touch_threshold=35):
+        '''
+        하나의 시퀀스가 입력으로 들어오면, 각 시퀀스에 label을 붙임.
+        '''
+        result_label = []
+
+        for frame_index in range(len(img)):
+            if np.sum(img[frame_index]) >= touch_threshold:
+                result_label.append(label)
+            else:
+                result_label.append(0)
+
+        return result_label
+
+
+    # ==================================
     # About Preprocess
     # ==================================
 
@@ -246,8 +307,9 @@ class PreprocessDataset:
         img, force, label, img_ts, force_ts = self.load_data_from_npz(path)
 
         for sequence_index in range(len(img)):
-            img[sequence_index] = self.delete_bad_frame(img[sequence_index])
+            img[sequence_index], img_ts[sequence_index] = self.replace_bad_frame_with_previous(img[sequence_index], img_ts[sequence_index])
             img[sequence_index] = self.clip_zero(img[sequence_index])
+            img[sequence_index] = self.fix_corrupted_frames(img[sequence_index])
 
         img, img_ts = self.convert_3channel_image(img, img_ts)
         force = self.apply_butterworth_filter(force, img_ts, force_ts,
@@ -259,6 +321,10 @@ class PreprocessDataset:
         frame = []
 
         for sequence_index in range(len(img)):
+            label[sequence_index] = self.label_each_frame(img[sequence_index], label[sequence_index], touch_threshold)
+            label[sequence_index] = F.one_hot(torch.Tensor(label[sequence_index]).to(torch.int64),
+                                              num_classes=self.num_classes)
+
             # 이미지를 채널별로 normalize
             img[sequence_index] = self.resize_image(img[sequence_index], self.resized_image_size)
             img[sequence_index] = self.normalize_image(img[sequence_index], self.img_mean, self.img_std)
@@ -268,7 +334,6 @@ class PreprocessDataset:
             frame.append(int(len(img[sequence_index])))
 
         # label
-        label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=self.num_classes)
         if is_save: self.save_dataset(path, img, force, label, frame)
 
         return img, force, label, frame
@@ -311,9 +376,21 @@ class PreprocessDataset:
         '''
 
         img, force, _, img_ts, force_ts = self.load_data_from_npz(path_of_train_dataset)
+        _img = img.copy()
+        before_frame_counts = [arr.shape[0] for arr in img]
         for sequence_index in range(len(img)):
-            img[sequence_index] = self.delete_bad_frame(img[sequence_index])
+            _img[sequence_index] = self.delete_bad_frame(img[sequence_index])
+            _img[sequence_index] = self.clip_zero(img[sequence_index])
+            _img[sequence_index] = self.fix_corrupted_frames(img[sequence_index])
+        after_frame_counts = [arr.shape[0] for arr in _img]
+        print(f"제외된 이미지 개수: {sum(before_frame_counts) - sum(after_frame_counts)} (총합: {sum(before_frame_counts)})\n")
+
+
+        for sequence_index in range(len(img)):
+            img[sequence_index], img_ts[sequence_index] = self.replace_bad_frame_with_previous(img[sequence_index], img_ts[sequence_index])
             img[sequence_index] = self.clip_zero(img[sequence_index])
+            img[sequence_index] = self.fix_corrupted_frames(img[sequence_index])
+
         img_frequency, force_frequency = self.measure_image_and_force_frequency(img_ts, force_ts)
 
         print(f"이미지 수집 주기: {img_frequency}")
@@ -363,7 +440,7 @@ pd = PreprocessDataset(original_image_size=original_image_size,
                        order_of_filter=order_of_filter,
                        num_classes=num_classes)
 
-pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations('train')
+pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations(f"{path}/train")
 
 for d_type in dataset_types:
-    pd.preprocess(d_type, is_save=False)
+    pd.preprocess(f"{path}/{d_type}", is_save=True)

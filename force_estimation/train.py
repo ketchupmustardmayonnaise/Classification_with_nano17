@@ -111,7 +111,7 @@ class ForceEstimation:
                 self.optimizer_type = 'sgd'
 
             # loss
-            self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='none')
+            self.loss = torch.nn.MSELoss(reduction='mean') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='mean')
 
             self.learning_rate = float(self.learning_rate)
 
@@ -222,8 +222,7 @@ class ForceEstimation:
 
                 MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='none')
                 L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='none')
-                loss = (MSEloss + L1_loss) / 2
-                loss = loss.mean()
+                loss = self.loss(MSEloss, L1_loss)
                 loss.backward()
 
                 self.optimizer.step()
@@ -321,6 +320,12 @@ class ForceEstimation:
         MSE = [] # shape: (num of chunks, target_index, 3)
         MAE = [] # shape: (num of chunks, target_index, 3)
 
+        # 소요 시간 측정
+        self.batch_size = 1
+        start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        times = []
+        torch.cuda.synchronize()
+
         upper_bound_of_force = np.array(self.cfg.get('upper_bound_of_force')).astype('float32')
         
         with torch.no_grad():
@@ -354,7 +359,11 @@ class ForceEstimation:
 
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
 
-                    pred_force = self.model(X_batch) # shape: (batch size, sliding window size, 3) = (8, 30, 3)
+                    start.record()
+                    pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
+                    end.record()
+                    torch.cuda.synchronize()
+                    times.append(start.elapsed_time(end))
 
                     _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
                     pf[len(pf)-1].extend(_pred_force_detach)
@@ -393,6 +402,16 @@ class ForceEstimation:
         print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
         print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
 
+        # 소요 시간 측정
+        times_np = np.array(times)
+        mean = times_np.mean()
+        std = times_np.std()
+        p95 = np.percentile(times_np, 95)
+        print("--- Inference time statistics ---")
+        print(f"Mean\t: {mean:.3f} ms")
+        print(f"Std\t: {std:.3f} ms")
+        print(f"P95\t: {p95:.3f} ms")
+
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tRMSE loss: {:.5f}\n".format(torch.mean(MSE), torch.mean(MAE), torch.sqrt(torch.mean(MSE))) + '\n')
             train_txt_file.write("(Coefficient of Determination, R^2) ALL: {:.5f}\n".format(torch.mean(r2_score)))
@@ -400,6 +419,11 @@ class ForceEstimation:
             train_txt_file.write(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+
+            train_txt_file.write("--- Inference time statistics ---\n")
+            train_txt_file.write(f"Mean\t: {mean:.3f} ms\n")
+            train_txt_file.write(f"Std\t: {std:.3f} ms\n")
+            train_txt_file.write(f"P95\t: {p95:.3f} ms\n\n")
 
         return MSE, MAE
 

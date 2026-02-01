@@ -1,0 +1,46 @@
+Traceback (most recent call last):                
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\tqdm\std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\utils\data\dataloader.py", line 633, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\utils\data\dataloader.py", line 677, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\utils\data\_utils\fetch.py", line 51, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\torch\utils\data\_utils\fetch.py", line 51, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+            ~~~~~~~~~~~~^^^^^
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\dataset\rftdataset.py", line 64, in __getitem__
+    label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.target_index - 1])
+                             ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+IndexError: index 818 is out of bounds for axis 0 with size 7
+Failed to enable GUI event loop integration for 'qt'
+Traceback (most recent call last):
+  File "C:\Program Files\JetBrains\PyCharm 2025.1\plugins\python-ce\helpers\pydev\pydev_ipython\matplotlibtools.py", line 33, in do_enable_gui
+    enable_gui(guiname)
+  File "C:\Program Files\JetBrains\PyCharm 2025.1\plugins\python-ce\helpers\pydev\pydev_ipython\inputhook.py", line 565, in enable_gui
+    return gui_hook(app)
+           ^^^^^^^^^^^^^
+  File "C:\Program Files\JetBrains\PyCharm 2025.1\plugins\python-ce\helpers\pydev\pydev_ipython\inputhook.py", line 183, in enable_qt
+    from pydev_ipython.qt_for_kernel import QT_API, QT_API_PYQT5, QT_API_PYQT6
+  File "C:\Program Files\JetBrains\PyCharm 2025.1\plugins\python-ce\helpers\pydev\pydev_ipython\qt_for_kernel.py", line 124, in <module>
+    QtCore, QtGui, QtSvg, QT_API = load_qt(api_opts)
+                                   ^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\JetBrains\PyCharm 2025.1\plugins\python-ce\helpers\pydev\pydev_ipython\qt_loaders.py", line 288, in load_qt
+    raise ImportError("""
+ImportError:
+    Could not load requested Qt binding. Please ensure that
+    PyQt4 >= 4.7 or PySide >= 1.0.3 is available,
+    and only one is imported per session.
+
+    Currently-imported Qt library:   'pyqt6'
+    PyQt4 installed:                 False
+    PyQt5 installed:                 False
+    PyQt6 installed:                 False
+    PySide >= 1.0.3 installed:       False
+    Tried to load:                   ['pyqt6']
+
+Backend QtAgg is interactive backend. Turning interactive mode on.

@@ -1,0 +1,18 @@
+Traceback (most recent call last):                 
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\with_classification\train_with_classification.py", line 573, in <module>
+    force_estimation = ForceEstimation(config)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\with_classification\train_with_classification.py", line 174, in __init__
+    self.train()
+  File "C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\with_classification\train_with_classification.py", line 248, in train
+    acc = accuracy_score(y_label.cpu().data.numpy(), y_pred.cpu().data.numpy())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\sklearn\utils\_param_validation.py", line 213, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\sklearn\metrics\_classification.py", line 231, in accuracy_score
+    y_type, y_true, y_pred = _check_targets(y_true, y_pred)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Jeongmin\anaconda3\envs\capacitivescreen\Lib\site-packages\sklearn\metrics\_classification.py", line 112, in _check_targets
+    raise ValueError(
+ValueError: Classification metrics can't handle a mix of multiclass and multiclass-multioutput targets
