@@ -43,7 +43,7 @@ class TransformerModel(nn.Module):
         # 최종 출력을 위한 Linear 레이어
         # 각 시퀀스 토큰마다 Force를 예측하도록 설정
         self.regression_output_layer = nn.Linear(input_size, regression_output_dim)
-        self.classification_output_layer = nn.Linear(input_size * max_len, self.num_classes)
+        self.classification_output_layer = nn.Linear(input_size * max_len, num_classes)
         
     def forward(self, x):
         # x shape: (batch_size, seq_len, input_size)

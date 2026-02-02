@@ -70,8 +70,8 @@ class CFModel(nn.Module):
             self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size=dim_decoder_hidden, output_size=3, num_rnn_layer=num_decoder_layer, bidirectional=True)
         elif decoder.lower() == 'transformer' :
             self.decoder = TransformerModel(input_size=self.decoder_input_size, # encoder 출력 크기
-                                            regression_output_dim=self.num_classes,
-                                            classification_output_dim=8,
+                                            num_classes=self.num_classes,
+                                            regression_output_dim=3,
                                              num_rnn_layer=num_decoder_layer, # 트랜스포머 레이어 수
                                              nhead=transformer_nhead, # 어텐션 헤드 수
                                              dim_feedforward=transformer_ff_dim, # 트랜스포머 내부 FF 레이어 차원

@@ -61,7 +61,10 @@ class RFTDataset(Dataset):
 
             img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index])
             force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3])
-            label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.target_index - 1])
+
+            # label
+            window_labels = torch.from_numpy(self.label[sequence_idx][frame_idx:frame_idx + self.target_index])
+            label = self.majority_last_onehot_torch(window_labels)
 
 
             ######## Data Augmentation ########
@@ -120,3 +123,29 @@ class RFTDataset(Dataset):
 
         force = np.concatenate(self.force, axis=0)[:, 0:3]
         return torch.from_numpy(np.mean(force, axis=0))
+
+    @staticmethod
+    def majority_last_onehot_torch(window_labels: torch.Tensor) -> torch.Tensor:
+        """
+        window_labels: (T, C) one-hot or soft labels
+        return: scalar tensor (class index)
+        """
+        # 1. frame-wise class id (T,)
+        frame_labels = window_labels.argmax(dim=1)
+
+        # 2. class counts (C,)
+        num_classes = window_labels.size(1)
+        counts = torch.bincount(frame_labels, minlength=num_classes)
+
+        # 3. majority classes
+        max_count = counts.max()
+        majority_mask = counts == max_count  # (C,)
+
+        # 4. from last frame → first, pick first majority
+        #    (vectorized: no Python loop)
+        reversed_labels = frame_labels.flip(0)                  # (T,)
+        is_majority = majority_mask[reversed_labels]            # (T,)
+        idx = torch.argmax(is_majority.int())                   # first True
+        label = reversed_labels[idx]
+
+        return torch.nn.functional.one_hot(label, num_classes=num_classes).float()

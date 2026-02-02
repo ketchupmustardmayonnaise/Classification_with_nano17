@@ -275,6 +275,10 @@ class ForceEstimation:
             # validate the model
             val_CE, val_acc, val_MSE, val_MAE = self.validate(self.val_dataloader)
 
+
+            # ===============================================
+            # Early Stopping & best model save
+
             if self.loss_type == 'MSE':
                 val_loss_to_monitor = val_MSE
             else: # MAE or default
@@ -304,6 +308,7 @@ class ForceEstimation:
             avg_train_mse = np.mean(MSE)
             avg_train_mae = np.mean(MAE)
             current_lr = self.optimizer.param_groups[0]['lr']
+            # ===============================================
 
             print(msg.format(
                 epoch + 1,
@@ -391,6 +396,7 @@ class ForceEstimation:
                 f.append(_force)  # 리스트에 각 시퀀스마다의 force label을 전체 저장
                 pf.append([])
 
+                # ===============================================
                 # 각 시퀀스를 sliding window씩 자름
                 X = []
                 force = []
@@ -398,8 +404,13 @@ class ForceEstimation:
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i + self.target_index])
                     force.append(_force[i:i + self.target_index])
-                    y.append(_y[i+self.target_index - 1])
 
+                    window_labels = torch.Tensor(_y[i:i+self.target_index])
+                    y.append(RFTDataset.majority_last_onehot_torch(window_labels).tolist())
+                # ===============================================
+
+
+                # ===============================================
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
                 while True:
@@ -454,6 +465,8 @@ class ForceEstimation:
 
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
+                # ===============================================
+
 
         # wandb에 test 이미지를 저장할 artifact를 만듦
         # artifact_for_save_test = wandb.Artifact("")
