@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: True
 wandb_project: Ticwatch Pro 3
 
@@ -7,7 +7,7 @@ encoder: "lightweight_convnexttiny" # resnet18, resnet34, resnet50, densenet121,
 
 # decoder
 decoder: transformer # [lstm, transformer, bidirectional_lstm]
-num_decoder_layer: 6
+num_decoder_layer: 2
 dim_decoder_hidden : 128
 
 # image

@@ -566,6 +566,7 @@ class ForceEstimation:
             train_txt_file.write(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}\n')
             train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
             train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+            train_txt_file.write(classification_report(y_labels, y_preds, digits=4))
 
             train_txt_file.write("--- Inference time statistics ---\n")
             train_txt_file.write(f"Mean\t: {mean:.3f} ms\n")
