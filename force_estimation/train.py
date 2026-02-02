@@ -48,6 +48,7 @@ class ForceEstimation:
             ('wandb_project', str),
 
             ('image_size', list),  # 이미지를 몇 size로 할 것인지 (int, int)
+            ('num_classes', int),
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
             ('xflip', bool),
 

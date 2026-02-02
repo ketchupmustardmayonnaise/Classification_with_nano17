@@ -10,11 +10,13 @@ transformer_ff_dim = 192
 
 class CFModel(nn.Module):
     def __init__(self, encoder, decoder, num_decoder_layer, dim_decoder_hidden,
-                 target_index, image_size):
+                 target_index, image_size,
+                 num_classes = 8):
 
         super().__init__()
         self.extractor = False
         self.decoder_input_size = 1000
+        self.num_classes = num_classes
 
         if encoder.lower() == 'resnet18':
             self.encoder = models.resnet18(pretrained=True)
@@ -68,7 +70,7 @@ class CFModel(nn.Module):
             self.decoder = LSTM(input_size=self.decoder_input_size, hidden_size=dim_decoder_hidden, output_size=3, num_rnn_layer=num_decoder_layer, bidirectional=True)
         elif decoder.lower() == 'transformer' :
             self.decoder = TransformerModel(input_size=self.decoder_input_size, # encoder 출력 크기
-                                            regression_output_dim=3,
+                                            regression_output_dim=self.num_classes,
                                             classification_output_dim=8,
                                              num_rnn_layer=num_decoder_layer, # 트랜스포머 레이어 수
                                              nhead=transformer_nhead, # 어텐션 헤드 수

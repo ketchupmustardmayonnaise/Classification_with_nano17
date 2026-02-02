@@ -22,12 +22,13 @@ class PositionalEncoding(nn.Module):
 
 class TransformerModel(nn.Module):
     def __init__(self, input_size, num_rnn_layer, nhead, dim_feedforward, dropout=0.0, max_len=50,
-        classification_output_dim=8,
+        num_classes=8,
         regression_output_dim=3):
         super().__init__()
         
         # Positional Encoding
         self.pos_encoder = PositionalEncoding(d_model=input_size, dropout=dropout, max_len=max_len)
+        self.num_classes = num_classes
         
         # Transformer Encoder Layer 정의
         encoder_layers = nn.TransformerEncoderLayer(
@@ -42,7 +43,7 @@ class TransformerModel(nn.Module):
         # 최종 출력을 위한 Linear 레이어
         # 각 시퀀스 토큰마다 Force를 예측하도록 설정
         self.regression_output_layer = nn.Linear(input_size, regression_output_dim)
-        self.classification_output_layer = nn.Linear(input_size * max_len, classification_output_dim)
+        self.classification_output_layer = nn.Linear(input_size * max_len, self.num_classes)
         
     def forward(self, x):
         # x shape: (batch_size, seq_len, input_size)
@@ -57,5 +58,24 @@ class TransformerModel(nn.Module):
         # CFModel의 기존 출력 형태 (batch, seq, output)를 맞추기 위함
         r_output = self.regression_output_layer(x)
         c_output = self.classification_output_layer(torch.flatten(x, 1))
+
+        '''
+        # classification
+        c_logits = self.classification_output_layer(torch.flatten(x, 1))
+        c_pred = torch.argmax(c_logits, dim=1)  # (batch,)
+
+        # regression output 저장용
+        batch_size, seq_len, _ = x.shape
+        r_output = torch.zeros(
+            batch_size, seq_len, self.regression_output_dim,
+            device=x.device
+        )
+
+        # class별로 해당 regression head 적용
+        for cls in range(self.num_classes):
+            mask = (c_pred == cls)
+            if mask.any():
+                r_output[mask] = self.regression_output_layers[cls](x[mask])
+        '''
         
         return c_output, r_output

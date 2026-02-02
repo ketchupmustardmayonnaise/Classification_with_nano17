@@ -52,6 +52,7 @@ class ForceEstimation:
             ('wandb_project', str),
 
             ('image_size', list),  # 이미지를 몇 size로 할 것인지 (int, int)
+            ('num_classes', int),
             ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
             ('xflip', bool),
 
@@ -86,7 +87,8 @@ class ForceEstimation:
                              self.num_decoder_layer,
                              self.dim_decoder_hidden,
                              self.target_index,
-                             self.image_size)
+                             self.image_size,
+                             num_classes=self.num_classes)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model,
                           input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
@@ -134,6 +136,7 @@ class ForceEstimation:
                     "decoder": self.decoder,
                     "num_decoder_layer": self.num_decoder_layer,
                     "dim_decoder_hidden": self.dim_decoder_hidden,
+                    "num_classes": self.num_classes,
 
                     "target_index": self.target_index,
                     "xflip": self.xflip,

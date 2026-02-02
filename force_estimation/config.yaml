@@ -12,6 +12,7 @@ dim_decoder_hidden : 128
 
 # image
 target_index: 30 #몇 frame으로 자를 것인지
+num_classes: 8
 
 image_type: rgb # [origin, rgb, diff, zScore]
 image_size: !!python/tuple
