@@ -5,6 +5,7 @@ import time
 import torch
 import torchinfo
 import yaml
+import seaborn as sns
 from tqdm import tqdm
 from force_estimation.utils import *
 from force_estimation.dataset import *
@@ -377,7 +378,7 @@ class ForceEstimation:
         with torch.no_grad():
             for _X, _force, y in self.test_dataloader:  # 한 시퀀스씩 추정
                 _X = _X.squeeze().tolist()
-                _y = _y.squeeze().tolist()
+                _y = y.squeeze().tolist()
                 _force = _force.squeeze().tolist()
 
                 # label에서 0이 아닌 값만 뽑음 - 해당 시퀀스의 bodypart ground truth가 무엇인지
@@ -390,6 +391,7 @@ class ForceEstimation:
                 # 각 시퀀스를 sliding window씩 자름
                 X = []
                 force = []
+                y = []
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i + self.target_index])
                     force.append(_force[i:i + self.target_index])
@@ -412,7 +414,7 @@ class ForceEstimation:
                     # ===============================================
                     # 소요 시간 측정
                     start.record()
-                    pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
+                    pred_class, pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
                     end.record()
                     torch.cuda.synchronize()
                     times.append(start.elapsed_time(end))
@@ -485,7 +487,7 @@ class ForceEstimation:
         pair_of_errors = []
         for lbl in unique_labels:
             mask = torch.Tensor(y_labels) == lbl
-            mse_each_label = torch.Tensor(MSE)[mask]
+            mse_each_label = torch.Tensor(MSE)[mask].numpy()
             mean_mae = torch.Tensor(MAE)[mask].mean(dim=(0, 1))
             pair_of_errors.append([mse_each_label, mean_mae])
         # ===============================================

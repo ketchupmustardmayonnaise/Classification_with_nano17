@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: True
 wandb_project: Ticwatch Pro 3
 
@@ -30,7 +30,7 @@ upper_bound_of_force: !!python/tuple
   - 1 # z
 
 save_dir: ./saved_models
-model_dir: ./saved_models/lightweight_convnexttiny_bidirectional_lstm_01-14_04-01-54/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ./saved_models/lightweight_convnexttiny_transformer_02-02_05-19-40/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None

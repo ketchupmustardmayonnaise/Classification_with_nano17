@@ -5,3 +5,4 @@ force_estimation/wandb
 *.h5
 force_estimation/artifacts
 force_estimation/dataset/wandb
+force_estimation/with_classification/wandb
