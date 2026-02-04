@@ -6,6 +6,8 @@ import torch
 import torchinfo
 import yaml
 from tqdm import tqdm
+
+from force_estimation.metrics.train_metrics import TrainMetrics
 from utils import *
 from dataset import *
 from torch.optim import lr_scheduler
@@ -13,6 +15,7 @@ from utils.earlystopping import *
 import wandb
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
+from force_estimation.metrics import *
 from torchmetrics.regression import MeanAbsolutePercentageError
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
@@ -113,7 +116,6 @@ class ForceEstimation:
 
             # loss
             self.loss = torch.nn.MSELoss(reduction='mean') if self.loss_type == "MSE" else torch.nn.L1Loss(reduction='mean')
-
             self.learning_rate = float(self.learning_rate)
 
             # wandb 사용한다면
@@ -177,20 +179,16 @@ class ForceEstimation:
 
     def validate(self, dataloader):
         self.model.eval()
-        MSE = 0
-        MAE = 0
+        metrics = TrainMetrics(is_classification=False)
 
         with torch.no_grad():
             for X, force, y in dataloader:
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
                 pred_force = self.model(X)
+                metrics.calculate_regression_metrics(pred_force.float(), force.float())
 
-                MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='mean')
-                MAE += torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='mean')
-
-        MSE /= len(dataloader)
-        MAE /= len(dataloader)
-        return MSE, MAE
+        mse, mae = metrics.report_metrics()
+        return mse, mae
 
 
 
@@ -199,14 +197,14 @@ class ForceEstimation:
         msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
               ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
 
+        metrics = TrainMetrics(is_classification=False)
+
         patience = 20
         best_model_path = os.path.join(self.save_dir, 'best_model.pt')
         early_stopping = EarlyStopping(patience = patience, verbose=True, path = best_model_path)
         for epoch in range(start_epoch, self.num_epoch):
             self.model.train()
-
-            MSE = []
-            MAE = []
+            metrics.initialize_metrics()
 
             # tqdm으로 배치 진행 상황을 보여줌
             progress_bar = tqdm(self.train_dataloader, desc="Training", leave=False)
@@ -215,21 +213,16 @@ class ForceEstimation:
             # X.shape =
             for batch in progress_bar:
                 X, force, y = batch
-                # X = apply_augmentation_to_all_frame(X, self.augmentation_angle)
                 X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='none')
-                L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='none')
-                loss = self.loss(MSEloss, L1_loss)
+                metrics.calculate_regression_metrics(pred_force.float(), force.float())
+                loss = self.loss(pred_force.float(), force.float())
                 loss.backward()
 
                 self.optimizer.step()
-                
-                MSE.append(MSEloss.mean().item())
-                MAE.append(L1_loss.mean().item())
 
                 # 현재 평균 loss를 tqdm description에 표시
                 running_loss += loss.item()
@@ -237,17 +230,13 @@ class ForceEstimation:
                 
 
             if self.scheduler is not None: self.scheduler.step()
+
+            # ========================================
             # validate the model
-            val_MSE, val_MAE = self.validate(self.val_dataloader)
-
-            if self.loss_type == 'MSE+MAE':
-                val_loss_to_monitor = (val_MSE + val_MAE) / 2
-            elif self.loss_type == 'MSE':
-                val_loss_to_monitor = val_MSE
-            else: # MAE or default
-                val_loss_to_monitor = val_MAE
-
+            mse_val, mae_val = self.validate(self.val_dataloader)
+            val_loss_to_monitor = mse_val if self.loss_type.lower() == 'mse' else mae_val
             is_best_loss =  early_stopping(val_loss_to_monitor, self.model)
+
             # wandb 에 업로드
             if self.use_wandb:
                 new_version_artifact = wandb.Artifact(f"{self.encoder}_{self.decoder}_{self.time_suffix}_{self.target_index}frames", type="model")
@@ -260,43 +249,31 @@ class ForceEstimation:
                 torch.save(self.model.state_dict(), os.path.join(wandb.run.dir, "current_model.pt"))
                 new_version_artifact.add_file(os.path.join(wandb.run.dir, "current_model.pt"))
                 wandb.log_artifact(new_version_artifact)
-            
-            if early_stopping.early_stop:
-                print("Early stopping")
-                break
-            avg_train_mse = np.mean(MSE)
-            avg_train_mae = np.mean(MAE)
+            # ========================================
+
             current_lr = self.optimizer.param_groups[0]['lr']
+            mse, mae = metrics.report_metrics()
             
             print(msg.format(
-                epoch + 1,
-                self.num_epoch,
-                current_lr,
-                avg_train_mse,
-                avg_train_mae,
-                val_MSE,
-                val_MAE
-            ))
+                epoch + 1, self.num_epoch, current_lr,
+                mse, mae, mse_val, mae_val))
             
             
             train_txt_path = self.save_dir + "/train.txt"
             with open(train_txt_path, 'a') as train_txt_file:
                 train_txt_file.write(msg.format(
-                    epoch + 1,
-                    self.num_epoch,
-                    float(self.learning_rate),
-                    float(np.mean(MSE)),
-                    float(np.mean(MAE)),
-                    float(val_MSE),
-                    float(val_MAE)
-                ) + '\n')
+                    epoch + 1, self.num_epoch, current_lr,
+                    mse, mae, mse_val, mae_val) + '\n')
 
             if self.use_wandb:
                 try:
-                    wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                                  "validation_MSE": val_MSE, "validation_MAE": val_MAE})
+                    wandb.log({"train_MSE": mse, "train_MAE": mae, "validation_MSE": mse_val, "validation_MAE": mae_val})
                 except:
                     wandb.finish()
+
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
 
         # --- 학습 종료 후 최종 작업 ---
         print("Loading best model weights...")
@@ -313,120 +290,77 @@ class ForceEstimation:
 
     def test(self):
         self.model.eval()
-
-        f = [] # (# of sequences, full sequence, 3)
-        pf = [] # (# of sequences, # of chunks, 30)
-        gt = [] # (# of sequences, # of chunks, 30)
-
-        MSE = [] # shape: (num of chunks, target_index, 3)
-        MAE = [] # shape: (num of chunks, target_index, 3)
+        metrics = TestMetrics()
 
         # 소요 시간 측정
         self.batch_size = 1
         start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        times = []
         torch.cuda.synchronize()
 
         upper_bound_of_force = np.array(self.cfg.get('upper_bound_of_force')).astype('float32')
         
         with torch.no_grad():
-            for _X, _force, y in self.test_dataloader: # 한 시퀀스씩 추정
-                _X = _X.squeeze().tolist()
-                _force = _force.squeeze().tolist()
+            for _X, _force, _label in self.test_dataloader: # inference each one sequence
+                _X, _force = _X.squeeze().tolist(), _force.squeeze().tolist() # convert a sequence tensor to list
+                metrics.init_new_sequence()
+                metrics.save_sequence(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
-                f.append(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
+                # ========================================
                 # 각 시퀀스를 sliding window씩 자름
-                X = []
-                force = []
+                X, force, label = [], [], []
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i+self.target_index])
                     force.append(_force[i:i+self.target_index])
-                
-                
-                pf.append([])
+                    label.append(_label[i:i+self.target_index])
+                # ========================================
 
+
+
+                # ========================================
                 # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
                 batch_start = 0
                 while True:
                     if batch_start + self.batch_size < len(X):
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
+                        X_batch, force_batch, label_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
                                                         torch.Tensor(force[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(y[batch_start:batch_start+self.batch_size])
+                                                        torch.Tensor(_label[batch_start:batch_start+self.batch_size])
                     else:
-                        X_batch, force_batch, y_batch = torch.Tensor(X[batch_start:len(X)]),\
+                        X_batch, force_batch, label_batch = torch.Tensor(X[batch_start:len(X)]),\
                                                         torch.Tensor(force[batch_start:len(X)]),\
-                                                        torch.Tensor(y[batch_start:len(X)])
+                                                        torch.Tensor(_label[batch_start:len(X)])
 
-                    X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), y_batch.to(self.device)
+                    X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), label_batch.to(self.device)
 
+                    # measure and record inference time
                     start.record()
                     pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
                     end.record()
                     torch.cuda.synchronize()
-                    times.append(start.elapsed_time(end))
 
-                    _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
-                    pf[len(pf)-1].extend(_pred_force_detach)
-
-                    gt.extend(force_batch.detach().cpu().numpy().tolist())
-
-                    # 각 X, Y, Z별 MSE, MAE 계산
-                    MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch, reduction='none').tolist())
-                    MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch, reduction='none').tolist())
+                    metrics.save_inference_time(start.elapsed_time(end))
+                    metrics.save_regression_result_of_window(pred_force.detach().cpu().numpy().tolist(), force_batch.detach().cpu().numpy().tolist())
 
                     batch_start += self.batch_size
                     if batch_start >= len(X): break
+                # ========================================
 
         # wandb에 test 이미지를 저장할 artifact를 만듦
         # artifact_for_save_test = wandb.Artifact("")
 
         train_txt_path = self.save_dir + "/train.txt"
-        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
+        Visualization.plot_for_lstm(metrics.ground_truth_for_sequence, metrics.prediction_for_window,
+                      self.target_index, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
 
-        MSE = torch.Tensor(MSE)
-        MAE = torch.Tensor(MAE)
+        metrics.set_mean_of_test(self.test_dataset.get_mean_of_test_dataset())
+        metrics.set_upper_bound_of_test(upper_bound_of_force)
+        message, mse, mae, r2_score, nrmse_for_axis = metrics.get_regression_metrics(export_r2_score=True, export_nrmse=True)
 
-        MSE_for_axis = torch.mean(MSE, dim=(0, 1))
-        MAE_for_axis = torch.mean(MAE, dim=(0, 1))
-        NRMSE_for_axis = torch.sqrt_(torch.mean(MSE, dim=(0, 1))) / torch.Tensor(upper_bound_of_force)
-
-        gt = torch.Tensor(gt)
-        pred = np.concatenate(pf, axis=0)
-        mean_force_for_axis = self.test_dataset.get_mean_of_test_dataset()
-        r2_score = 1 - (torch.sum((gt - pred) ** 2) / torch.sum((gt - mean_force_for_axis) ** 2))
-
-        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tRMSE loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE), torch.sqrt(torch.mean(MSE))))
-        print("(Coefficient of Determination, R^2) ALL: {:.5f}".format(torch.mean(r2_score)))
-        print("(NRMSE) X: {:.5f}\tY: {:.5f}\tZ: {:.5f}".format(NRMSE_for_axis[0], NRMSE_for_axis[1], NRMSE_for_axis[2]))
-        print(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}')
-        print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
-        print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
-
-        # 소요 시간 측정
-        times_np = np.array(times)
-        mean = times_np.mean()
-        std = times_np.std()
-        p95 = np.percentile(times_np, 95)
-        print("--- Inference time statistics ---")
-        print(f"Mean\t: {mean:.3f} ms")
-        print(f"Std\t: {std:.3f} ms")
-        print(f"P95\t: {p95:.3f} ms")
-
+        print(message)
         with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}\tRMSE loss: {:.5f}\n".format(torch.mean(MSE), torch.mean(MAE), torch.sqrt(torch.mean(MSE))) + '\n')
-            train_txt_file.write("(Coefficient of Determination, R^2) ALL: {:.5f}\n".format(torch.mean(r2_score)))
-            train_txt_file.write("(NRMSE) X: {:.5f}\tY: {:.5f}\tZ: {:.5f}\n".format(NRMSE_for_axis[0], NRMSE_for_axis[1], NRMSE_for_axis[2]))
-            train_txt_file.write(f'(TEST RMSE) X: {torch.sqrt(MSE_for_axis[0])}\tY: {torch.sqrt(MSE_for_axis[1])}\tZ: {torch.sqrt(MSE_for_axis[2])}\n')
-            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
-            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
+            train_txt_file.write(message)
 
-            train_txt_file.write("--- Inference time statistics ---\n")
-            train_txt_file.write(f"Mean\t: {mean:.3f} ms\n")
-            train_txt_file.write(f"Std\t: {std:.3f} ms\n")
-            train_txt_file.write(f"P95\t: {p95:.3f} ms\n\n")
-
-        return MSE, MAE
+        return mse, mae
 
 
 if __name__ == '__main__':

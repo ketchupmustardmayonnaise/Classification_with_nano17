@@ -1,5 +1,5 @@
-train_mode: False
-use_wandb: True
+train_mode: True
+use_wandb: False
 wandb_project: Ticwatch Pro 3
 
 # encoder
@@ -18,7 +18,7 @@ image_type: rgb # [origin, rgb, diff, zScore]
 image_size: !!python/tuple
   - 6
   - 6
-xflip: True
+xflip: False
 
 # directory
 dataset_dir: ./dataset
@@ -31,7 +31,7 @@ upper_bound_of_force: !!python/tuple
   - 1 # z
 
 save_dir: ./saved_models
-model_dir: ./saved_models/lightweight_convnexttiny_transformer_02-02_11-09-25/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ./saved_models/lightweight_convnexttiny_transformer_02-03_23-10-04/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None

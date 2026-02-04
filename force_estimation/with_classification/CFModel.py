@@ -2,6 +2,7 @@ from sys import exception
 
 from force_estimation.model.lstm import *
 from force_estimation.with_classification.transformer import *
+from force_estimation.with_classification.transformer_each_label import *
 import torch.nn.functional as F
 from torchvision import models
 
