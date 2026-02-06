@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from torchvision import models
 
 transformer_nhead = 2
-transformer_ff_dim = 192
 
 class CFModel(nn.Module):
     def __init__(self, encoder, decoder, num_decoder_layer, dim_decoder_hidden,
@@ -72,7 +71,7 @@ class CFModel(nn.Module):
                                              output_size=3,
                                              num_rnn_layer=num_decoder_layer, # 트랜스포머 레이어 수
                                              nhead=transformer_nhead, # 어텐션 헤드 수
-                                             dim_feedforward=transformer_ff_dim, # 트랜스포머 내부 FF 레이어 차원
+                                             dim_feedforward=self.decoder_input_size * 2, # 트랜스포머 내부 FF 레이어 차원
                                              max_len=target_index) # 시퀀스 최대 길이
         
         else: raise Exception('Unknown decoder type')

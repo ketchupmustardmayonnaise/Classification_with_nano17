@@ -5,7 +5,7 @@ current_path = os.getcwd()
 print(current_path)
 
 # 원본 ZIP 경로
-src_zip_path = f'{current_path}\\split'  # 여기에 원래 zip 경로 넣기
+src_zip_path = f'{current_path}\\original_data\\bodypart_adjusted\\kth'  # 여기에 원래 zip 경로 넣기
 
 for file_name in os.listdir(src_zip_path):  # 각 파일들에 대하여
     if file_name.endswith('.zip'):

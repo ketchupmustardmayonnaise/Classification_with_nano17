@@ -27,6 +27,7 @@ class TrainMetrics:
             self.prediction_label = []
 
     def calculate_regression_metrics(self, prediction : torch.Tensor, ground_truth : torch.Tensor):
+        # valid = torch.isfinite(prediction).all & torch.isfinite(ground_truth).all
         mse = torch.nn.functional.mse_loss(prediction, ground_truth, reduction='none')
         mae = torch.nn.functional.l1_loss(prediction, ground_truth, reduction='none')
 

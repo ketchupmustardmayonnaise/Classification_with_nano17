@@ -21,7 +21,7 @@ image_size: !!python/tuple
 xflip: False
 
 # directory
-dataset_dir: ./dataset
+dataset_dir: ../dataset/bodypart/for_train/h5
 
 # upper bound of force
 # x, y 는 양방향 모두 고려할 것
