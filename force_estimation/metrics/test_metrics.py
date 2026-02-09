@@ -19,6 +19,7 @@ class TestMetrics:
         # =================== Classification Metrics ===================
         self.is_classification = is_classification
         if self.is_classification:
+            # 현재로서는, 하나의 sliding window에서 하나의 값을 예측함.
             self.cross_entropy = []
             self.ground_truth_label = []
             self.prediction_label = []
@@ -66,6 +67,40 @@ class TestMetrics:
 
     def set_upper_bound_of_test(self, upper_bound_for_axis):
         self.upper_bound_for_axis = torch.Tensor(upper_bound_for_axis)
+
+
+    def get_metrics_for_filter(self, mask):
+
+        # shape: (num_of_chunks, target_index, 3)
+        filtered_prediction = [sequence for sequence, m in zip(self.prediction_for_window, mask) if m]
+        filtered_ground_truth = [sequence for sequence, m in zip(self.ground_truth_for_window, mask) if m]
+
+        filtered_prediction = torch.from_numpy(np.concatenate(filtered_prediction, axis=0))
+        filtered_ground_truth = torch.from_numpy(np.concatenate(filtered_ground_truth, axis=0))
+
+        mse = torch.nn.functional.mse_loss(filtered_prediction, filtered_ground_truth, reduction='none')
+        mae = torch.nn.functional.l1_loss(filtered_prediction, filtered_ground_truth, reduction='none')
+
+        return torch.mean(mse), torch.mean(mae), torch.sqrt(torch.mean(mse))  # MSE, MAE, RMSE
+
+
+    def get_metrics_for_label(self):
+        from force_estimation.with_classification.bodypart_label import bodypart_label
+
+        for label in bodypart_label.keys():
+            mask = (self.ground_truth_label == label)
+
+            filtered_prediction = torch.from_numpy(np.concatenate(self.prediction_for_window, axis=0))[mask]
+            filtered_ground_truth = torch.from_numpy(np.concatenate(self.ground_truth_for_window, axis=0))[mask]
+
+            mse = torch.nn.functional.mse_loss(filtered_prediction, filtered_ground_truth, reduction='none')
+            mae = torch.nn.functional.l1_loss(filtered_prediction, filtered_ground_truth, reduction='none')
+
+            mse_for_axis = torch.mean(mse, dim=(0, 1))
+            mae_for_axis = torch.mean(mae, dim=(0, 1))
+
+            print(f"{bodypart_label[label]}: MSE: {torch.mean(mse)} (X: {mse_for_axis[0]:.6f}, Y: {mse_for_axis[1]:.6f}, Z: {mse_for_axis[2]:.6f}) ,\
+            MAE: {torch.mean(mae)} (X: {mae_for_axis[0]:.6f}, Y: {mae_for_axis[1]:.6f}, Z: {mae_for_axis[2]:.6f})")
 
 
     def get_regression_metrics(self, export_r2_score : bool = False, export_nrmse : bool = False):

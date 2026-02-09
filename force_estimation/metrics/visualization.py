@@ -95,7 +95,10 @@ class Visualization:
             _f = f[index]
             _pf = pf[index]
 
-            plt.suptitle(f"{index}th test sequence data")
+            if label is not None:
+                plt.suptitle(f"{index}th test sequence data ({bodypart_label.get(label[index])})")
+            else:
+                plt.suptitle(f"{index}th test sequence data")
 
             # 해당 plot에 대해서만 MSE, MAE
             mse = torch.nn.functional.mse_loss(torch.Tensor(_f).float(), torch.Tensor(_pf).float(), reduction='none')
@@ -130,18 +133,18 @@ class Visualization:
             if not os.path.exists(f"{save_dir}/{folder_name}"): os.makedirs(f"{save_dir}/{folder_name}")
 
             if label is not None:
-                plt.savefig(f'{save_dir}/{folder_name}/test_{bodypart_label.get(label[index])}_{index}th_data.png',
+                plt.savefig(f'{save_dir}/{folder_name}/test_{index}th_data.png',
                             dpi=300, facecolor='white', edgecolor='black',
                             format='png', pad_inches=0.1, transparent=False)
-                plt.savefig(f'{save_dir}/{folder_name}/test_{bodypart_label.get(label[index])}_{index}th_data.svg',
+                plt.savefig(f'{save_dir}/{folder_name}/test_{index}th_data.svg',
                             dpi=300,
                             facecolor='white', edgecolor='black',
                             format='svg', pad_inches=0.1, transparent=False)
             else:
-                plt.savefig(f'{save_dir}/{folder_name}/test_{index}th_data.png', dpi=300,
+                plt.savefig(f'{save_dir}/{folder_name}/test_{bodypart_label.get(label[index])}_{index}th_data.png', dpi=300,
                             facecolor='white', edgecolor='black',
                             format='png', pad_inches=0.1, transparent=False)
-                plt.savefig(f'{save_dir}/{folder_name}/test_{index}th_data.svg', dpi=300,
+                plt.savefig(f'{save_dir}/{folder_name}/test_{bodypart_label.get(label[index])}_{index}th_data.svg', dpi=300,
                             facecolor='white', edgecolor='black',
                             format='svg', pad_inches=0.1, transparent=False)
 

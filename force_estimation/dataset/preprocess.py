@@ -11,7 +11,7 @@ import h5py
 
 # =======================================
 # configuration
-path = 'bodypart_not_cross_person'
+path = 'bodypart_not_cross_person/all'
 dataset_types = ['train', 'val', 'test']
 
 original_image_size = (6, 6)
@@ -60,6 +60,8 @@ class PreprocessDataset:
         img_ts = []
         force_ts = []
 
+        name = []
+
         for lab in os.listdir(path):  # 각 label에 대하여
             for file_name in os.listdir(path + '/' + lab):  # 각 파일들에 대하여
                 with zipfile.ZipFile(path + '/' + lab + '/' + file_name, 'r') as zf:  # 각 zip파일들에 대하여
@@ -77,8 +79,10 @@ class PreprocessDataset:
                             label.append(int(lab))
                             frame.append(len(data['img']))
 
+                            name.append(self.extract_subject_name(file_name))
+
         print(f"{path}: {sum(frame)} image data")
-        return img, force, label, img_ts, force_ts
+        return img, force, label, img_ts, force_ts, name
 
 
 
@@ -298,13 +302,25 @@ class PreprocessDataset:
         return result_label
 
 
+
+    def extract_subject_name(self, filename):
+        """
+        파일명에서, 이름만 추출함.
+        """
+        # 확장자 제거
+        name = filename.rsplit('.', 1)[0]
+
+        name = name.split('_')[1].lower()
+        return name
+
+
     # ==================================
     # About Preprocess
     # ==================================
 
 
     def preprocess(self, path, is_save=True):
-        img, force, label, img_ts, force_ts = self.load_data_from_npz(path)
+        img, force, label, img_ts, force_ts, name = self.load_data_from_npz(path)
 
         for sequence_index in range(len(img)):
             img[sequence_index], img_ts[sequence_index] = self.replace_bad_frame_with_previous(img[sequence_index], img_ts[sequence_index])
@@ -334,13 +350,13 @@ class PreprocessDataset:
             frame.append(int(len(img[sequence_index])))
 
         # label
-        if is_save: self.save_dataset(path, img, force, label, frame)
+        if is_save: self.save_dataset(path, img, force, label, frame, name)
 
-        return img, force, label, frame
+        return img, force, label, frame, name
 
 
 
-    def save_dataset(self, path, img, force, label, frame):
+    def save_dataset(self, path, img, force, label, frame, name=None):
         file_name = f'{path}_dataset.h5'
 
         with h5py.File(file_name, 'w') as h5f:
@@ -367,6 +383,8 @@ class PreprocessDataset:
                     sys.exit(1)
 
             h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
+            if name is not None:
+                h5f.create_dataset('name', data=name, compression='gzip', compression_opts=9)
 
 
 
@@ -375,7 +393,7 @@ class PreprocessDataset:
         Train Dataset으로부터 mean, max, std 추출
         '''
 
-        img, force, _, img_ts, force_ts = self.load_data_from_npz(path_of_train_dataset)
+        img, force, _, img_ts, force_ts, _ = self.load_data_from_npz(path_of_train_dataset)
         _img = img.copy()
         before_frame_counts = [arr.shape[0] for arr in img]
         for sequence_index in range(len(img)):

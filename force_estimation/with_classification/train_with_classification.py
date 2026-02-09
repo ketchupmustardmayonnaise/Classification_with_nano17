@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from force_estimation.metrics import *
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from force_estimation.model.with_classification.CFModel import *
+from force_estimation.model.CFModel import *
 
 
 class ForceEstimation:
@@ -80,8 +80,7 @@ class ForceEstimation:
                              self.num_decoder_layer,
                              self.dim_decoder_hidden,
                              self.target_index,
-                             self.image_size,
-                             num_classes=self.num_classes)
+                             self.image_size)
         self.model = self.model.to(self.device)
         torchinfo.summary(self.model, input_size=(self.batch_size, self.target_index, 3, self.image_size[0], self.image_size[1]))
 
@@ -305,10 +304,6 @@ class ForceEstimation:
         self.model.eval()
         metrics = TestMetrics(is_classification=True)
 
-        label_for_sequence = []  # (# of sequences, index)
-
-        y_labels = []  # 각 sliding window마다의 bodypart label
-
         # 소요 시간 측정
         self.batch_size = 1
         start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
@@ -318,14 +313,10 @@ class ForceEstimation:
 
         with torch.no_grad():
             for _X, _force, _label in self.test_dataloader:  # 한 시퀀스씩 추정
-                _X, _y, _force = _X.squeeze().tolist(), _label.squeeze().tolist(), _force.squeeze().tolist()
+                _X, _label, _force = _X.squeeze().tolist(), _label.squeeze().tolist(), _force.squeeze().tolist()
 
                 metrics.init_new_sequence()
                 metrics.save_sequence(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
-
-                # label에서 0이 아닌 값만 뽑음 - 해당 시퀀스의 bodypart ground truth가 무엇인지
-                labels = np.argmax(_y, axis=1)
-                label_for_sequence.append(next((lab for lab in labels if lab != 0), None))
 
                 # ===============================================
                 # 각 시퀀스를 sliding window씩 자름
@@ -334,7 +325,7 @@ class ForceEstimation:
                     X.append(_X[i:i + self.target_index])
                     force.append(_force[i:i + self.target_index])
 
-                    window_labels = torch.Tensor(_y[i:i+self.target_index])
+                    window_labels = torch.Tensor(_label[i:i+self.target_index])
                     label.append(RFTDataset.majority_last_onehot_torch(window_labels).tolist())
                 # ===============================================
 
@@ -365,11 +356,6 @@ class ForceEstimation:
                     # ===============================================
                     # Classification - Bodypart Classification
                     pred_class = torch.nn.functional.softmax(pred_class, dim=1)  # 각 레이블별 확률값
-
-                    # 현재 label의 ground truth를 index로 취함.
-                    y_label = torch.argmax(y_batch, dim=0)
-                    # label의 ground truth와 predicted 결과를 저장함.
-                    y_labels.extend(y_label.cpu().data.tolist())
                     # ===============================================
 
                     metrics.save_inference_time(start.elapsed_time(end))
@@ -388,28 +374,30 @@ class ForceEstimation:
         train_txt_path = self.save_dir + "/train.txt"
         metrics.set_mean_of_test(self.test_dataset.get_mean_of_test_dataset())
         metrics.set_upper_bound_of_test(upper_bound_of_force)
-        message, mse, mae = metrics.get_regression_metrics()
+        message, mse, mae, r2_score, nrmse_for_axis = metrics.get_regression_metrics(export_r2_score=True,
+                                                                                     export_nrmse=True)
 
+        print(message)
+
+        # ===============================================
         Visualization.plot_for_lstm(metrics.ground_truth_for_sequence, metrics.prediction_for_window,
                       self.target_index, self.save_dir, train_txt_path,
-                      use_wandb=self.use_wandb, label=label_for_sequence)
-
-
-        # ===============================================
+                      use_wandb=self.use_wandb, label=self.test_dataset.return_sequence_labels())
         # classification 결과의 accuracy
         Visualization.save_accuracy_metrics(self.save_dir, metrics.ground_truth_label, metrics.prediction_label)
+        # ===============================================
 
-        '''
-        # ===============================================
-        # 각 bodypart마다의 MSE, MAE error
-        pair_of_errors = []
-        for bodypart_index in self.num_classes:
-            mask = torch.Tensor(y_labels) == bodypart_index
-            mse_each_label = torch.Tensor(MSE)[mask].numpy()
-            mean_mae = torch.Tensor(MAE)[mask].mean(dim=(0, 1))
-            pair_of_errors.append([mse_each_label, mean_mae])
-        # ===============================================
-        '''
+
+        # =======================================================
+        # 각 subject별 통계
+        subjects = self.test_dataset.return_unique_names()
+        for s in subjects:
+            filter_list = (self.test_dataset.name == s)
+            mse, mae, rmse = metrics.get_metrics_for_filter(filter_list)
+            print(f"({s}: mse: {mse}, mae: {mae}, rmse: {rmse})")
+        # =======================================================
+
+        metrics.get_metrics_for_label()
 
 
         # ===============================================
@@ -417,30 +405,6 @@ class ForceEstimation:
         print(message)
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write(message)
-
-        '''
-        for index in range(pair_of_errors.__len__()):
-            print(f"Label {index} → RMSE 평균: {np.sqrt(np.mean(np.array(pair_of_errors[index][0])))} "
-                  f"(X: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 0])):.4f},\
-                  Y: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 1])):.4f},\
-                  Z: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 2])):.4f}),"
-                  f"\tMAE 평균: {np.mean(np.array(pair_of_errors[index][1]))} "
-                  f"(X: {pair_of_errors[index][1][0]:.4f}, Y: {pair_of_errors[index][1][1]:.4f}, Z: {pair_of_errors[index][1][2]:.4f})")
-        # ===============================================
-
-
-        # 결과 txt 파일로도 출력
-        with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write(message)
-
-            for index in range(pair_of_errors.__len__()):
-                train_txt_file.write(f"Label {index} → RMSE 평균: {np.sqrt(np.mean(np.array(pair_of_errors[index][0])))} "
-                  f"(X: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 0])):.4f},\
-                  Y: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 1])):.4f},\
-                  Z: {np.sqrt(np.mean(pair_of_errors[index][0][:, :, 2])):.4f}),"
-                  f"\tMAE 평균: {np.mean(np.array(pair_of_errors[index][1]))} "
-                  f"(X: {pair_of_errors[index][1][0]:.4f}, Y: {pair_of_errors[index][1][1]:.4f}, Z: {pair_of_errors[index][1][2]:.4f})\n")
-        '''
         # ===============================================
 
 

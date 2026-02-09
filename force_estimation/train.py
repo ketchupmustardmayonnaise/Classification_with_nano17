@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 from force_estimation.metrics import *
 from torchmetrics.regression import MeanAbsolutePercentageError
+import torch.nn.functional as F
+
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
 from model import *
@@ -213,13 +215,13 @@ class ForceEstimation:
             # X.shape =
             for batch in progress_bar:
                 X, force, y = batch
-                X, y, force = X.float().to(self.device), y.to(self.device), force.to(self.device)
+                X, y, force = X.float().to(self.device), y.to(self.device), force.float().to(self.device)
 
                 self.optimizer.zero_grad()
                 pred_force = self.model(X)
 
-                metrics.calculate_regression_metrics(pred_force.float(), force.float())
-                loss = self.loss(pred_force.float(), force.float())
+                metrics.calculate_regression_metrics(pred_force, force)
+                loss = self.loss(pred_force, force)
                 loss.backward()
 
                 self.optimizer.step()
@@ -301,7 +303,8 @@ class ForceEstimation:
         
         with torch.no_grad():
             for _X, _force, _label in self.test_dataloader: # inference each one sequence
-                _X, _force = _X.squeeze().tolist(), _force.squeeze().tolist() # convert a sequence tensor to list
+                _X, _force, _label = _X.squeeze().tolist(), _force.squeeze().tolist(), _label.squeeze().tolist() # convert a sequence tensor to list
+
                 metrics.init_new_sequence()
                 metrics.save_sequence(_force) # 리스트에 각 시퀀스마다의 force label을 전체 저장
 
@@ -312,7 +315,9 @@ class ForceEstimation:
                 for i in range(len(_X) - self.target_index + 1):
                     X.append(_X[i:i+self.target_index])
                     force.append(_force[i:i+self.target_index])
-                    label.append(_label[i:i+self.target_index])
+
+                    window_labels = torch.Tensor(_label[i:i + self.target_index])
+                    label.append(RFTDataset.majority_last_onehot_torch(window_labels).tolist())
                 # ========================================
 
 
@@ -324,19 +329,21 @@ class ForceEstimation:
                     if batch_start + self.batch_size < len(X):
                         X_batch, force_batch, label_batch = torch.Tensor(X[batch_start:batch_start+self.batch_size]),\
                                                         torch.Tensor(force[batch_start:batch_start+self.batch_size]),\
-                                                        torch.Tensor(_label[batch_start:batch_start+self.batch_size])
+                                                        torch.Tensor(label[batch_start:batch_start+self.batch_size])
                     else:
                         X_batch, force_batch, label_batch = torch.Tensor(X[batch_start:len(X)]),\
                                                         torch.Tensor(force[batch_start:len(X)]),\
-                                                        torch.Tensor(_label[batch_start:len(X)])
+                                                        torch.Tensor(label[batch_start:len(X)])
 
                     X_batch, force_batch, y_batch = X_batch.to(self.device), force_batch.to(self.device), label_batch.to(self.device)
 
+                    # ===============================================
                     # measure and record inference time
                     start.record()
                     pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
                     end.record()
                     torch.cuda.synchronize()
+                    # ===============================================
 
                     metrics.save_inference_time(start.elapsed_time(end))
                     metrics.save_regression_result_of_window(pred_force.detach().cpu().numpy().tolist(), force_batch.detach().cpu().numpy().tolist())
@@ -350,13 +357,31 @@ class ForceEstimation:
 
         train_txt_path = self.save_dir + "/train.txt"
         Visualization.plot_for_lstm(metrics.ground_truth_for_sequence, metrics.prediction_for_window,
-                      self.target_index, self.save_dir, train_txt_path, use_wandb=self.use_wandb)
+                                    self.target_index, self.save_dir, train_txt_path,
+                                    use_wandb=self.use_wandb, label=self.test_dataset.return_sequence_labels())
 
         metrics.set_mean_of_test(self.test_dataset.get_mean_of_test_dataset())
         metrics.set_upper_bound_of_test(upper_bound_of_force)
         message, mse, mae, r2_score, nrmse_for_axis = metrics.get_regression_metrics(export_r2_score=True, export_nrmse=True)
 
         print(message)
+
+        # =======================================================
+        # 각 subject별 통계
+        subjects = self.test_dataset.return_unique_names()
+        for s in subjects:
+            filter_list = (self.test_dataset.name == s)
+            mse, mae, rmse = metrics.get_metrics_for_filter(filter_list)
+            print(f"({s}: mse: {mse}, mae: {mae}, rmse: {rmse})")
+        # =======================================================
+
+
+        # =======================================================
+        # lab = self.
+
+        # =======================================================
+        # metrics.get_metrics_for_label()
+
         with open(train_txt_path, 'a') as train_txt_file:
             train_txt_file.write(message)
 

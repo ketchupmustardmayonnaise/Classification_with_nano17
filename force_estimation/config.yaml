@@ -1,4 +1,4 @@
-train_mode: True
+train_mode: False
 use_wandb: False
 wandb_project: Ticwatch Pro 3
 
@@ -20,7 +20,7 @@ image_size: !!python/tuple
 xflip: True
 
 # directory
-dataset_dir: ./dataset/bodypart_not_cross_person/h5
+dataset_dir: ./dataset/bodypart_not_cross_person/all/h5
 
 # upper bound of force
 # x, y 는 양방향 모두 고려할 것
@@ -30,7 +30,7 @@ upper_bound_of_force: !!python/tuple
   - 1 # z
 
 save_dir: ../saved_models
-model_dir: C:\Users\user\Documents\SynologyDrive\Obsidian\이정민\Issue\250204 Data Augmentation 관련 문제\(bodypart - transformer - nan) lightweight_convnexttiny_transformer_02-04_17-35-03/best_model.pt # 확장자: .pt 또는 .pth
+model_dir: ../saved_models/lightweight_convnexttiny_transformer_02-09_15-15-11/best_model.pt # 확장자: .pt 또는 .pth
 
 optimizer_type: Adam # [Adam, SGD, rmsprop]
 scheduler_type: None

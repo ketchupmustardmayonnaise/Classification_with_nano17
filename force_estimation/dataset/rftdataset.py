@@ -25,12 +25,17 @@ class RFTDataset(Dataset):
         
         self.prefix = [0]
         self.frame = []
+        self.name = []
 
         with h5py.File(self.path, 'r') as f:
             sample_keys = list(f.keys())
             if 'frame' in sample_keys:
                 self.frame = f[f"frame"][:]
                 sample_keys.remove('frame')
+
+            if 'name' in sample_keys:
+                self.name = f[f"name"][:]
+                sample_keys.remove('name')
 
             for seq in sample_keys:
                 self.img.append(f[f"{seq}/img"][:])
@@ -59,8 +64,8 @@ class RFTDataset(Dataset):
             sequence_idx = bisect.bisect_right(self.prefix, index) - 1
             frame_idx = index - self.prefix[sequence_idx]
 
-            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index])
-            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3])
+            img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.target_index]).float()
+            force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.target_index, 0:3]).float()
 
             # label
             window_labels = torch.from_numpy(self.label[sequence_idx][frame_idx:frame_idx + self.target_index])
@@ -124,6 +129,7 @@ class RFTDataset(Dataset):
         force = np.concatenate(self.force, axis=0)[:, 0:3]
         return torch.from_numpy(np.mean(force, axis=0))
 
+
     @staticmethod
     def majority_last_onehot_torch(window_labels: torch.Tensor) -> torch.Tensor:
         """
@@ -153,3 +159,16 @@ class RFTDataset(Dataset):
 
     def scale_image(self, img, scale_factor=(2,2)):
         return F.interpolate(img, scale_factor=scale_factor, mode='bilinear')
+
+
+    def return_unique_names(self):
+        return np.unique(np.array(self.name))
+
+    def return_sequence_labels(self):
+        label_for_sequence = []
+        for sequence_idx in range(len(self.label)):
+            # label에서 0이 아닌 값만 뽑음 - 해당 시퀀스의 bodypart ground truth가 무엇인지
+            labels = np.argmax(self.label[sequence_idx], axis=1)
+            label_for_sequence.append(next((lab for lab in labels if lab != 0), None))
+
+        return label_for_sequence
