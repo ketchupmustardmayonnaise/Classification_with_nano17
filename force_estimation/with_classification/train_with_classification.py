@@ -2,22 +2,17 @@ import pathlib
 import sys
 import time
 
-import torch
 import torchinfo
 import yaml
-import seaborn as sns
 from tqdm import tqdm
 from force_estimation.utils import *
-from force_estimation.dataset import *
 from torch.optim import lr_scheduler
 from force_estimation.utils.earlystopping import *
-import wandb
 from torch.utils.data import DataLoader
-from bodypart_label import bodypart_label
 from force_estimation.metrics import *
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from force_estimation.with_classification.CFModel import *
+from force_estimation.model.with_classification.CFModel import *
 
 
 class ForceEstimation:
