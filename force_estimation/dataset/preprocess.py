@@ -11,7 +11,7 @@ import h5py
 
 # =======================================
 # configuration
-path = 'bodypart_not_cross_person/all'
+path = 'dataset/bodypart_not_cross_person/all'
 dataset_types = ['train', 'val', 'test']
 
 original_image_size = (6, 6)

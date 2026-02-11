@@ -1,0 +1,33 @@
+
+save_directory: ./saved_models
+
+wandb:
+  project: HandInterfacesWatch
+  entity: pinkmiro-kyung-hee-university
+  group: 3subjects_not_cross_person
+  log_model: all
+
+data:
+  data_dir: ./data/dataset/bodypart_not_cross_person/all/h5
+  length_of_window: 30
+  batch_size: 8
+  image_size: [6, 6]
+
+model:
+  dropout: 0.0
+  learning_rate: 0.0001
+  weight_decay: 0.001
+
+  encoder_type: lightweight_convnexttiny
+  decoder_type: transformer
+
+  transformer:
+    num_layers: 2
+    dim_feedforward: default
+    num_of_head: 2 # for transformer
+    export_multistep: True # Many-To-One 또는 Many-To-Many
+
+  lstm:
+    num_layers: 2
+    is_bidirectional: True # for lstm
+    export_multistep: True # Many-To-One 또는 Many-To-Many

@@ -1,6 +1,8 @@
 .idea
 __pycache__
 saved_models
+wandb
+outputs
 force_estimation/wandb
 *.h5
 force_estimation/artifacts
