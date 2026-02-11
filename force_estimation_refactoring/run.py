@@ -97,6 +97,7 @@ def main(cfg: DictConfig):
     )
 
     trainer.fit(model, datamodule=data_module)
+    wandb.finish()
 
 
 if __name__ == '__main__':

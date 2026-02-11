@@ -5,10 +5,24 @@ import wandb
 
 import seaborn as sns
 import matplotlib.pyplot as plt
-from bodypart_label import bodypart_label
+from .bodypart_label import bodypart_label
 
 
-def plot_sequence(f, pf, save_dir, index, label,
+def reconstruct_list_from_windows(raw_windows : list,
+                                  index : int = None) -> list:
+    if index is None:
+        index = len(raw_windows[0])
+
+    reconstructed_list = []
+    reconstructed_list.extend(raw_windows[0][:index].tolist())  # 첫 번째 데이터는 모두 저장
+    for i in range(1, len(raw_windows)):
+        reconstructed_list.append(raw_windows[i][index - 1].tolist())  # 그 이후부턴 마지막 프레임만 저장
+
+    return reconstructed_list
+
+
+def plot_sequence(f, pf, save_dir, index,
+                  label=None,
                   use_wandb=False, name=None):
     """
     재정렬된 force와 predicted force가 주어지면, 이를 plot하여 저장함.
@@ -34,9 +48,9 @@ def plot_sequence(f, pf, save_dir, index, label,
         axes[num_data].set_xlabel('Frame')
         axes[num_data].set_ylabel('Force (N)')
         if num_data == 0 or num_data == 1:
-            axes[num_data].set_ylim([-2, 2])
+            axes[num_data].set_ylim([-3, 3])
         elif num_data == 2:
-            axes[num_data].set_ylim([-5, 0.5])
+            axes[num_data].set_ylim([-10, 0.5])
 
         axes[num_data].text(x=0.05, y=0.05,
                             s=f'RMSE: {torch.sqrt_(torch.mean(mse, axis=0)[num_data]):4f},'
@@ -54,23 +68,27 @@ def plot_sequence(f, pf, save_dir, index, label,
             axes[num_data].set_title('FZ')
 
     plt.legend()
-    if not os.path.exists(f"{save_dir}"): os.makedirs(f"{save_dir}")
+    if not os.path.exists(f"{save_dir}"):
+        os.makedirs(f"{save_dir}")
+        os.makedirs(f"{save_dir}/png")
+        os.makedirs(f"{save_dir}/svg")
 
-    if label is not None:
-        plt.savefig(f'{save_dir}/test_{index}th_data.png',
-                    dpi=300, facecolor='white', edgecolor='black',
-                    format='png', pad_inches=0.1, transparent=False)
-        plt.savefig(f'{save_dir}/test_{index}th_data.svg',
-                    dpi=300,
-                    facecolor='white', edgecolor='black',
-                    format='svg', pad_inches=0.1, transparent=False)
+    if label is None:
+        if name is None:
+            filename = f'test_{index}th_data'
+        else: filename = f'[{str(name)}] test_{index}th_data'
     else:
-        plt.savefig(f'{save_dir}/test_{bodypart_label.get(label[index])}_{index}th_data.png', dpi=300,
-                    facecolor='white', edgecolor='black',
-                    format='png', pad_inches=0.1, transparent=False)
-        plt.savefig(f'{save_dir}/test_{bodypart_label.get(label[index])}_{index}th_data.svg', dpi=300,
-                    facecolor='white', edgecolor='black',
-                    format='svg', pad_inches=0.1, transparent=False)
+        if name is None:
+            filename = f'[{bodypart_label.get(label)}] test_{index}th_data'
+        else: filename = f'[{str(name)}] [{bodypart_label.get(label)}] test_{index}th_data'
+
+    plt.savefig(f'{save_dir}/png/{filename}.png',
+                dpi=300, facecolor='white', edgecolor='black',
+                format='png', pad_inches=0.1, transparent=False)
+    plt.savefig(f'{save_dir}/svg/{filename}.svg',
+                dpi=300,
+                facecolor='white', edgecolor='black',
+                format='svg', pad_inches=0.1, transparent=False)
 
     if use_wandb:
         img = wandb.Image(plt.imread(f'{save_dir}/test_{index}th_data.png'))

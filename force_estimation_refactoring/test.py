@@ -2,6 +2,7 @@ import time
 import hydra
 from omegaconf import OmegaConf
 from models import *
+from utils.load_model import *
 from utils.bodypart_label import bodypart_label
 from omegaconf import DictConfig
 
@@ -14,6 +15,9 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 from pytorch_lightning.loggers import WandbLogger
 
 
+PATH = "C:\\Users\\Jeongmin\\PycharmProjects\\Classification_with_nano17\\force_estimation_refactoring\\saved_models\\02-12_01-30-20_lightweight_convnexttiny_transformer"
+MODEL_NAME = "best_model_loss_for_monitor=0.4144.ckpt"
+
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
@@ -21,39 +25,9 @@ def main(cfg: DictConfig):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
 
-    time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
-
     # =========================================
     # callback 함수들
     # =========================================
-
-    wandb_logger = WandbLogger(
-        name=f'{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}',
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
-        log_model= cfg.wandb.log_model
-    )
-
-    save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-    if not os.path.exists(save_dir): os.makedirs(save_dir)
-    run_name = f"{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-
-    checkpoint_callback = ModelCheckpoint(
-        monitor='val/loss',
-        mode='min',
-        save_top_k=3,
-        dirpath=save_dir,
-        filename='best_model_(val_loss_{val_loss:.2f})',
-        verbose=True
-    )
-
-    # early stopping callback
-    early_stop_callback = EarlyStopping(
-        monitor='val/loss',
-        patience=20,
-        min_delta=1e-4,  # 0.001 미만 개선은 무시
-        verbose=True)
 
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
@@ -78,24 +52,33 @@ def main(cfg: DictConfig):
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
 
-    model = PredictionForce(vf_net, tf_net,
-                    dim_of_regression=3, # axis
-                    classes=bodypart_label,
-                    task="regression",
+    model = load_model_from_local(
+        PredictionForce, f"{PATH}//{MODEL_NAME}",
+        vision_feature_extractor=vf_net,
+        temporal_feature_extractor=tf_net,
 
-                    learning_rate=cfg.model.learning_rate,
-                    weight_decay=cfg.model.weight_decay)
+        dim_of_regression=3,
+        classes=bodypart_label,
+        task="regression",
+
+        learning_rate=cfg.model.learning_rate,
+        weight_decay=cfg.model.weight_decay,
+        # !!!!!!! 이거 수정 !!!!!!!
+        directory=PATH,
+    )
 
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
         precision=16,
-        logger=wandb_logger,
-        max_epochs=200,
-        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
+        max_epochs=200
     )
 
-    test_results = trainer.test(model, datamodule=data_module, ckpt_path='best')
+    data_module.setup(stage='test')
+    # test_mean = data_module.test_dataloader().get_mean_of_test_dataset()
+    # PredictionForce.set_buffer("test_mean", test_mean)
+
+    test_results = trainer.test(model, datamodule=data_module)
 
 
 if __name__ == '__main__':

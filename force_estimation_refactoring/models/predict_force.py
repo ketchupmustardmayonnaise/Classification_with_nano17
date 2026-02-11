@@ -1,6 +1,7 @@
 import json
 
 import torch
+from force_estimation_refactoring.utils.plot_sequence import *
 import numpy as np
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -90,16 +91,6 @@ class PredictionForce(pl.LightningModule):
             raise Exception("정확한 Task 기입")
 
 
-        # Lists to store results for epoch end (for per-axis calculations)
-        self.train_predictions = []
-        self.train_targets = []
-        self.val_predictions = []
-        self.val_targets = []
-        self.test_predictions = []  # 모든 테스트 샘플의 예측값
-        self.test_targets = []  # 모든 테스트 샘플의 실제값
-
-
-
         # ================= Loss =================
 
         self.train_results = self._init_result_dict()
@@ -123,26 +114,6 @@ class PredictionForce(pl.LightningModule):
             return x
 
 
-
-    def step(self, batch: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int, int]):
-        prediction = self.forward(batch['img'])
-
-        # Calculate overall loss
-        loss = self.criterion(prediction, batch['force'])
-
-        # per-axis losses
-        loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
-        loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
-        loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
-
-        # 이미지(images)와 함께 추가 메타데이터도 반환합니다.
-        # 이 반환 값들은 training/validation/test_step에서 필요에 따라 사용됩니다.
-        return (loss, loss_fx, loss_fy, loss_fz,
-                prediction, batch['force'], batch['img'],
-                batch['sequence_id'], batch['subject_id'])
-
-
-
     # =================== Methods ===================
     def _init_result_dict(self):
         return {
@@ -156,7 +127,7 @@ class PredictionForce(pl.LightningModule):
 
         storage["prediction"].extend(preds.detach().cpu())
         storage["target"].extend(target.detach().cpu())
-        storage["sequence_id"].extend(sequence_index)
+        storage["sequence_id"].extend(sequence_index.detach().cpu().tolist())
         storage["subject_id"].extend(subject_id)
 
 
@@ -182,6 +153,13 @@ class PredictionForce(pl.LightningModule):
             raise Exception("정확한 Task 기입")
 
         self._task = value
+
+
+    def set_buffer(self,
+                   name : str,
+                   x : torch.Tensor):
+
+        self.register_buffer(name, x, persistent=True) # persistent=True => checkpoint에도 저장함.
 
 
     def configure_optimizers(self):
@@ -228,7 +206,7 @@ class PredictionForce(pl.LightningModule):
 
             self.train_metrics.update(preds_flat, targets_flat)
             self._save_result(self.train_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'], batch['subject_id'])
+                              batch['sequence_id'].detach(), batch['subject_id'])
 
 
         elif self._task == "classification":
@@ -314,7 +292,7 @@ class PredictionForce(pl.LightningModule):
 
             self.val_metrics.update(preds_flat, targets_flat)
             self._save_result(self.val_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'], batch['subject_id'])
+                              batch['sequence_id'].detach(), batch['subject_id'])
 
         elif self._task == "classification":
             # Calculate loss
@@ -390,7 +368,7 @@ class PredictionForce(pl.LightningModule):
 
             self.test_metrics.update(preds_flat, targets_flat)
             self._save_result(self.test_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'], batch['subject_id'])
+                              batch['sequence_id'].detach(), batch['subject_id'])
 
         elif self._task == "classification":
             loss = self.cls_loss(prediction, batch['label'])
@@ -398,12 +376,12 @@ class PredictionForce(pl.LightningModule):
 
             self.test_metrics(pred_class, batch['label'])
             self._save_result(self.test_results, prediction.detach(), batch['label'].detach(),
-                              batch['sequence_id'], batch['subject_id'])
+                              batch['sequence_id'].detach(), batch['subject_id'])
 
 
 
     def on_test_epoch_end(self):
-        metrics = self.test_results.compute()
+        metrics = self.test_metrics.compute()
         self.log_dict(metrics)
 
         if self._task == "regression":
@@ -411,37 +389,76 @@ class PredictionForce(pl.LightningModule):
             ground_truth = torch.cat(self.test_results['target'], dim=0)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
+            r2_all = R2Score()(prediction, ground_truth)
             r2_fx = R2Score()(prediction[:, 0], ground_truth[:, 0])
             r2_fy = R2Score()(prediction[:, 1], ground_truth[:, 1])
             r2_fz = R2Score()(prediction[:, 2], ground_truth[:, 2])
 
+            rmse_all = MeanSquaredError(squared=False)(prediction, ground_truth)
             rmse_fx = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
             rmse_fy = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
             rmse_fz = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
 
+            mae_all = MeanAbsoluteError()(prediction, ground_truth)
             mae_fx = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
             mae_fy = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
             mae_fz = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
 
+            self.log("test/r2_all", r2_all, on_epoch=True, logger=True)
             self.log("test/r2_fx", r2_fx, on_epoch=True, logger=True)
             self.log("test/r2_fy", r2_fy, on_epoch=True, logger=True)
             self.log("test/r2_fz", r2_fz, on_epoch=True, logger=True)
+
+            self.log("test/rmse_all", rmse_all, on_epoch=True, logger=True)
             self.log("test/rmse_fx", rmse_fx, on_epoch=True, logger=True)
             self.log("test/rmse_fy", rmse_fy, on_epoch=True, logger=True)
             self.log("test/rmse_fz", rmse_fz, on_epoch=True, logger=True)
+
+            self.log("test/mae_all", mae_all, on_epoch=True, logger=True)
             self.log("test/mae_fx", mae_fx, on_epoch=True, logger=True)
             self.log("test/mae_fy", mae_fy, on_epoch=True, logger=True)
             self.log("test/mae_fz", mae_fz, on_epoch=True, logger=True)
+
+            # REPORT
+            with open(f'{self.directory}/test_result.txt', "a") as f:
+                f.write(f"[R2 SCORE] Overall: {r2_all:.6f} Fx: {r2_fx:.6f} Fy: {r2_fy:.6f} Fz: {r2_fz:.6f}\n")
+                f.write(f"[RMSE] Overall: {rmse_all:.6f} Fx: {rmse_fx:.6f} Fy: {rmse_fy:.6f} Fz: {rmse_fz:.6f}\n")
+                f.write(f"[MAE] Overall: {mae_all:.6f} Fx: {mae_fx:.6f} Fy: {mae_fy:.6f} Fz: {mae_fz:.6f}\n")
+
+            # 시퀀스 별로 plot
+            grouped_data, unique_seq = self.group_by_sequence(self.test_results)
+            for sid in unique_seq:
+                prediction = reconstruct_list_from_windows(grouped_data[sid]['prediction'])
+                ground_truth = reconstruct_list_from_windows(grouped_data[sid]['target'])
+
+                plot_sequence(ground_truth, prediction, f"{self.directory}/test", sid,
+                              name=grouped_data[sid]['subject_id'][0])
+
+            # 피험자별로 Result Report
+            grouped_data, unique_seq = self.group_by_name(self.test_results)
+            with open(f'{self.directory}/test_result.txt', "a") as f:
+                f.write(f" ========= REPORT FOR EACH SUBJECT ========= \n\n")
+            for sid in unique_seq:
+                prediction = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['prediction']))
+                ground_truth = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['target']))
+
+                r2_for_subject = R2Score()(prediction, ground_truth)
+                rmse_for_subject = MeanSquaredError(squared=False)(prediction, ground_truth)
+                mae_for_subject = MeanAbsoluteError()(prediction, ground_truth)
+
+                with open(f'{self.directory}/test_result.txt', "a") as f:
+                    f.write(f"{sid} R2 SCORE: {r2_for_subject:.6f} RMSE: {rmse_for_subject:.6f} MAE: {mae_for_subject:.6f}\n")
+
+            # bodypart 별로 Result Report
+            # !!!!!!!! 추후 꼭 추가 !!!!!!!!!
 
         self.test_metrics.reset()
         self.test_results = self._init_result_dict()
 
     def group_by_sequence(self,
-                          results,
-                          filter_type="sequence_id" # "sequence_id" or "subject_id"
-    ):
+                          results):
 
-        seq_ids = np.array(results[filter_type])
+        seq_ids = np.array(results["sequence_id"])
         unique_seq = np.unique(seq_ids)
 
         grouped = {}
@@ -451,14 +468,41 @@ class PredictionForce(pl.LightningModule):
 
             preds = [results["prediction"][i] for i in idx]
             targets = [results["target"][i] for i in idx]
+            subject_id = [results["subject_id"][i] for i in idx]
 
             # (num_windows, T, 3) 로 stack
             grouped[sid] = {
+                "subject_id": np.stack(subject_id),
                 "prediction": np.stack(preds),
                 "target": np.stack(targets),
             }
 
-        return grouped
+        return grouped, unique_seq
+
+
+
+    def group_by_name(self, results):
+
+        seq_ids = np.array(results["subject_id"])
+        unique_seq = np.unique(seq_ids)
+
+        grouped = {}
+
+        for sid in unique_seq:
+            idx = np.where(seq_ids == sid)[0]
+
+            preds = [results["prediction"][i] for i in idx]
+            targets = [results["target"][i] for i in idx]
+            sequence_id = [results["target"][i] for i in idx]
+
+            # (num_windows, T, 3) 로 stack
+            grouped[sid] = {
+                "sequence_id": np.stack(sequence_id),
+                "prediction": np.stack(preds),
+                "target": np.stack(targets),
+            }
+
+        return grouped, unique_seq
 
 
     def metriccollection_to_float_dict(self, metric_collection):
