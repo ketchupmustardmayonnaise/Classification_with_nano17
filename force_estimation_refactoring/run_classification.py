@@ -14,12 +14,12 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-
-PATH = "C:\\Users\\Jeongmin\\PycharmProjects\\Classification_with_nano17\\force_estimation_refactoring\\saved_models\\02-12_01-30-20_lightweight_convnexttiny_transformer\\best_model_loss_for_monitor=0.4144.ckpt"
-
-@hydra.main(config_path="conf", config_name="config", version_base=None)
+@hydra.main(config_path="conf", config_name="classification_config", version_base=None)
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
+
+    PATH = cfg.save_directory
+    MODEL_NAME = "best_model_loss_for_monitor=0.3359.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
@@ -31,19 +31,20 @@ def main(cfg: DictConfig):
     # =========================================
 
     wandb_logger = WandbLogger(
-        name=f'{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}',
+        name=f'[CLASSIFICATION] {cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}',
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
+        group="CLASSIFICATION",
         log_model= cfg.wandb.log_model
     )
 
-    save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
+    save_dir = f"{PATH}/CLASSIFICATION_{time_suffix}"
     if not os.path.exists(save_dir): os.makedirs(save_dir)
 
     checkpoint_callback = ModelCheckpoint(
         monitor='loss_for_monitor',
         mode='min',
+        save_last=True,
         save_top_k=3,
         dirpath=save_dir,
         filename='best_model_{loss_for_monitor:.4f}',
@@ -52,7 +53,7 @@ def main(cfg: DictConfig):
 
     # early stopping callback
     early_stop_callback = EarlyStopping(
-        monitor='val/loss',
+        monitor='loss_for_monitor',
         patience=20,
         min_delta=1e-4,  # 0.001 미만 개선은 무시
         verbose=True)
@@ -81,7 +82,7 @@ def main(cfg: DictConfig):
                         export_multistep = cfg.model.transformer.export_multistep)
 
     model = load_model_from_local(
-        PredictionForce, PATH,
+        PredictionForce, f"{PATH}/{MODEL_NAME}",
         vision_feature_extractor=vf_net,
         temporal_feature_extractor=tf_net,
 
@@ -104,6 +105,7 @@ def main(cfg: DictConfig):
     )
 
     trainer.fit(model, datamodule=data_module)
+    wandb.finish()
 
 
 if __name__ == '__main__':

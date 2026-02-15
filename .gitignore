@@ -1,10 +1,8 @@
 .idea
 __pycache__
-saved_models
-wandb
-outputs
-force_estimation/wandb
+saved_models/
+wandb/
+outputs/
+artifacts/
 *.h5
-force_estimation/artifacts
-force_estimation/dataset/wandb
-force_estimation/with_classification/wandb
+lightning_logs/

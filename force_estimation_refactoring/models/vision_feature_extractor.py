@@ -73,12 +73,17 @@ class VisionFeatureExtractor(nn.Module):
 
     def forward(self, x):
         # x.shape = (batch, timesteps, channels, height, width)
-        b, t, c, h, w = x.shape
+        if len(x.shape) == 4:
+            b, c, h, w = x.shape
+            x = self.model(x)
+            x = torch.flatten(x, 1)
 
-        x = x.view((b * t, c, h, w))
-        x = self.model(x)
-        x = torch.flatten(x, 1)
-        x = x.reshape((b, t, -1))
+        elif len(x.shape) == 5:
+            b, t, c, h, w = x.shape
+            x = x.view((b * t, c, h, w))
+            x = self.model(x)
+            x = torch.flatten(x, 1)
+            x = x.reshape((b, t, -1))
 
         return x
 

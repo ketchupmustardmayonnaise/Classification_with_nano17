@@ -37,6 +37,10 @@ class CapTSDataset(Dataset):
                 self.name = f[f"name"][:]
                 sample_keys.remove('name')
 
+            if 'label_each_sequence' in sample_keys:
+                self.label_each_sequence = f[f"label_each_sequence"][:]
+                sample_keys.remove('label_each_sequence')
+
             for seq in sample_keys:
                 self.img.append(f[f"{seq}/img"][:])
                 self.force.append(f[f"{seq}/force"][:])
@@ -55,10 +59,7 @@ class CapTSDataset(Dataset):
 
         img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.length_of_window]).float()
         force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.length_of_window, 0:3]).float()
-
-        # label
-        window_labels = torch.from_numpy(self.label[sequence_idx][frame_idx:frame_idx + self.length_of_window])
-        label = self.majority_last_onehot_torch(window_labels)
+        label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.length_of_window - 1])
 
         ######## Data Augmentation ########
         if self.dataset_type.lower() == 'train' and self.augmentation == True:
@@ -75,6 +76,7 @@ class CapTSDataset(Dataset):
             'img': img,
             'force': force,
             'label': label,
+            'sequence_label' : self.label_each_sequence[sequence_idx],
             'sequence_id': sequence_idx,
             'subject_id': self.name[sequence_idx]
         }

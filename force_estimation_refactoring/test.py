@@ -15,8 +15,8 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 from pytorch_lightning.loggers import WandbLogger
 
 
-PATH = "C:\\Users\\Jeongmin\\PycharmProjects\\Classification_with_nano17\\force_estimation_refactoring\\saved_models\\02-12_01-30-20_lightweight_convnexttiny_transformer"
-MODEL_NAME = "best_model_loss_for_monitor=0.4144.ckpt"
+PATH = "C:\\Users\\user\\PycharmProjects\\Classification_with_nano17_MTM\\force_estimation_refactoring\\saved_models\\02-12_02-37-05_lightweight_convnexttiny_transformer"
+MODEL_NAME = "best_model_loss_for_monitor=0.3359.ckpt"
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -28,8 +28,6 @@ def main(cfg: DictConfig):
     # =========================================
     # callback 함수들
     # =========================================
-
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     # 데이터셋
     data_module = CapacitiveImageDataModule(cfg)

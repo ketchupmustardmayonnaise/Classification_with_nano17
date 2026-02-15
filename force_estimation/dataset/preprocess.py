@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import zipfile
 import traceback
 import h5py
+import copy
 
 # =======================================
 # configuration
@@ -336,6 +337,8 @@ class PreprocessDataset:
         force = self.interpolate_nano_to_capacitance(force, img_ts, force_ts)
         frame = []
 
+        label_each_sequence = copy.deepcopy(label)
+
         for sequence_index in range(len(img)):
             label[sequence_index] = self.label_each_frame(img[sequence_index], label[sequence_index], touch_threshold)
             label[sequence_index] = F.one_hot(torch.Tensor(label[sequence_index]).to(torch.int64),
@@ -350,13 +353,13 @@ class PreprocessDataset:
             frame.append(int(len(img[sequence_index])))
 
         # label
-        if is_save: self.save_dataset(path, img, force, label, frame, name)
+        if is_save: self.save_dataset(path, img, force, label, frame, label_each_sequence, name)
 
-        return img, force, label, frame, name
+        return img, force, label, frame, label_each_sequence, name
 
 
 
-    def save_dataset(self, path, img, force, label, frame, name=None):
+    def save_dataset(self, path, img, force, label, frame, label_each_sequence, name=None):
         file_name = f'{path}_dataset.h5'
 
         with h5py.File(file_name, 'w') as h5f:
@@ -383,6 +386,7 @@ class PreprocessDataset:
                     sys.exit(1)
 
             h5f.create_dataset('frame', data=frame, compression='gzip', compression_opts=9)
+            h5f.create_dataset('label_each_sequence', data=label_each_sequence)
             if name is not None:
                 h5f.create_dataset('name', data=name, compression='gzip', compression_opts=9)
 
