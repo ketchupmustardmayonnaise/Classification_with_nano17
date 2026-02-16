@@ -43,7 +43,7 @@ class RFTDataset(Dataset):
                 self.label.append(f[f"{seq}/label"][:])
 
         for i in range(len(self.frame)):
-            self.frame[i] = int((self.frame[i] - target_index) / self.stride + 1)
+            self.frame[i] = int((self.frame[i] - target_index) / self.stride) + 1
             self.prefix.append(self.frame[i] + self.prefix[-1])
         self.len = sum(self.frame)
 
