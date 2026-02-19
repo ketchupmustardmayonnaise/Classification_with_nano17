@@ -20,7 +20,7 @@ from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError, R2Score
 from typing import Any, Dict, Tuple
 from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
-from cross_entropy import CrossEntropyMetrics
+from .cross_entropy import CrossEntropyMetrics
 
 
 class PredictionForce(pl.LightningModule):
@@ -73,9 +73,9 @@ class PredictionForce(pl.LightningModule):
                 "mae": MeanAbsoluteError(),
                 "r2": R2Score() })
 
-            self.train_metrics = metrics.clone(prefix="train_")
-            self.val_metrics = metrics.clone(prefix="val_")
-            self.test_metrics = metrics.clone(prefix="test_")
+            self.train_metrics = metrics.clone(prefix="train/")
+            self.val_metrics = metrics.clone(prefix="val/")
+            self.test_metrics = metrics.clone(prefix="test/")
 
         elif self._task == "classification":
             self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
@@ -85,9 +85,9 @@ class PredictionForce(pl.LightningModule):
                 "cross_entropy": CrossEntropyMetrics() # cross entropy 평균용
             })
 
-            self.train_metrics = metrics.clone(prefix="train_")
-            self.val_metrics = metrics.clone(prefix="val_")
-            self.test_metrics = metrics.clone(prefix="test_")
+            self.train_metrics = metrics.clone(prefix="train/")
+            self.val_metrics = metrics.clone(prefix="val/")
+            self.test_metrics = metrics.clone(prefix="test/")
 
         else:
             raise Exception("정확한 Task 기입")
@@ -212,7 +212,7 @@ class PredictionForce(pl.LightningModule):
         elif self._task == "classification":
             # Calculate loss
             ground_truth = batch['label']
-            loss = self.criterion(prediction, torch.argmax(ground_truth, dim=1))
+            loss = self.criterion(prediction, ground_truth)
             self.train_metrics.update(prediction, ground_truth)
 
             self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True)
@@ -263,11 +263,11 @@ class PredictionForce(pl.LightningModule):
                 f.write(
                     f"train_ce={metrics['train/cross_entropy']:.6f}, train_acc={metrics['train/accuracy']:.6f}\n")
 
-            prediction = torch.Tensor(self.train_results['prediction']) # (N, c)
-            ground_truth = torch.Tensor(self.train_results['target']) # (N, c)
+            prediction = torch.Tensor(self.train_results['prediction'])  # (N, C)
+            ground_truth = torch.Tensor(self.train_results['target']).to(torch.long)  # (N,)
 
-            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(torch.argmax(prediction, dim=1), torch.argmax(ground_truth, dim=1))
-            ce = cross_entropy(prediction, torch.argmax(ground_truth, dim=1).float())
+            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
+            ce = cross_entropy(prediction, ground_truth)
 
             self.log(f"train/accuracy", acc, on_epoch=True, logger=True)
             self.log(f"train/cross_entropy", ce, on_epoch=True, logger=True)
@@ -309,7 +309,7 @@ class PredictionForce(pl.LightningModule):
 
             # Calculate loss
             ground_truth = batch['label']  # (N, C)
-            loss = self.criterion(prediction, torch.argmax(ground_truth, dim=1))
+            loss = self.criterion(prediction, ground_truth)
             self.val_metrics.update(prediction, ground_truth)
 
             # logging
@@ -330,7 +330,7 @@ class PredictionForce(pl.LightningModule):
         if self._task == "regression":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
-                    f"[{self.current_epoch} Epoch] val_rmse={metrics['val_rmse']:.6f}, val_mae={metrics['val_mae']:.6f}, val_r2={metrics['val_r2']:.6f} ")
+                    f"[{self.current_epoch} Epoch] val_rmse={metrics['val/rmse']:.6f}, val_mae={metrics['val/mae']:.6f}, val_r2={metrics['val_/r2']:.6f} ")
 
 
             prediction = torch.Tensor(self.val_results['prediction']).reshape((-1, 3))
@@ -366,21 +366,21 @@ class PredictionForce(pl.LightningModule):
         elif self._task == "classification":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
-                    f"[{self.current_epoch} Epoch] val_ce={metrics['val_ce']:.6f}, val_acc={metrics['val_acc']:.6f} ")
+                    f"[{self.current_epoch} Epoch] val_ce={metrics['val/cross_entropy']:.6f}, val_acc={metrics['val/accuracy']:.6f} ")
 
             prediction = torch.Tensor(self.val_results['prediction']) # (N, C)
-            ground_truth = torch.Tensor(self.val_results['target']) # (N, C)
+            ground_truth = torch.Tensor(self.val_results['target']).to(torch.long) # (N,)
 
-            loss = self.criterion(prediction, torch.argmax(ground_truth, dim=1).float())
-            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(torch.argmax(prediction, dim=1), torch.argmax(ground_truth, dim=1))
-            ce = cross_entropy(prediction, torch.argmax(ground_truth, dim=1).float())
+            loss = self.criterion(prediction, ground_truth)
+            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
+            ce = cross_entropy(prediction, ground_truth)
 
             self.log(f"val/accuracy", acc, on_epoch=True, logger=True)
             self.log(f"val/cross_entropy", ce, on_epoch=True, logger=True)
             self.log(f"loss_for_monitor", loss, on_epoch=True, logger=True)
 
             # 각 class별 Accuracy와 Cross_Entropy
-            gt_cls = ground_truth.argmax(dim=1)  # (N,)
+            gt_cls = ground_truth  # (N,)
             pred_cls = prediction.argmax(dim=1)  # (N,)
             for c in range(len(self.classes)):
                 mask = (gt_cls == c)
@@ -395,8 +395,8 @@ class PredictionForce(pl.LightningModule):
                 gt_c = gt_cls[mask]  # (Nc,)
                 ce_c = F.cross_entropy(pred_c, gt_c)
 
-                self.log(f"train/acc_class_{c}", acc_c, on_epoch=True, logger=True)
-                self.log(f"train/ce_class_{c}", ce_c, on_epoch=True, logger=True)
+                self.log(f"val/acc_class_{c}", acc_c, on_epoch=True, logger=True)
+                self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True)
 
         self.val_metrics.reset()
         self.val_results = self._init_result_dict()
@@ -433,16 +433,17 @@ class PredictionForce(pl.LightningModule):
 
 
         elif self._task == "classification":
+            ground_truth = batch['label']
+
             # Calculate loss
-            loss = self.criterion(prediction, torch.argmax(batch['label'], dim=1).float())
+            loss = self.criterion(prediction, ground_truth)
             pred_class = torch.argmax(prediction, dim=1)
 
-            self.test_metrics["acc"](pred_class, batch['label'])
-            self.test_metrics["ce"](loss)  # ⚠ logits 아님, loss 넣기
+            self.test_metrics.update(pred_class, ground_truth)
 
             self.log("test/loss", loss, on_step=False, on_epoch=True)
-            self.log("test/acc", self.train_metrics["acc"], on_epoch=True)
-            self.log("test/ce", self.train_metrics["ce"], on_epoch=True)
+            self.log("test/accuracy", self.test_metrics["accuracy"], on_epoch=True)
+            self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True)
 
             self._save_result(self.val_results, prediction.detach(), batch['label'].detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['sequence_label'].detach())

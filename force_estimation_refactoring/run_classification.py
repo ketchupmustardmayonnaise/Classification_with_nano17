@@ -19,7 +19,7 @@ def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
     PATH = cfg.save_directory
-    MODEL_NAME = "best_model_loss_for_monitor=0.3359.ckpt"
+    MODEL_NAME = "best_model_loss_for_monitor=0.3210.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")

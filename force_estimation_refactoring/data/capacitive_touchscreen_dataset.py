@@ -9,6 +9,7 @@ import bisect
 import random
 import math
 import torchvision.transforms.functional as TF
+import copy
 
 
 class CapTSDataset(Dataset):
@@ -31,15 +32,15 @@ class CapTSDataset(Dataset):
         with h5py.File(self.path, 'r') as f:
             sample_keys = list(f.keys())
             if 'frame' in sample_keys:
-                self.frame = f[f"frame"][:]
+                self.frame = f[f"frame"][:].tolist()
                 sample_keys.remove('frame')
 
             if 'name' in sample_keys:
-                self.name = f[f"name"][:]
+                self.name = f[f"name"][:].tolist()
                 sample_keys.remove('name')
 
             if 'label_each_sequence' in sample_keys:
-                self.label_each_sequence = f[f"label_each_sequence"][:]
+                self.label_each_sequence = f[f"label_each_sequence"][:].tolist()
                 sample_keys.remove('label_each_sequence')
 
             for seq in sample_keys:
@@ -53,7 +54,7 @@ class CapTSDataset(Dataset):
             if self.xflip:
                 self.horizontal_flip_augmentaion()
 
-
+        # frame 개수와
         for i in range(len(self.frame)):
             self.frame[i] = int((self.frame[i] - length_of_window) / self.stride) + 1
             self.prefix.append(self.frame[i] + self.prefix[-1])
@@ -68,7 +69,11 @@ class CapTSDataset(Dataset):
         img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.length_of_window]).float()
         force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.length_of_window, 0:3]).float()
         # label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.length_of_window - 1])
-        label = F.one_hot(self.label[sequence_idx], num_classes=self.num_classes).float()
+
+        # label_idx = torch.tensor(self.label_each_sequence[sequence_idx], dtype=torch.long)
+        # label = F.one_hot(label_idx, num_classes=self.num_classes).float()
+
+        label = torch.tensor(self.label_each_sequence[sequence_idx], dtype=torch.long)
 
         return {
             'img': img,
@@ -82,30 +87,27 @@ class CapTSDataset(Dataset):
     def __len__(self):
         return self.len
 
-    def get_mean_of_test_dataset(self):
-        assert self.dataset_type.lower() == 'test'
-
-        force = np.concatenate(self.force, axis=0)[:, 0:3]
-        return torch.from_numpy(np.mean(force, axis=0))
-
-    def scale_image(self, img, scale_factor=(2, 2)):
-        return F.interpolate(img, scale_factor=scale_factor, mode='bilinear')
-
 
     def horizontal_flip_augmentaion(self):
+
+        # 각 시퀀스마다 모두 시행
         length = len(self.img)
-
         for i in range(length):
+
+            # 이미지는 Horizontal Flip을 시행함.
             img = torch.stack([
-                TF.hflip(i)
-                for i in self.img[length]
-            ])
+                TF.hflip(j)
+                for j in torch.from_numpy(self.img[i])
+            ]).numpy()
             self.img.append(img)
-            self.force.append(self.force[length][0] * (-1))  # x만 flip
 
-            self.label.append(self.label[length])
-            self.label_each_sequence.append(self.label_each_sequence[length])
-            self.frame.append(self.frame[length])
-            self.name.append(self.name[length])
+            # force는 x축 부호를 바꿈
+            force = copy.deepcopy(self.force[i]) # (length of a sequence, 6)
+            force[:, 0] *= (-1) # x만 flip
+            self.force.append(force)
 
-
+            # 다른 데이터들은 그대로 복사
+            self.label.append(self.label[i])
+            self.label_each_sequence.append(self.label_each_sequence[i])
+            self.frame.append(self.frame[i])
+            self.name.append(self.name[i])

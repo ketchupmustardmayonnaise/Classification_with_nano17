@@ -18,18 +18,18 @@ class CapacitiveImageDataModule(LightningDataModule):
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:
             self.train_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
-                                              num_classes=self.num_classes,
+                                              num_classes=self.hparams.cfg.data.num_classes,
                                               path=f"{self.hparams.cfg.data.data_dir}/train_dataset.h5",
                                               dataset_type='train')
 
             self.val_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
-                                            num_classes=self.num_classes,
+                                            num_classes=self.hparams.cfg.data.num_classes,
                                             path=f"{self.hparams.cfg.data.data_dir}/val_dataset.h5",
                                             dataset_type='val')
 
         if stage == 'test' or stage == 'predict':
             self.test_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
-                                             num_classes=self.num_classes,
+                                             num_classes=self.hparams.cfg.data.num_classes,
                                              path=f"{self.hparams.cfg.data.data_dir}/test_dataset.h5",
                                              dataset_type='test')
 

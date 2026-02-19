@@ -1,5 +1,5 @@
 
-save_directory: ./saved_models/02-12_02-37-05_lightweight_convnexttiny_transformer
+save_directory: ./saved_models/02-17_03-32-34_lightweight_convnexttiny_transformer
 
 wandb:
   project: HandInterfacesWatch

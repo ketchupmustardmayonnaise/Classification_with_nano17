@@ -451,7 +451,7 @@ class PreprocessDataset:
         return img_max, img_std, img_mean
 
 
-
+'''
 pd = PreprocessDataset(original_image_size=original_image_size,
                        resized_image_size=resized_image_size,
                        type_of_image=type_of_image,
@@ -464,3 +464,4 @@ pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations(f"{path}/train")
 
 for d_type in dataset_types:
     pd.preprocess(f"{path}/{d_type}", is_save=True)
+'''
