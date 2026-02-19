@@ -201,8 +201,8 @@ class PredictionForce(pl.LightningModule):
             self.log("train/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
 
             # (B, T, 3) -> (B*T, 3)
-            preds_flat = prediction.detach().reshape(-1, 3)  # (B*T,3)
-            targets_flat = batch['force'].detach().reshape(-1, 3)  # (B*T,3)
+            preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
+            targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
             self.train_metrics.update(preds_flat, targets_flat)
             self._save_result(self.train_results, prediction.detach(), batch['force'].detach(),
@@ -298,8 +298,8 @@ class PredictionForce(pl.LightningModule):
             self.log("val/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
 
             # (B, T, 3) -> (B*T, 3)
-            preds_flat = prediction.detach().reshape(-1, 3)  # (B*T,3)
-            targets_flat = batch['force'].detach().reshape(-1, 3)  # (B*T,3)
+            preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
+            targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
             self.val_metrics.update(preds_flat, targets_flat)
             self._save_result(self.val_results, prediction.detach(), batch['force'].detach(),
@@ -308,12 +308,12 @@ class PredictionForce(pl.LightningModule):
         elif self._task == "classification":
 
             # Calculate loss
-            ground_truth = batch['label']  # (N, C)
+            ground_truth = batch['label']  # (N,)
             loss = self.criterion(prediction, ground_truth)
             self.val_metrics.update(prediction, ground_truth)
 
             # logging
-            self._save_result(self.val_results, prediction.detach(), batch['label'].detach(),
+            self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['sequence_label'].detach())
 
         return {"loss": loss}
@@ -380,20 +380,15 @@ class PredictionForce(pl.LightningModule):
             self.log(f"loss_for_monitor", loss, on_epoch=True, logger=True)
 
             # 각 class별 Accuracy와 Cross_Entropy
-            gt_cls = ground_truth  # (N,)
-            pred_cls = prediction.argmax(dim=1)  # (N,)
+            gt_class, pred_class = ground_truth, prediction.argmax(dim=1)  # (N,)
             for c in range(len(self.classes)):
-                mask = (gt_cls == c)
-                if mask.sum() == 0:
-                    continue
+                mask = (gt_class == c)
+                if mask.sum() == 0: continue
 
                 # Accuracy
-                acc_c = (pred_cls[mask] == c).float().mean()
-
+                acc_c = (pred_class[mask] == c).float().mean()
                 # Cross Entropy
-                pred_c = prediction[mask]  # (Nc, C)
-                gt_c = gt_cls[mask]  # (Nc,)
-                ce_c = F.cross_entropy(pred_c, gt_c)
+                ce_c = F.cross_entropy(prediction[mask], gt_class[mask]) # (Nc, C), (Nc)
 
                 self.log(f"val/acc_class_{c}", acc_c, on_epoch=True, logger=True)
                 self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True)
@@ -424,8 +419,8 @@ class PredictionForce(pl.LightningModule):
             self.log("test/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
 
             # (B, T, 3) -> (B*T, 3)
-            preds_flat = prediction.detach().reshape(-1, 3)  # (B*T,3)
-            targets_flat = batch['force'].detach().reshape(-1, 3)  # (B*T,3)
+            preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
+            targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
             self.test_metrics.update(preds_flat, targets_flat)
             self._save_result(self.test_results, prediction.detach(), batch['force'].detach(),
@@ -433,19 +428,13 @@ class PredictionForce(pl.LightningModule):
 
 
         elif self._task == "classification":
-            ground_truth = batch['label']
+            ground_truth = batch['label'] # (N,)
+            self.test_metrics.update(prediction, ground_truth)
 
-            # Calculate loss
-            loss = self.criterion(prediction, ground_truth)
-            pred_class = torch.argmax(prediction, dim=1)
-
-            self.test_metrics.update(pred_class, ground_truth)
-
-            self.log("test/loss", loss, on_step=False, on_epoch=True)
             self.log("test/accuracy", self.test_metrics["accuracy"], on_epoch=True)
             self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True)
 
-            self._save_result(self.val_results, prediction.detach(), batch['label'].detach(),
+            self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['sequence_label'].detach())
 
 
@@ -455,8 +444,8 @@ class PredictionForce(pl.LightningModule):
         self.log_dict(metrics)
 
         if self._task == "regression":
-            prediction = torch.Tensor(self.test_results['prediction']).reshape(-1, 3) # (B, T, 3) -> (B*T, 3)
-            ground_truth = torch.Tensor(self.test_results['target']).reshape(-1, 3) # (B, T, 3) -> (B*T, 3)
+            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)) # (B, T, 3) -> (B*T, 3)
+            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)) # (B, T, 3) -> (B*T, 3)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
             r2_all = R2Score()(prediction, ground_truth)
