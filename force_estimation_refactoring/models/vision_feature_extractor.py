@@ -80,7 +80,7 @@ class VisionFeatureExtractor(nn.Module):
 
         elif len(x.shape) == 5:
             b, t, c, h, w = x.shape
-            x = x.view((b * t, c, h, w))
+            x = x.reshape(b * t, c, h, w)
             x = self.model(x)
             x = torch.flatten(x, 1)
             x = x.reshape((b, t, -1))

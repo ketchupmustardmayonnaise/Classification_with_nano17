@@ -85,12 +85,13 @@ class CapTSDataset(Dataset):
 
         img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.length_of_window]).float()
         force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.length_of_window, 0:3]).float()
-        # label = torch.from_numpy(self.label[sequence_idx][frame_idx + self.length_of_window - 1])
-
-        # label_idx = torch.tensor(self.label_each_sequence[sequence_idx], dtype=torch.long)
-        # label = F.one_hot(label_idx, num_classes=self.num_classes).float()
-
-        label = torch.tensor(self.label_each_sequence[sequence_idx], dtype=torch.long)
+        labels = torch.from_numpy(
+            self.label[sequence_idx][
+            frame_idx + self.length_of_window - 5:
+            frame_idx + self.length_of_window
+            ]
+        ).long()  # shape: [5]
+        label = torch.mode(labels).values
 
         return {
             'img': img,

@@ -111,9 +111,13 @@ class PredictionForce(pl.LightningModule):
             return x
 
         elif self._task == "classification":
-            x = x[:, -1] # 마지막 timestep (batch_size, channels, height, width)
-            x = self.vf_net(x) # (batch_size, dim_hidden_features=96)
-            x = self.classification_head(x) # (batch_size, 8)
+            x = x[:, -5:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
+            x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
+            x = self.classification_head(x) # (batch_size, 5, 8)
+
+            x = torch.softmax(x, dim=-1)  # (B, 5, 8)
+            x = x.mean(dim=1)  # (B, 8)
+
             return x
 
 

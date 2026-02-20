@@ -16,7 +16,7 @@ data:
 
   xflip: True
   yflip: False
-  translation: True
+  translation: False
 
 model:
   dropout: 0.0

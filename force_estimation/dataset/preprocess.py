@@ -350,7 +350,7 @@ class PreprocessDataset:
         label_each_sequence = copy.deepcopy(label)
 
         for sequence_index in range(len(img)):
-            label[sequence_index] = self.label_each_frame(img[sequence_index], label[sequence_index], touch_threshold)
+            label[sequence_index] = self.label_each_frame(img[sequence_index], label[sequence_index])
 
             # 이미지를 채널별로 normalize
             img[sequence_index] = self.resize_image(img[sequence_index], self.resized_image_size)
@@ -461,7 +461,6 @@ class PreprocessDataset:
         return img_max, img_std, img_mean
 
 
-'''
 pd = PreprocessDataset(original_image_size=original_image_size,
                        resized_image_size=resized_image_size,
                        type_of_image=type_of_image,
@@ -474,4 +473,3 @@ pd.img_max, pd.img_std, pd.img_mean = pd.extract_informations(f"{path}/train")
 
 for d_type in dataset_types:
     pd.preprocess(f"{path}/{d_type}", is_save=True)
-'''
