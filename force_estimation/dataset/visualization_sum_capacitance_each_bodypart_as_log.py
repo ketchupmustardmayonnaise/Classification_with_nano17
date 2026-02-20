@@ -25,20 +25,27 @@ def collect_S_by_bodypart(img_list, labels, score_mode="relu_sum"):
     return S_by
 
 
-def plot_each_bodypart_hist(S_by, bins=200, density=True):
+def plot_each_bodypart_hist(S_by, bins=200, density=True, log=True):
     for y, S in sorted(S_by.items(), key=lambda kv: str(kv[0])):
 
         hist, edges = np.histogram(S, bins=bins, density=density)
         centers = (edges[:-1] + edges[1:]) / 2
 
-        Slog = np.log1p(S)  # log(1+S)
-        plt.figure(figsize=(6, 4))
-        plt.hist(Slog, bins=300, density=True)
-        plt.xlabel("log1p(S)")
-        plt.ylabel("Density")
-        plt.title("Histogram of log1p(S)")
-        plt.show()
-
+        if log:
+            Slog = np.log1p(S)  # log(1+S)
+            plt.figure(figsize=(6, 4))
+            plt.hist(Slog, bins=300, density=True)
+            plt.xlabel("log1p(Sum of Capacitance)")
+            plt.ylabel("Density")
+            plt.title("Histogram of log1p(Sum of Capacitance)")
+            plt.show()
+        else:
+            plt.figure(figsize=(6, 4))
+            plt.hist(S, bins=300, density=True)
+            plt.xlabel("Sum of Capacitance")
+            plt.ylabel("Density")
+            plt.title("Histogram of Sum of Capacitance (S)")
+            plt.show()
 
 pd = PreprocessDataset()
 
@@ -54,4 +61,4 @@ for sequence_index in range(len(img)):
 S_by = collect_S_by_bodypart(img, label, score_mode="relu_sum")
 print({k: v.shape for k, v in S_by.items()})  # label별 프레임 수 확인
 
-plot_each_bodypart_hist(S_by, bins=200, density=True)
+plot_each_bodypart_hist(S_by, bins=200, density=True, log=True)

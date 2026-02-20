@@ -26,7 +26,15 @@ order_of_filter = 4
 
 num_classes = 8
 
-touch_threshold = 35
+touch_threshold = [ 0,
+                    194.48744476309508, # 1 - finger pad
+                    262.29032053097137, # 2 - palmar side of fingers
+                    295.9539827001089, # 3 - palm
+                    277.6792373827575, # 4 - pinky-side of the clenched fist
+                    332.71804734416696, # 5 - thumb-side of the clenched fist
+                    333.33475381805107, # 6 - mouth
+                    182.4403931614534, # 7 - ear
+                    ]
 # =======================================
 
 
@@ -122,7 +130,7 @@ class PreprocessDataset:
                     # 첫 프레임이 bad인 경우 → 그대로 두거나 0으로
                     # 필요하면 다른 정책 적용 가능
                     continue
-                input_image[t] = input_image[t - 1]
+                input_image[t] = input_image[t - 1].copy()
 
         return input_image, input_ts
 
@@ -288,14 +296,16 @@ class PreprocessDataset:
     # ==================================
     # label
     # ==================================
-    def label_each_frame(self, img, label, touch_threshold=35):
+    def label_each_frame(self, img, label):
         '''
         하나의 시퀀스가 입력으로 들어오면, 각 시퀀스에 label을 붙임.
         '''
+        global touch_threshold
+
         result_label = []
 
         for frame_index in range(len(img)):
-            if np.sum(img[frame_index]) >= touch_threshold:
+            if np.sum(img[frame_index]) >= touch_threshold[label]:
                 result_label.append(label)
             else:
                 result_label.append(0)

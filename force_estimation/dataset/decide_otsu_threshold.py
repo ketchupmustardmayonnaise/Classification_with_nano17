@@ -1,14 +1,46 @@
 import numpy as np
+from collections import defaultdict
+from preprocess import PreprocessDataset
+
+def seq_to_S(X, score_mode="relu_sum"):
+    if score_mode == "relu_sum":
+        return np.maximum(X, 0).sum(axis=(1, 2))
+    elif score_mode == "abs_sum":
+        return np.abs(X).sum(axis=(1, 2))
+    elif score_mode == "sum":
+        return X.sum(axis=(1, 2))
+    else:
+        raise ValueError
+
+
+def collect_S_by_bodypart(img_list, labels, score_mode="relu_sum"):
+    S_by = defaultdict(list)
+
+    for X, y in zip(img_list, labels):
+        S = seq_to_S(X, score_mode=score_mode)
+        S_by[y].append(S)
+
+    # label별 concat
+    S_by = {y: np.concatenate(v) for y, v in S_by.items()}
+    return S_by
+
 
 def otsu_threshold_1d(x, nbins=512):
+    """
+    x: 1D array-like (float)
+    returns: otsu threshold in the same domain as x
+    """
     x = np.asarray(x, dtype=float)
     x = x[np.isfinite(x)]
+    if x.size == 0:
+        raise ValueError("Input has no finite values.")
+
     hist, edges = np.histogram(x, bins=nbins)
     p = hist.astype(float) / (hist.sum() + 1e-12)
     centers = (edges[:-1] + edges[1:]) / 2
 
     w0 = np.cumsum(p)
-    w1 = 1 - w0
+    w1 = 1.0 - w0
     mu = np.cumsum(p * centers)
     mu_t = mu[-1]
 
@@ -19,39 +51,38 @@ def otsu_threshold_1d(x, nbins=512):
     idx = np.nanargmax(sigma_b2)
     return float(centers[idx])
 
-def three_state_from_otsu_deadband(S, delta_mode="idle_std", k=1.5, nbins=512):
+
+def log_otsu_threshold(values, nbins=512, clip_negative=True):
     """
-    S: (T,) sum-of-capacitance (>=0 권장)
-    Returns:
-      state: int array (0=idle, 1=uncertain, 2=touch)
-      thresholds in original domain: (T_idle, T_touch)
-      thresholds in log domain: (t0, delta)
+    values: python list / np.array of S values (>=0 권장)
+    returns:
+      T_original: threshold in original domain
+      t_log: threshold in log1p(domain)
     """
-    S = np.asarray(S, dtype=float)
-    S = np.maximum(S, 0)
-    L = np.log1p(S)
+    v = np.asarray(values, dtype=float)
 
-    t0 = otsu_threshold_1d(L, nbins=nbins)
+    if clip_negative:
+        v = np.maximum(v, 0.0)
 
-    # delta 결정
-    if delta_mode == "idle_std":
-        idle_L = L[L < t0]
-        if len(idle_L) < 10:
-            # fallback: 전체 std의 일부
-            delta = k * (np.std(L) + 1e-8) * 0.2
-        else:
-            delta = k * (np.std(idle_L) + 1e-8)
-    else:
-        raise ValueError("delta_mode currently supports only 'idle_std'")
+    L = np.log1p(v)
+    t_log = otsu_threshold_1d(L, nbins=nbins)
+    T_original = float(np.expm1(t_log))
+    return T_original, t_log
 
-    t_idle = t0 - delta
-    t_touch = t0 + delta
 
-    state = np.full_like(L, 1, dtype=np.int32)  # 기본 uncertain
-    state[L < t_idle] = 0
-    state[L > t_touch] = 2
+pd = PreprocessDataset()
 
-    T_idle = float(np.expm1(t_idle))
-    T_touch = float(np.expm1(t_touch))
+path = 'dataset/bodypart_not_cross_person/all/train'
+img, force, label, img_ts, force_ts, name = pd.load_data_from_npz(path)
 
-    return state, (T_idle, T_touch), (t0, delta)
+for sequence_index in range(len(img)):
+    img[sequence_index], img_ts[sequence_index] = pd.replace_bad_frame_with_previous(img[sequence_index],
+                                                                                     img_ts[sequence_index])
+    img[sequence_index] = pd.clip_zero(img[sequence_index])
+    img[sequence_index] = pd.fix_corrupted_frames(img[sequence_index])
+
+S_by = collect_S_by_bodypart(img, label, score_mode="relu_sum")
+
+for index in range(len(S_by)):
+    T, t_log = log_otsu_threshold(S_by[index+1], nbins=1024)
+    print(f"{index+1}: log-domain otsu: {t_log}, original-domain threshold: {T}")

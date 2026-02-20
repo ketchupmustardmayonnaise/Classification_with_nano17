@@ -15,7 +15,7 @@ data:
   num_classes: 8
 
   xflip: True
-  yflip: True
+  yflip: False
   translation: True
 
 model:

@@ -109,9 +109,9 @@ def plot_sequence_idle(
 
     # ---- S(t) time plot ----
     axs[0].plot(t_axis, S)
-    axs[0].axhline(S_th, linestyle="--", label="S_th")
-    axs[0].fill_between(t_axis, S.min(), S.max(), where=idle, alpha=0.2, label="idle")
-    axs[0].set_ylabel("S(t)")
+    # axs[0].axhline(S_th, linestyle="--", label="S_th")
+    # axs[0].fill_between(t_axis, S.min(), S.max(), where=idle, alpha=0.2, label="idle")
+    axs[0].set_ylabel("Sum of Capacitance Values")
     axs[0].set_title(f"Sequence {seq_idx}" if seq_idx is not None else "Sequence")
     axs[0].legend()
 
