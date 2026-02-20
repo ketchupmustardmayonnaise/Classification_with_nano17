@@ -230,7 +230,7 @@ class PredictionForce(pl.LightningModule):
         if self._task == "regression":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
-                    f"train_rmse={metrics['train_rmse']:.6f}, train_mae={metrics['train_mae']:.6f}, train_r2={metrics['train_r2']:.6f}\n")
+                    f"train_rmse={metrics['train/rmse']:.6f}, train_mae={metrics['train/mae']:.6f}, train_r2={metrics['train/r2']:.6f}\n")
 
             prediction = torch.Tensor(self.train_results['prediction']).reshape((-1, 3))
             ground_truth = torch.Tensor(self.train_results['target']).reshape((-1, 3))
@@ -330,7 +330,7 @@ class PredictionForce(pl.LightningModule):
         if self._task == "regression":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
-                    f"[{self.current_epoch} Epoch] val_rmse={metrics['val/rmse']:.6f}, val_mae={metrics['val/mae']:.6f}, val_r2={metrics['val_/r2']:.6f} ")
+                    f"[{self.current_epoch} Epoch] val_rmse={metrics['val/rmse']:.6f}, val_mae={metrics['val/mae']:.6f}, val_r2={metrics['val/r2']:.6f} ")
 
 
             prediction = torch.Tensor(self.val_results['prediction']).reshape((-1, 3))

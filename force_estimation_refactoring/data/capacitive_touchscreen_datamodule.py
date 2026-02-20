@@ -20,7 +20,11 @@ class CapacitiveImageDataModule(LightningDataModule):
             self.train_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                               num_classes=self.hparams.cfg.data.num_classes,
                                               path=f"{self.hparams.cfg.data.data_dir}/train_dataset.h5",
-                                              dataset_type='train')
+                                              dataset_type='train',
+
+                                              xflip=self.hparams.cfg.data.xflip,
+                                              yflip=self.hparams.cfg.data.yflip,
+                                              translation=self.hparams.cfg.data.translation)
 
             self.val_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                             num_classes=self.hparams.cfg.data.num_classes,
