@@ -305,7 +305,7 @@ class PreprocessDataset:
         result_label = []
 
         for frame_index in range(len(img)):
-            if np.sum(img[frame_index]) >= touch_threshold[label]:
+            if np.sum(img[frame_index][0]) >= touch_threshold[label]:
                 result_label.append(label)
             else:
                 result_label.append(0)

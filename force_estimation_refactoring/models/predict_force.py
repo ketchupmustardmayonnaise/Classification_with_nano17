@@ -1,7 +1,10 @@
 import json
 
 import torch
+import matplotlib.pyplot as plt
 from torch.nn.functional import cross_entropy
+from wandb.integration.sklearn.calculate import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 from utils.plot_sequence import *
 import numpy as np
@@ -49,7 +52,7 @@ class PredictionForce(pl.LightningModule):
         self.vf_net = vision_feature_extractor
         self.tf_net = temporal_feature_extractor
 
-        self.regression_head = nn.Linear(self.tf_net.size_of_output, dim_of_regression)
+        self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
         self.classification_head = None
 
         self._task = task
@@ -61,7 +64,7 @@ class PredictionForce(pl.LightningModule):
         if classes is not None:
             self.classes = classes
         if self._task == "classification":
-            self.classification_head = nn.Linear(self.tf_net.size_of_output, len(classes))
+            self.classification_head = nn.Linear(self.vf_net.size_of_output * 5, len(classes))
 
 
         # ================= Metrics =================
@@ -113,10 +116,8 @@ class PredictionForce(pl.LightningModule):
         elif self._task == "classification":
             x = x[:, -5:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
             x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
-            x = self.classification_head(x) # (batch_size, 5, 8)
-
-            x = torch.softmax(x, dim=-1)  # (B, 5, 8)
-            x = x.mean(dim=1)  # (B, 8)
+            x = torch.flatten(x, 1) # (batch_size, 5 * dim_hidden_features=96)
+            x = self.classification_head(x) # (batch_size, 8)
 
             return x
 
@@ -124,8 +125,8 @@ class PredictionForce(pl.LightningModule):
     # =================== Methods ===================
     def _init_result_dict(self):
         return {
-            "prediction": [], # shape: (num of overall sliding window, timestep, 3)
-            "target": [], # shape: (num of overall sliding window, timestep, 3)
+            "prediction": [], # shape: (num of overall sliding window, timestep, 3) or (N, 8)
+            "target": [], # shape: (num of overall sliding window, timestep, 3) or (N,)
             "sequence_id": [], # shape: (num of overall sliding window, 1)
             "subject_id": [],  # shape: (num of overall sliding window, 1)
             "sequence_label": [] # shape: (num of overall sliding window, 1)
@@ -144,7 +145,7 @@ class PredictionForce(pl.LightningModule):
     def set_task(self, value):
 
         if value == "classification":
-            self.classification_head = nn.Linear(self.tf_net.size_of_output, len(self.classes))
+            self.classification_head = nn.Linear(self.tf_net.size_of_output * 5, len(self.classes))
 
             metrics = MetricCollection({
                 "accuracy": Accuracy(task="multiclass", num_classes=len(self.classes)),
@@ -438,7 +439,7 @@ class PredictionForce(pl.LightningModule):
             self.log("test/accuracy", self.test_metrics["accuracy"], on_epoch=True)
             self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True)
 
-            self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
+            self._save_result(self.test_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['sequence_label'].detach())
 
 
@@ -560,6 +561,137 @@ class PredictionForce(pl.LightningModule):
                     f.write(f"(R2 SCORE) X: {r2_x:.6f}, Y: {r2_y:.6f}, Z: {r2_z:.6f}\n")
                     f.write(f"(RMSE) X: {rmse_x:.6f}, Y: {rmse_y:.6f}, Z: {rmse_z:.6f}\n")
                     f.write(f"(MAE) X: {mae_x:.6f}, Y: {mae_y:.6f}, Z: {mae_z:.6f}\n")
+
+        elif self._task == "classification":
+            # ---- collect ----
+            logits = torch.tensor(self.test_results["prediction"])  # (N, C)
+            gt = torch.tensor(self.test_results["target"]).long()  # (N,)
+            pred = logits.argmax(dim=1)  # (N,)
+
+            num_classes = len(self.classes)
+
+            # ---- overall metrics ----
+            acc = Accuracy(task="multiclass", num_classes=num_classes)(logits, gt)
+            ce = F.cross_entropy(logits, gt)
+
+            self.log("test/accuracy", acc, on_epoch=True, logger=True)
+            self.log("test/cross_entropy", ce, on_epoch=True, logger=True)
+
+            # ---- confusion matrix ----
+            confmat = torch.zeros((num_classes, num_classes), dtype=torch.long)
+            for t, p in zip(gt, pred):
+                confmat[t, p] += 1
+
+            # per-class acc / ce
+            per_class_rows = []
+            for c in range(num_classes):
+                mask = (gt == c)
+                n_c = int(mask.sum().item())
+                if n_c == 0:
+                    acc_c = float("nan")
+                    ce_c = float("nan")
+                else:
+                    acc_c = (pred[mask] == c).float().mean().item()
+                    ce_c = F.cross_entropy(logits[mask], gt[mask]).item()
+
+                self.log(f"test/acc_class_{c}", acc_c, on_epoch=True, logger=True)
+                self.log(f"test/ce_class_{c}", ce_c, on_epoch=True, logger=True)
+
+                # label name (classes가 dict일 수도 있어서 안전하게)
+                try:
+                    class_name = list(self.classes.keys())[c]  # classes={name:idx} 형태 가정
+                except Exception:
+                    class_name = str(c)
+
+                per_class_rows.append({
+                    "class_index": c,
+                    "class_name": class_name,
+                    "n": n_c,
+                    "accuracy": acc_c,
+                    "cross_entropy": ce_c
+                })
+
+            # ---- write report file ----
+            os.makedirs(self.directory, exist_ok=True)
+            report_path = f"{self.directory}/test_result.txt"
+
+            with open(report_path, "a", encoding="utf-8") as f:
+                f.write("\n\n========= TEST REPORT (CLASSIFICATION) =========\n")
+                f.write(f"Overall Accuracy: {acc.item():.6f}\n")
+                f.write(f"Overall CrossEntropy: {ce.item():.6f}\n\n")
+
+                f.write("[Per-class]\n")
+                for r in per_class_rows:
+                    f.write(
+                        f"- class {r['class_index']} ({r['class_name']}): "
+                        f"n={r['n']}, acc={r['accuracy']:.6f}, ce={r['cross_entropy']:.6f}\n"
+                    )
+
+                f.write("\n[Confusion Matrix] (rows=true, cols=pred)\n")
+                # 보기 좋게 matrix 출력
+                for i in range(num_classes):
+                    row = " ".join([f"{int(x):5d}" for x in confmat[i].tolist()])
+                    f.write(row + "\n")
+
+            # ---- also save a CSV summary (optional but useful) ----
+            df = pd.DataFrame(per_class_rows)
+            df.to_csv(f"{self.directory}/test_classification_summary.csv", index=False)
+
+            # ---- optional: save raw predictions for later ----
+            # (원하면 주석 해제)
+            raw_df = pd.DataFrame({
+                "gt": gt.cpu().numpy(),
+                "pred": pred.cpu().numpy(),
+                "sequence_id": np.array(self.test_results["sequence_id"]),
+                "subject_id": np.array(self.test_results["subject_id"]),
+                "sequence_label": np.array(self.test_results["sequence_label"]),
+            })
+            raw_df.to_csv(f"{self.directory}/test_predictions.csv", index=False)
+
+            # numpy 변환
+            gt_np = gt.cpu().numpy()
+            pred_np = pred.cpu().numpy()
+
+            # ----------------------------
+            # confusion matrix (normalized)
+            # ----------------------------
+            cm = confusion_matrix(
+                gt_np,
+                pred_np,
+                labels=np.arange(num_classes),
+                normalize="true"  # ⭐ row normalize (가장 일반적)
+            )
+
+            # ----------------------------
+            # plot
+            # ----------------------------
+            try:
+                class_names = list(self.classes.keys())
+            except Exception:
+                class_names = [str(i) for i in range(num_classes)]
+
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+
+            fig, ax = plt.subplots(figsize=(8, 6))
+            disp.plot(
+                ax=ax,
+                cmap="Blues",
+                values_format=".2f",
+                colorbar=True
+            )
+
+            ax.set_title("Normalized Confusion Matrix")
+            plt.xticks(rotation=45)
+
+            cm_path = f"{self.directory}/test_confusion_matrix.png"
+            plt.tight_layout()
+            plt.savefig(cm_path, dpi=300)
+            plt.close(fig)
+
+            print(f"Confusion matrix saved to {cm_path}")
+
+            if wandb.run is not None:
+                wandb.log({"test/confusion_matrix": wandb.Image(cm_path)})
 
         self.test_metrics.reset()
         self.test_results = self._init_result_dict()
