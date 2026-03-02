@@ -1,0 +1,20 @@
+{
+  "train": [
+    "subject1",
+    "subject2",
+    "subject3",
+    "subject4",
+    "subject6",
+    "subject7",
+    "subject8",
+    "subject9"
+  ],
+  "val": [
+    "subject5"
+  ],
+  "test": [
+    "subject10",
+    "subject11",
+    "subject12"
+  ]
+}
