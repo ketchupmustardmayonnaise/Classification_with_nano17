@@ -7,7 +7,8 @@ from force_estimation.data.current_dataset.module import *
 
 # leave-out
 # python build_h5_cross_subject.py
-# --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\dataset\12_dataset --out_dir C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\dataset\12_dataset\h5 --split loso --test_subjects "subject3,subject7 subject9" --seed 0 --val_ratio 0.1
+# --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\12_dataset --out_dir C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\dataset\12_dataset_h5
+# --split loso --test_subjects "subject10 subject11 subject12" --val_subjects "subject5" --otsu_k 1.0
 
 
 # -------------------------
@@ -35,9 +36,6 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    total_frames = 0
-    bad_frames = 0
-
 
     # Dataset 폴더 내에서 각 subject별로 정리가 되어 있어야 함.
     subjects = sorted([p.name for p in root.iterdir() if p.is_dir()])
@@ -63,17 +61,21 @@ def main():
             raise ValueError("--test_subjects is required for --split loso (can be multiple subjects)")
         remain, test_subj = leave_out_split(subjects, test_subjects=test_list)
 
-        # val_subjects 지정되면 그걸 val로 고정
+        # remain 중에서, val_subjects 지정되면 그걸 val로 고정
         if len(val_manual) > 0:
             val_set = set(val_manual)
+
+            # 존재하지 않는 subject가 있는가?
             missing = sorted([s for s in val_set if s not in subjects])
             if missing:
                 raise ValueError(f"--val_subjects contains unknown subjects: {missing}")
 
+            # test dataset과 겹치는 subject가 있는가?
             overlap = sorted(val_set & set(test_subj))
             if overlap:
                 raise ValueError(f"--val_subjects overlaps with test subjects: {overlap}")
 
+            # remain 중에서 val subject와 train subject를 나눔.
             val_subj = sorted(val_set)
             train_subj = sorted([s for s in remain if s not in val_set])
             if len(train_subj) == 0:
@@ -86,6 +88,8 @@ def main():
             perm = rng.permutation(remain)
 
             n_remain = len(perm)
+
+            # 만약 remain으로 남은 1명이라면
             if n_remain == 1:
                 # train만 1명, val은 비움(어쩔 수 없음)
                 train_subj, val_subj = perm.tolist(), []
@@ -146,11 +150,6 @@ def main():
         # (3) 큰 값 프레임 -> 이전 프레임 복사 (+ 카운트)
         img, bad_mask = replace_bad_frame_with_previous(img, threshold=args.img_bad_threshold, return_mask=True)
 
-        # ---- 카운팅 ----
-        total_frames += img.shape[0]
-        bad_frames += int(bad_mask.sum())
-        # ----------------
-
         # (4) 3채널 변환 (앞 2프레임 drop)
         img3, img3_ts = to_3ch_rgb_like(img, img_ts)
         if img3 is None:
@@ -205,34 +204,50 @@ def main():
                     continue
 
                 # force preprocess: filter -> interpolate -> z-clip
-                force_f = butter_lowpass_filtfilt(force, force_ts, cutoff_hz=args.cutoff_hz, order=args.filter_order)
-                force_i, keep_img_idx = interp_force_to_img_ts(force_f, force_ts, img3_ts)
-                if force_i is None:
-                    continue
+                force = butter_lowpass_filtfilt(force, force_ts, cutoff_hz=args.cutoff_hz, order=args.filter_order)
+                force_interpolated, keep_img_idx = interp_force_to_img_ts(force, force_ts, img3_ts)
+                if force_interpolated is None: continue
 
                 # interpolate에서 drop된 프레임에 맞춰 img도 동기화
-                img3 = img3[keep_img_idx]
-                img3_ts = img3_ts[keep_img_idx]
+                img3, img3_ts = img3[keep_img_idx], img3_ts[keep_img_idx]
 
                 # z force clipping (>=0 -> 0)
-                force_i[:, 2] = np.minimum(force_i[:, 2], 0.0)
+                force_interpolated[:, 2] = np.minimum(force_interpolated[:, 2], 0.0)
 
-                # normalize image
-                # 일단 전처리 단계에서는 normalize하지 않고, dataset 코드에서 전처리
-                # img3 = normalize_zscore(img3, mean, std).astype(np.float32)
+
+                # ==============================================
+                # NEW: per-frame label (idle vs bodypart)
+                # 조건: img3의 첫 번째 채널 sum이 thr(bodypart)를 넘으면 bodypart, 아니면 idle
+                # ==============================================
+                idle_label_id = 0
+
+                # bodypart별 thr 가져오기 (compute_otsu_kstd_by_bodypart 결과의 "thr" 사용)
+                bodypart_info = otsu_info.get(bodypart, {})
+                threshold = bodypart_info.get("thr_final", None)
+
+                # 첫 번째 채널 기준 frame-wise sum
+                s_sum = img3[:, 0].reshape(img3.shape[0], -1).sum(axis=1).astype(np.float64)
+
+                if threshold is None: raise Exception(f"No threshold found for bodypart: {bodypart}")
+                else:
+                    threshold = float(threshold)
+                    label_frame = np.where(
+                        s_sum > threshold,
+                        MERGED_MAP[int(TAG_INV[bodypart])],
+                        idle_label_id
+                    ).astype(np.int32)
+                # ==============================================
 
                 # save
                 g = h5f.create_group(f"sequence_{seq_idx:04d}")
                 g.create_dataset("img", data=img3, compression="gzip", compression_opts=9)      # (T,3,6,6)
-                g.create_dataset("force", data=force_i, compression="gzip", compression_opts=9) # (T,6)
+                g.create_dataset("force", data=force_interpolated, compression="gzip", compression_opts=9) # (T,6)
+                g.create_dataset("label", data=label_frame, compression="gzip", compression_opts=9)  # (T,)
 
                 g.attrs["subject"] = subject
                 g.attrs["bodypart"] = bodypart
                 g.attrs["source_npz"] = str(npz_path)
                 g.attrs["frame"] = img3.shape[0]
-
-                # ---- numeric label handling ----
-                g.create_dataset("label", data=np.int32(TAG_INV[bodypart]))  # numeric
                 # --------------------------------
 
                 seq_idx += 1

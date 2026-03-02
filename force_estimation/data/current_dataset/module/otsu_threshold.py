@@ -61,7 +61,7 @@ def compute_otsu_kstd_by_bodypart(
         if is_valid_frame is not None:
             is_valid_frame = np.asarray(is_valid_frame)[keep_idx]
 
-        # 네 현재 순서대로 image preprocess (3채널 변환 전, 1채널 기준)
+        # 현재 순서대로 image preprocess (3채널 변환 전, 1채널 기준)
         img = clip_zero(img)
         if is_valid_frame is not None:
             img = replace_invalid_frame_with_previous(img, is_valid_frame)
@@ -69,25 +69,59 @@ def compute_otsu_kstd_by_bodypart(
 
         # 프레임별 sum -> log1p
         s = img.reshape(img.shape[0], -1).sum(axis=1).astype(np.float64)
-        x = np.log1p(np.clip(s, 0, None))
+        x = np.log1p(np.clip(s, 0, None)) # log(sum(capacitance))
 
         dist[bodypart].append(x)
 
     out = {}
     for bodypart, chunks in dist.items():
         if len(chunks) == 0:
-            out[bodypart] = {"otsu": None, "std_idle": None, "thr": None}
+            out[bodypart] = {
+                "n": 0,
+                "otsu_log": None,
+                "thr_final_log": None,
+                "std_idle_log": None,
+                "std_touch_log": None,
+                "std_all_log": None,
+                "otsu_sum": None,
+                "thr_final_sum": None,
+            }
             continue
+
         x = np.concatenate(chunks, axis=0)
         thr_otsu = otsu_threshold_1d(x)
         if not np.isfinite(thr_otsu):
-            out[bodypart] = {"otsu": None, "std_idle": None, "thr": None}
+            out[bodypart] = {
+                # std metrics
+                "std_idle": None,
+                "std_touch": None,
+                "std_all": None,
+
+                # threshold
+                "otsu_thr": None,
+                "thr_final": None,
+            }
             continue
 
         idle = x[x <= thr_otsu]
+        touch = x[x > thr_otsu]
+
         std_idle = float(np.std(idle)) if idle.size else 0.0
+        std_touch = float(np.std(touch)) if touch.size else 0.0  # ✅ 버그 수정
+        std_all = float(np.std(x))
+
+        # otsu threshold + k * std_all
         thr_final = float(thr_otsu + k * std_idle)
 
-        out[bodypart] = {"otsu": np.expm1(float(thr_otsu)), "std_idle": np.expm1(std_idle), "thr": np.expm1(thr_final)}
+        out[bodypart] = {
+            # std metrics
+            "std_idle": float(np.expm1(std_idle)),
+            "std_touch": float(np.expm1(std_touch)),
+            "std_all": float(np.expm1(std_all)),
+
+            # threshold
+            "otsu_thr": float(np.expm1(thr_otsu)),
+            "thr_final": float(np.expm1(thr_final)),
+        }
 
     return out
