@@ -1,5 +1,5 @@
 
-save_directory: ./saved_models/02-17_03-32-34_lightweight_convnexttiny_transformer
+save_directory: ./saved_models/02-27_03-36-09_lightweight_convnexttiny_transformer
 
 wandb:
   project: HandInterfacesWatch
@@ -8,7 +8,7 @@ wandb:
   log_model: all
 
 data:
-  data_dir: ./data/previous_dataset/dataset/bodypart_not_cross_person/all/h5
+  data_dir: ./data/current_dataset/dataset/12_subject_1
   length_of_window: 30
   batch_size: 8
   image_size: [6, 6]
@@ -29,7 +29,7 @@ model:
   encoder_type: lightweight_convnexttiny
   decoder_type: transformer
 
-  classification_type: MTM # MTM or OTO
+  classification_type: OTO # MTM or OTO
 
   transformer:
     num_layers: 2

@@ -1,13 +1,13 @@
 {
   "train": [
-    "subject4",
-    "subject11",
-    "subject5",
-    "subject12",
-    "subject8",
-    "subject6",
     "subject1",
-    "subject10"
+    "subject10",
+    "subject11",
+    "subject12",
+    "subject4",
+    "subject5",
+    "subject6",
+    "subject8"
   ],
   "val": [
     "subject2"
