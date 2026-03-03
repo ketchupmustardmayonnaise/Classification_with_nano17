@@ -128,7 +128,7 @@ class PredictionForce(pl.LightningModule):
             if self.hparams.classification_type == "MTM":
                 x = self.classification_head(x) # (batch_size, 5, 8)
             elif self.hparams.classification_type == "OTO":
-                torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * 5)
+                x = torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * 5)
                 x = self.classification_head(x)  # (batch_size, 8)
 
             return x
@@ -148,9 +148,9 @@ class PredictionForce(pl.LightningModule):
 
         storage["prediction"].extend(preds.detach().cpu().tolist())
         storage["target"].extend(target.detach().cpu().tolist())
-        storage["sequence_id"].extend(sequence_index.detach().cpu().tolist())
+        storage["sequence_id"].extend(sequence_index)
         storage["subject_id"].extend(subject_id)
-        storage["bodypart"].extend(bodypart.detach().cpu().tolist())
+        storage["bodypart"].extend(bodypart)
 
 
     # task 변경
@@ -180,7 +180,8 @@ class PredictionForce(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        # Initially only train the head - backbone will be added by callback
+
+        # trainer.fit() 이 시작될 때 딱 한 번 실행됨.
         if self._task == "regression":
             params = (
                     list(self.vf_net.parameters()) +
@@ -223,7 +224,7 @@ class PredictionForce(pl.LightningModule):
 
             self.train_metrics.update(preds_flat, targets_flat)
             self._save_result(self.train_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
 
         elif self._task == "classification":
@@ -245,7 +246,7 @@ class PredictionForce(pl.LightningModule):
 
             self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True)
             self._save_result(self.train_results, prediction.detach(), ground_truth.detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
         return {"loss": loss}
 
@@ -331,7 +332,7 @@ class PredictionForce(pl.LightningModule):
 
             self.val_metrics.update(preds_flat, targets_flat)
             self._save_result(self.val_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
         elif self._task == "classification":
             # Calculate loss
@@ -352,7 +353,7 @@ class PredictionForce(pl.LightningModule):
 
             # logging
             self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
         return {"loss": loss}
 
@@ -462,7 +463,7 @@ class PredictionForce(pl.LightningModule):
 
             self.test_metrics.update(preds_flat, targets_flat)
             self._save_result(self.test_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
 
         elif self._task == "classification":
@@ -476,7 +477,7 @@ class PredictionForce(pl.LightningModule):
                 N, T, C = prediction.shape
 
                 ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
-                prediction = prediction.mean(dim=1)  # (N, 8)
+                prediction = torch.nn.functional.softmax(prediction, dim=2).mean(dim=1)  # (N, 5, 8) -> (N, 8)
 
             self.test_metrics.update(prediction, ground_truth)
 
@@ -484,7 +485,7 @@ class PredictionForce(pl.LightningModule):
             self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True)
 
             self._save_result(self.test_results, prediction.detach(), ground_truth.detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'].detach())
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
 
 

@@ -1,20 +1,19 @@
 from force_estimation.data.current_dataset.module import *
 
 
-# 랜덤 split
+def main():# 랜덤 split
 # python build_h5_cross_subject.py --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\dataset\12_dataset
 # --out_dir C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\dataset\12_dataset\h5 --split random --seed 0 --train_ratio 0.8 --val_ratio 0.1
 
 # leave-out
 # python build_h5_cross_subject.py
-# --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\12_dataset --out_dir C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\dataset\12_dataset_h5
-# --split loso --test_subjects "subject10 subject11 subject12" --val_subjects "subject5" --otsu_k 1.0
+# --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\12_dataset --out_dir C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\current_dataset\dataset\12_dataset_h5 --split loso --test_subjects "subject10 subject11 subject12" --val_subjects "subject5" --otsu_k 1.0
 
 
 # -------------------------
 # Main build
 # -------------------------
-def main():
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=str, required=True, help="Dataset root folder")
     ap.add_argument("--out_dir", type=str, default="out_h5", help="output folder")

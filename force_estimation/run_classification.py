@@ -19,7 +19,7 @@ def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
     PATH = cfg.save_directory
-    MODEL_NAME = "best_model_loss_for_monitor=0.3210.ckpt"
+    MODEL_NAME = "best_model_loss_for_monitor=0.1861.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
@@ -54,7 +54,7 @@ def main(cfg: DictConfig):
     # early stopping callback
     early_stop_callback = EarlyStopping(
         monitor='loss_for_monitor',
-        patience=20,
+        patience=5,
         min_delta=1e-4,  # 0.001 미만 개선은 무시
         verbose=True)
 
