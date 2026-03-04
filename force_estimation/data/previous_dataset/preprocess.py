@@ -10,6 +10,8 @@ import traceback
 import h5py
 import copy
 
+from force_estimation.utils.bodypart_label import bodypart_label
+
 # =======================================
 # configuration
 path = 'dataset/bodypart_not_cross_person/all'
@@ -388,7 +390,8 @@ class PreprocessDataset:
 
                     group.attrs["frame"] = len(img[index])
                     if name is not None: group.attrs["subject"] = name[index]
-                    group.attrs["bodypart"] = label_each_sequence[index]
+                    a = bodypart_label[label_each_sequence[index]]
+                    group.attrs["bodypart"] = bodypart_label[label_each_sequence[index]]
 
                     if index % 10 == 0:
                         print(f"save {index} / {len(img)} data...")

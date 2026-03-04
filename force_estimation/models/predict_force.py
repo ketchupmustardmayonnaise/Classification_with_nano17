@@ -56,8 +56,12 @@ class PredictionForce(pl.LightningModule):
         self.vf_net = vision_feature_extractor
         self.tf_net = temporal_feature_extractor
 
+        self._task = task
+        self.learning_rate = learning_rate
+
         self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
         self.classification_head = None
+
         if self._task == "classification":
             if self.hparams.classification_type == "MTM":
                 self.classification_head = nn.Linear(self.vf_net.size_of_output, len(classes))
@@ -67,9 +71,6 @@ class PredictionForce(pl.LightningModule):
 
         if classes is not None:
             self.classes = classes
-
-        self._task = task
-        self.learning_rate = learning_rate
 
         self.directory = directory
         self.log_file = f'{self.directory}/train.txt'
@@ -607,64 +608,57 @@ class PredictionForce(pl.LightningModule):
                     f.write(f"(RMSE) X: {rmse_x:.6f}, Y: {rmse_y:.6f}, Z: {rmse_z:.6f}\n")
                     f.write(f"(MAE) X: {mae_x:.6f}, Y: {mae_y:.6f}, Z: {mae_z:.6f}\n")
 
+
         elif self._task == "classification":
-            # ---- collect ----
+            # ==========================================================
+            # 1. 결과 텐서 정리
+            # ==========================================================
             logits = torch.tensor(self.test_results["prediction"])  # (N, C)
             gt = torch.tensor(self.test_results["target"]).long()  # (N,)
             pred = logits.argmax(dim=1)  # (N,)
             num_classes = len(self.classes)
 
-            # ===============================
-            # Precision / Recall / F1
-            # ===============================
+            # numpy 변환 (sklearn용)
             gt_np = gt.cpu().numpy()
             pred_np = pred.cpu().numpy()
+
+            # ==========================================================
+            # 2. Overall Metrics
+            # ==========================================================
+
+            acc = Accuracy(task="multiclass", num_classes=num_classes)(logits, gt)
+            ce = F.cross_entropy(logits, gt)
+            precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+                gt_np, pred_np, average="macro", zero_division=0
+            )
+
+            precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(
+                gt_np, pred_np, average="weighted", zero_division=0
+            )
+
+            # Lightning log
+            self.log("test/accuracy", acc, on_epoch=True)
+            self.log("test/cross_entropy", ce, on_epoch=True)
+            self.log("test/f1_macro", f1_macro, on_epoch=True)
+            self.log("test/f1_weighted", f1_weighted, on_epoch=True)
+
+            # ==========================================================
+            # 3. Per-Class Metrics
+            # ==========================================================
 
             precision, recall, f1, support = precision_recall_fscore_support(
                 gt_np,
                 pred_np,
                 labels=np.arange(num_classes),
-                average=None,  # per-class
+                average=None,
                 zero_division=0
             )
 
-            # macro matrix
-            precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
-                gt_np, pred_np, average="macro", zero_division=0
-            )
-
-            # weighted matrix
-            precision_weighted, recall_weighted, f1_weighted, _ = precision_recall_fscore_support(
-                gt_np, pred_np, average="weighted", zero_division=0
-            )
-
-            # ---- log overall ----
-            self.log("test/precision_macro", precision_macro, on_epoch=True)
-            self.log("test/recall_macro", recall_macro, on_epoch=True)
-            self.log("test/f1_macro", f1_macro, on_epoch=True)
-
-            self.log("test/precision_weighted", precision_weighted, on_epoch=True)
-            self.log("test/recall_weighted", recall_weighted, on_epoch=True)
-            self.log("test/f1_weighted", f1_weighted, on_epoch=True)
-            # =========================================
-
-            # ---- overall metrics ----
-            acc = Accuracy(task="multiclass", num_classes=num_classes)(logits, gt)
-            ce = F.cross_entropy(logits, gt)
-
-            self.log("test/accuracy", acc, on_epoch=True, logger=True)
-            self.log("test/cross_entropy", ce, on_epoch=True, logger=True)
-
-            # ---- confusion matrix ----
-            confmat = torch.zeros((num_classes, num_classes), dtype=torch.long)
-            for t, p in zip(gt, pred):
-                confmat[t, p] += 1
-
-            # per-class acc / ce
             per_class_rows = []
             for c in range(num_classes):
                 mask = (gt == c)
                 n_c = int(mask.sum().item())
+
                 if n_c == 0:
                     acc_c = float("nan")
                     ce_c = float("nan")
@@ -672,123 +666,146 @@ class PredictionForce(pl.LightningModule):
                     acc_c = (pred[mask] == c).float().mean().item()
                     ce_c = F.cross_entropy(logits[mask], gt[mask]).item()
 
-                self.log(f"test/acc_class_{c}", acc_c, on_epoch=True, logger=True)
-                self.log(f"test/ce_class_{c}", ce_c, on_epoch=True, logger=True)
-
-                self.log(f"test/precision_class_{c}", precision[c], on_epoch=True)
-                self.log(f"test/recall_class_{c}", recall[c], on_epoch=True)
+                # Lightning log
+                self.log(f"test/acc_class_{c}", acc_c, on_epoch=True)
+                self.log(f"test/ce_class_{c}", ce_c, on_epoch=True)
                 self.log(f"test/f1_class_{c}", f1[c], on_epoch=True)
-
-                # label name (classes가 dict일 수도 있어서 안전하게)
-                try:
-                    class_name = list(self.classes.keys())[c]  # classes={name:idx} 형태 가정
-                except Exception:
-                    class_name = str(c)
 
                 per_class_rows.append({
                     "class_index": c,
                     "class_name": bodypart_label[c],
                     "n": n_c,
                     "accuracy": acc_c,
-                    "cross_entropy": ce_c
+                    "cross_entropy": ce_c,
+                    "precision": precision[c],
+                    "recall": recall[c],
+                    "f1": f1[c],
                 })
 
-            # ---- write report file ----
+            # ==========================================================
+            # 4. Confusion Matrix (raw + normalized)
+            # ==========================================================
+
+            confmat = torch.zeros((num_classes, num_classes), dtype=torch.long)
+
+            for t, p in zip(gt, pred):
+                confmat[t, p] += 1
+
+            cm_normalized = confusion_matrix(
+                gt_np,
+                pred_np,
+                labels=np.arange(num_classes),
+                normalize="true"  # row normalize
+            )
+
+            # plot normalized confusion matrix
+
+            try:
+                class_names = list(self.classes.values())
+            except Exception:
+                class_names = [str(i) for i in range(num_classes)]
+
+            disp = ConfusionMatrixDisplay(
+                confusion_matrix=cm_normalized,
+                display_labels=class_names
+            )
+
+            fig, ax = plt.subplots(figsize=(8, 6))
+            disp.plot(ax=ax, cmap="Blues", values_format=".2f", colorbar=True)
+            ax.set_title("Normalized Confusion Matrix")
+            plt.xticks(rotation=45)
+            cm_path = f"{self.directory}/test_confusion_matrix.png"
+            plt.tight_layout()
+            plt.savefig(cm_path, dpi=300)
+            plt.close(fig)
+
+            # ==========================================================
+            # 5. Write Report File
+            # ==========================================================
+
             os.makedirs(self.directory, exist_ok=True)
             report_path = f"{self.directory}/test_result.txt"
 
             with open(report_path, "a", encoding="utf-8") as f:
                 f.write("\n\n========= TEST REPORT (CLASSIFICATION) =========\n")
                 f.write(f"Overall Accuracy: {acc.item():.6f}\n")
-                f.write(f"Overall CrossEntropy: {ce.item():.6f}\n\n")
-
+                f.write(f"Overall CrossEntropy: {ce.item():.6f}\n")
+                f.write(f"F1 (macro): {f1_macro:.6f}\n")
+                f.write(f"F1 (weighted): {f1_weighted:.6f}\n\n")
                 f.write("[Per-class]\n")
+
                 for r in per_class_rows:
                     f.write(
                         f"- class {r['class_index']} ({r['class_name']}): "
-                        f"n={r['n']}, acc={r['accuracy']:.6f}, ce={r['cross_entropy']:.6f}\n"
+                        f"n={r['n']}, acc={r['accuracy']:.6f}, "
+                        f"P={r['precision']:.6f}, "
+                        f"R={r['recall']:.6f}, "
+                        f"F1={r['f1']:.6f}, "
+                        f"CE={r['cross_entropy']:.6f}\n"
                     )
 
                 f.write("\n[Confusion Matrix] (rows=true, cols=pred)\n")
-                # 보기 좋게 matrix 출력
+
                 for i in range(num_classes):
                     row = " ".join([f"{int(x):5d}" for x in confmat[i].tolist()])
                     f.write(row + "\n")
 
-                f.write("\n[Overall]\n")
-                f.write(f"Precision (macro): {precision_macro:.6f}\n")
-                f.write(f"Recall (macro): {recall_macro:.6f}\n")
-                f.write(f"F1 (macro): {f1_macro:.6f}\n\n")
+            # ==========================================================
+            # 6. Save CSV
+            # ==========================================================
 
-                f.write(f"Precision (weighted): {precision_weighted:.6f}\n")
-                f.write(f"Recall (weighted): {recall_weighted:.6f}\n")
-                f.write(f"F1 (weighted): {f1_weighted:.6f}\n")
-
-                f.write("\n[Per-class Recall / Precision / F1]\n")
-                for c in range(num_classes):
-                    f.write(
-                        f"class {bodypart_label[c]}: "
-                        f"P={precision[c]:.6f}, "
-                        f"R={recall[c]:.6f}, "
-                        f"F1={f1[c]:.6f}, "
-                        f"n={support[c]}\n"
-                    )
-
-            # ---- also save a CSV summary (optional but useful) ----
             df = pd.DataFrame(per_class_rows)
             df.to_csv(f"{self.directory}/test_classification_summary.csv", index=False)
 
-            # ---- optional: save raw predictions for later ----
             raw_df = pd.DataFrame({
-                "gt": gt.cpu().numpy(),
-                "pred": pred.cpu().numpy(),
+                "gt": gt_np,
+                "pred": pred_np,
                 "sequence_id": np.array(self.test_results["sequence_id"]),
                 "subject_id": np.array(self.test_results["subject_id"]),
                 "bodypart": np.array(self.test_results["bodypart"]),
             })
+
             raw_df.to_csv(f"{self.directory}/test_predictions.csv", index=False)
 
-            # numpy 변환
-            gt_np = gt.cpu().numpy()
-            pred_np = pred.cpu().numpy()
+            # ==========================================================
+            # 7. Subject-wise Report
+            # ==========================================================
 
-            # ----------------------------
-            # confusion matrix (normalized)
-            # ----------------------------
-            cm = confusion_matrix(
-                gt_np,
-                pred_np,
-                labels=np.arange(num_classes),
-                normalize='true' # ⭐ row normalize (가장 일반적)
-            )
+            subject_ids = np.array(self.test_results["subject_id"])
+            unique_subjects = np.unique(subject_ids)
 
-            # ----------------------------
-            # plot
-            # ----------------------------
-            try:
-                class_names = list(self.classes.values())
-            except Exception:
-                class_names = [str(i) for i in range(num_classes)]
+            with open(report_path, "a", encoding="utf-8") as f:
+                f.write("\n\n========= REPORT FOR EACH SUBJECT =========\n\n")
 
-            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+            for sid in unique_subjects:
+                idx = np.where(subject_ids == sid)[0]
+                logits_sub = logits[idx]
+                gt_sub = gt[idx]
+                pred_sub = logits_sub.argmax(dim=1)
 
-            fig, ax = plt.subplots(figsize=(8, 6))
-            disp.plot(
-                ax=ax,
-                cmap="Blues",
-                values_format=".2f",
-                colorbar=True
-            )
+                if len(gt_sub) == 0:
+                    continue
 
-            ax.set_title("Normalized Confusion Matrix")
-            plt.xticks(rotation=45)
+                acc_sub = Accuracy(task="multiclass", num_classes=num_classes)(logits_sub, gt_sub)
+                ce_sub = F.cross_entropy(logits_sub, gt_sub)
 
-            cm_path = f"{self.directory}/test_confusion_matrix.png"
-            plt.tight_layout()
-            plt.savefig(cm_path, dpi=300)
-            plt.close(fig)
+                _, _, f1_sub, _ = precision_recall_fscore_support(
+                    gt_sub.cpu().numpy(),
+                    pred_sub.cpu().numpy(),
+                    average="macro",
+                    zero_division=0
+                )
 
-            print(f"Confusion matrix saved to {cm_path}")
+                self.log(f"test/accuracy_subject_{sid}", acc_sub, on_epoch=True)
+                self.log(f"test/f1_subject_{sid}", f1_sub, on_epoch=True)
+
+                with open(report_path, "a", encoding="utf-8") as f:
+                    f.write(f"[Subject {sid}]\n")
+                    f.write(f"Accuracy: {acc_sub.item():.6f}\n")
+                    f.write(f"CrossEntropy: {ce_sub.item():.6f}\n")
+                    f.write(f"F1(macro): {f1_sub:.6f}\n\n")
+
+            # WandB logging
 
             if wandb.run is not None:
                 wandb.log({"test/confusion_matrix": wandb.Image(cm_path)})
