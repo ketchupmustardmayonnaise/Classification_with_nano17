@@ -102,14 +102,14 @@ class CapTSDataset(Dataset):
                 frame_idx + self.length_of_window]).long()
 
         return {
-            'img': img,
-            'force': force,
-            'label': label,
+            'img': img, # (length of sliding window, 3, 6, 6)
+            'force': force, # (length of sliding window, 3)
+            'label': label, # (refer_recent_frames_for_classification, 1)
 
             # metadata
-            'bodypart' : self.bodypart[sequence_idx],
-            'sequence_id': sequence_idx,
-            'subject_id': self.name[sequence_idx]
+            'bodypart' : self.bodypart[sequence_idx], # string - 리턴될 때, 리스트로 유지됨
+            'sequence_id': sequence_idx, # scalar - 리턴될 때, tensor로 stack됨
+            'subject_id': self.name[sequence_idx] # string - 리턴될 때, 리스트로 유지됨
         }
 
     def __len__(self):

@@ -148,7 +148,7 @@ class PredictionForce(pl.LightningModule):
 
         storage["prediction"].extend(preds.detach().cpu().tolist())
         storage["target"].extend(target.detach().cpu().tolist())
-        storage["sequence_id"].extend(sequence_index)
+        storage["sequence_id"].extend(sequence_index.detach().cpu().tolist())
         storage["subject_id"].extend(subject_id)
         storage["bodypart"].extend(bodypart)
 
