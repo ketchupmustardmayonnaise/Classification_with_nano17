@@ -6,22 +6,6 @@ import h5py
 from scipy import signal
 from scipy.interpolate import interp1d
 
-# -------------------------
-# Frame cleaning (timestamps)
-# -------------------------
-def keep_strictly_increasing(ts: np.ndarray):
-    """
-    ts에서 strictly increasing이 되도록 프레임 인덱스를 남김.
-    - ts[i+1] - ts[i] > 0 인 구간만 유지
-    """
-    ts = np.asarray(ts)
-    if ts.ndim != 1 or ts.size == 0:
-        return np.arange(ts.size, dtype=np.int64)
-    keep = np.ones(ts.size, dtype=bool)
-    d = np.diff(ts.astype(np.float64))
-    keep[1:] = d > 0
-    return np.where(keep)[0]
-
 
 # -------------------------
 # Image preprocessing
