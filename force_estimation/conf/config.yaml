@@ -19,7 +19,7 @@ data:
   translation: False
 
   # classification 할 때, 하나의 프레임만 참조하지 않고 여러 프레임을 동시에 참조하여 예측함.
-  refer_recent_frames_for_classification: 5
+  refer_recent_frames_for_classification: 1
 
 model:
   dropout: 0.0

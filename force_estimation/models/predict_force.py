@@ -123,7 +123,7 @@ class PredictionForce(pl.LightningModule):
             return x
 
         elif self._task == "classification":
-            x = x[:, -5:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
+            x = x[:, -self.hparams.refer_recent_frames_for_classification:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
             x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
 
             if self.hparams.classification_type == "MTM":
