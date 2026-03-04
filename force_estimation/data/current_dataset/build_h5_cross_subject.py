@@ -109,6 +109,35 @@ def main():# 랜덤 split
     # ===========================================
 
 
+    # ===========================================
+    # ---- dataset-wide sampling rate (Hz) ----
+    # img_ts: image collection timestamp
+    # force_ts: force collection timestamp
+    # NOTE: Use MEAN (weighted) Hz, not median.
+    # ===========================================
+    total_img_intervals, total_img_dur = 0, 0.0
+    total_force_intervals, total_force_dur = 0, 0.0
+
+    for _subject, _bodypart, _npz_path in iter_npz(root):
+        _img, _img_ts, _is_valid, _force, _force_ts = load_one_npz(_npz_path)
+
+        n_int, dur = sum_intervals_and_duration(_img_ts)
+        total_img_intervals += n_int
+        total_img_dur += dur
+
+        n_int, dur = sum_intervals_and_duration(_force_ts)
+        total_force_intervals += n_int
+        total_force_dur += dur
+
+    img_hz_mean = (total_img_intervals / total_img_dur) if total_img_dur > 0 else 0.0
+    force_hz_mean = (total_force_intervals / total_force_dur) if total_force_dur > 0 else 0.0
+    img_dt_mean = (total_img_dur / total_img_intervals) if total_img_intervals > 0 else 0.0
+    force_dt_mean = (total_force_dur / total_force_intervals) if total_force_intervals > 0 else 0.0
+
+    print(f"[Hz] img mean: {img_hz_mean:.4f} Hz (mean dt {img_dt_mean:.6f}s)")
+    print(f"[Hz] force mean: {force_hz_mean:.4f} Hz (mean dt {force_dt_mean:.6f}s)")
+
+
     # ---- Otsu + k*std thresholds (by bodypart, using TRAIN subjects only) ----
     otsu_info = compute_otsu_kstd_by_bodypart(
         root=root,
@@ -158,7 +187,16 @@ def main():# 랜덤 split
         train_meta.append((subject, bodypart, str(npz_path)))
 
     mean, std = compute_channel_mean_std(train_seqs_for_stats)
-    stats = {"img_mean": mean.tolist(), "img_std": std.tolist()}
+    # stats.json: training-set normalization stats + dataset-wide sampling rate
+    stats = {
+        "img_mean": mean.tolist(),
+        "img_std": std.tolist(),
+        "img_hz_mean": float(img_hz_mean),
+        "force_hz_mean": float(force_hz_mean),
+        "img_dt_mean_sec": float(img_dt_mean),
+        "force_dt_mean_sec": float(force_dt_mean),
+        "hz_note": "Mean Hz is computed as sum(N-1)/sum(duration) over all sequences after removing non-increasing timestamps.",
+    }
     (out_dir / "stats.json").write_text(json.dumps(stats, indent=2), encoding="utf-8")
     print("[Stats] mean:", mean, "std:", std)
 
@@ -191,6 +229,11 @@ def main():# 랜덤 split
                 img_ts = img_ts[keep_idx]
                 if is_valid_frame is not None:
                     is_valid_frame = np.asarray(is_valid_frame)[keep_idx]
+
+                # (0b) force timestamp 역행/중복 샘플 제거 (필터/보간 안정성)
+                keep_f = keep_strictly_increasing(force_ts)
+                force = force[keep_f]
+                force_ts = force_ts[keep_f]
 
                 # image preprocess
                 img = clip_zero(img)

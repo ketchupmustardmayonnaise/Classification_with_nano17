@@ -7,6 +7,23 @@ from scipy import signal
 from scipy.interpolate import interp1d
 
 # -------------------------
+# Frame cleaning (timestamps)
+# -------------------------
+def keep_strictly_increasing(ts: np.ndarray):
+    """
+    ts에서 strictly increasing이 되도록 프레임 인덱스를 남김.
+    - ts[i+1] - ts[i] > 0 인 구간만 유지
+    """
+    ts = np.asarray(ts)
+    if ts.ndim != 1 or ts.size == 0:
+        return np.arange(ts.size, dtype=np.int64)
+    keep = np.ones(ts.size, dtype=bool)
+    d = np.diff(ts.astype(np.float64))
+    keep[1:] = d > 0
+    return np.where(keep)[0]
+
+
+# -------------------------
 # Utils: split by subject
 # -------------------------
 def split_subjects(subjects, seed=0, train_ratio=0.8, val_ratio=0.1):
@@ -81,3 +98,30 @@ def load_one_npz(npz_path: Path):
     force_ts = d["force_ts"]
     is_valid_frame = d["is_valid_frame"] if "is_valid_frame" in d else (d["is_valid"] if "is_valid" in d else None)
     return img, img_ts, is_valid_frame, force, force_ts
+
+
+
+# -------------------------------------------------
+# Sampling-rate (Hz) utilities
+# -------------------------------------------------
+def sum_intervals_and_duration(ts: np.ndarray):
+    """Return (n_intervals, duration_sec) after removing non-increasing timestamps.
+
+    Per-sequence Hz is (N-1)/(t_last - t_first). For the *entire dataset*,
+    we compute a weighted mean rate: sum(N-1) / sum(duration).
+    """
+    if ts is None:
+        return 0, 0.0
+    ts = np.asarray(ts).reshape(-1)
+    if ts.size < 2:
+        return 0, 0.0
+
+    keep = keep_strictly_increasing(ts)
+    ts = ts[keep]
+    if ts.size < 2:
+        return 0, 0.0
+
+    duration = float(ts[-1] - ts[0])
+    if duration <= 0:
+        return 0, 0.0
+    return int(ts.size - 1), duration

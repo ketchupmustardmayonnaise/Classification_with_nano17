@@ -9,25 +9,15 @@ from scipy.interpolate import interp1d
 # -------------------------
 # Force preprocessing
 # -------------------------
-def median_dt(ts):
-    ts = np.asarray(ts, dtype=np.float64)
-    if ts.size < 2:
-        return np.nan
-    d = np.diff(ts)
-    d = d[np.isfinite(d) & (d > 0)]
-    if d.size == 0:
-        return np.nan
-    return float(np.median(d))
-
 
 def butter_lowpass_filtfilt(force, force_ts, cutoff_hz=6.0, order=4):
     """
     force: (B,6)
     force_ts: (B,)
-    샘플레이트는 force_ts median dt로 추정
+    샘플레이트는 300 Hz
     """
     force = np.asarray(force, dtype=np.float64)
-    fs_dt = median_dt(force_ts)
+    fs_dt = 300
     if not np.isfinite(fs_dt) or fs_dt <= 0:
         return force.astype(np.float32)
 
