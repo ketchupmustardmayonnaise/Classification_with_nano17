@@ -14,7 +14,7 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-@hydra.main(config_path="conf", config_name="classification_config", version_base=None)
+@hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
@@ -89,6 +89,8 @@ def main(cfg: DictConfig):
         dim_of_regression=3,
         classes=bodypart_label,
         task="classification",
+
+        # classification 관련 코드
         refer_recent_frames_for_classification=cfg.data.refer_recent_frames_for_classification,
         classification_type=cfg.model.classification_type,
 
@@ -107,7 +109,7 @@ def main(cfg: DictConfig):
     )
 
     trainer.fit(model, datamodule=data_module)
-    test_results = trainer.test(model, datamodule=data_module)
+    trainer.test(model, datamodule=data_module, ckpt_path="best")
     wandb.finish()
 
 
