@@ -14,7 +14,6 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-
 PATH = "./saved_models\\02-28_05-06-44_lightweight_convnexttiny_transformer"
 MODEL_NAME = "best_model_loss_for_monitor=0.2991.ckpt"
 
@@ -25,13 +24,8 @@ def main(cfg: DictConfig):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
 
-    # =========================================
-    # callback 함수들
-    # =========================================
-
     # 데이터셋
     data_module = CapacitiveImageDataModule(cfg)
-
 
     # =========================================
     # 학습 모델 정의
@@ -76,7 +70,7 @@ def main(cfg: DictConfig):
     # test_mean = data_module.test_dataloader().get_mean_of_test_dataset()
     # PredictionForce.set_buffer("test_mean", test_mean)
 
-    test_results = trainer.test(model, datamodule=data_module, ckpt_path="best")
+    trainer.test(model, datamodule=data_module, ckpt_path="best")
 
 
 if __name__ == '__main__':

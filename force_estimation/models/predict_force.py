@@ -58,21 +58,21 @@ class PredictionForce(pl.LightningModule):
 
         self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
         self.classification_head = None
-
-        self._task = task
-        self.learning_rate = learning_rate
-
-        self.directory = directory
-        self.log_file = f'{self.directory}/train.txt'
-
-        if classes is not None:
-            self.classes = classes
         if self._task == "classification":
             if self.hparams.classification_type == "MTM":
                 self.classification_head = nn.Linear(self.vf_net.size_of_output, len(classes))
             elif self.hparams.classification_type == "OTO":
                 self.classification_head = nn.Linear(
                     self.vf_net.size_of_output * refer_recent_frames_for_classification, len(classes))
+
+        if classes is not None:
+            self.classes = classes
+
+        self._task = task
+        self.learning_rate = learning_rate
+
+        self.directory = directory
+        self.log_file = f'{self.directory}/train.txt'
 
 
         # ================= Metrics =================

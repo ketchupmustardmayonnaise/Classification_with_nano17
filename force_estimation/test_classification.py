@@ -12,20 +12,15 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 PATH = "./saved_models\\02-27_03-36-09_lightweight_convnexttiny_transformer\\CLASSIFICATION_03-03_14-48-31"
 MODEL_NAME = "last.ckpt"
 
-@hydra.main(config_path="conf", config_name="classification_config", version_base=None)
+@hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
 
-    # =========================================
-    # callback 함수들
-    # =========================================
-
     # 데이터셋
     data_module = CapacitiveImageDataModule(cfg)
-
 
     # =========================================
     # 학습 모델 정의
@@ -68,7 +63,7 @@ def main(cfg: DictConfig):
     )
 
     data_module.setup(stage='test')
-    test_results = trainer.test(model, datamodule=data_module)
+    trainer.test(model, datamodule=data_module)
 
 
 if __name__ == '__main__':
