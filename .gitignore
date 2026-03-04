@@ -6,3 +6,4 @@ outputs/
 artifacts/
 *.h5
 lightning_logs/
+force_estimation/data/current_dataset/dataset
