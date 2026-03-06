@@ -32,15 +32,13 @@ class PredictionForce(pl.LightningModule):
     def __init__(self,
                  # === 모델 구조 관련 파라미터 ===
                  vision_feature_extractor,
-                 temporal_feature_extractor,
+                 regression_feature_extractor,
+                 classification_feature_extractor,
 
                  # === 입력 관련 파라미터 ===
                  dim_of_regression : int = 3,
                  classes : dict = None,
                  task : str = 'regression',     # "regression" | "classification" | "finetune"
-
-                 refer_recent_frames_for_classification: int = 5,
-                 classification_type: str = 'MTM', # MTM, OTO
 
                  # === Hyperparameter ===
                  learning_rate : float = 1e-4,
@@ -51,27 +49,26 @@ class PredictionForce(pl.LightningModule):
 
         super().__init__()
 
-        self.save_hyperparameters(ignore=['vision_feature_extractor', 'temporal_feature_extractor'])
-
-        self.vf_net = vision_feature_extractor
-        self.tf_net = temporal_feature_extractor
+        self.save_hyperparameters(ignore=['vision_feature_extractor', 'regression_feature_extractor', 'classification_feature_extractor'])
 
         self._task = task
         self.learning_rate = learning_rate
 
-        self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
-        self.classification_head = None
-
-        if self._task == "classification":
-            if self.hparams.classification_type == "MTM":
-                self.classification_head = nn.Linear(self.vf_net.size_of_output, len(classes))
-            elif self.hparams.classification_type == "OTO":
-                self.classification_head = nn.Linear(
-                    self.vf_net.size_of_output * refer_recent_frames_for_classification, len(classes))
-
         if classes is not None:
             self.classes = classes
 
+        # 모델 정의
+        self.vf_net = vision_feature_extractor
+        self.rf_net = regression_feature_extractor
+        self.cf_net = classification_feature_extractor
+
+        self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
+        self.classification_head = None
+        if self._task == "classification":
+            if classes is not None: self.classification_head = nn.Linear(self.vf_net.size_of_output, len(self.classes))
+            else: raise Exception("classes가 확인되지 않습니다. Classification을 진행할 수 없습니다.")
+
+        # directory 또는 log file
         self.directory = directory
         self.log_file = f'{self.directory}/train.txt'
 
@@ -118,19 +115,14 @@ class PredictionForce(pl.LightningModule):
 
         if self._task == "regression":
             x = self.vf_net(x)
-            x = self.tf_net(x)
+            x = self.rf_net(x)
             x = self.regression_head(x)
             return x
 
         elif self._task == "classification":
-            x = x[:, -self.hparams.refer_recent_frames_for_classification:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
-            x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
-
-            if self.hparams.classification_type == "MTM":
-                x = self.classification_head(x) # (batch_size, 5, 8)
-            elif self.hparams.classification_type == "OTO":
-                x = torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * 5)
-                x = self.classification_head(x)  # (batch_size, 8)
+            x = self.vf_net(x) # (batch_size, timestep, dim_hidden_features=96)
+            x = self.cf_net(x) # (batch_size, dim_hidden_features=96) - 마지막 timestep의 feature
+            x = self.classification_head(x)
 
             return x
 
@@ -158,7 +150,8 @@ class PredictionForce(pl.LightningModule):
     def set_task(self, value):
 
         if value == "classification":
-            self.classification_head = nn.Linear(self.tf_net.size_of_output * self.hparams.refer_recent_frames_for_classification, len(self.classes))
+            if self.classes is not None: self.classification_head = nn.Linear(self.vf_net.size_of_output, len(self.classes))
+            else: raise Exception("classes가 확인되지 않습니다. Classification을 진행할 수 없습니다.")
 
             metrics = MetricCollection({
                 "accuracy": Accuracy(task="multiclass", num_classes=len(self.classes)),
@@ -186,12 +179,15 @@ class PredictionForce(pl.LightningModule):
         if self._task == "regression":
             params = (
                     list(self.vf_net.parameters()) +
-                    list(self.tf_net.parameters()) +
+                    list(self.rf_net.parameters()) +
                     list(self.regression_head.parameters())
             )
 
         elif self._task == "classification":
-            params = self.classification_head.parameters()  # head only
+            params = (
+                    list(self.cf_net.parameters()) +
+                    list(self.classification_head.parameters())
+            )
 
         elif self._task == "finetune":
             params = self.parameters()  # 전체
@@ -230,17 +226,8 @@ class PredictionForce(pl.LightningModule):
 
         elif self._task == "classification":
             # Calculate loss
-            ground_truth = batch['label'] # (N, 5)
-
-            if self.hparams.classification_type == "OTO": # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long) # (N,)
-                prediction = prediction # (N, 8)
-
-            else: # MANY-TO-MANY
-                N, T, C = prediction.shape
-
-                ground_truth = ground_truth.reshape(N*T) # (N, 5)
-                prediction = prediction.reshape(N*T, C) # (N, 5, 8)
+            ground_truth = batch['label'].to(torch.long) # (N,)
+            prediction = prediction  # (N, 8)
 
             loss = self.criterion(prediction, ground_truth)
             self.train_metrics.update(prediction, ground_truth)
@@ -337,17 +324,8 @@ class PredictionForce(pl.LightningModule):
 
         elif self._task == "classification":
             # Calculate loss
-            ground_truth = batch['label']  # (N, 5)
-
-            if self.hparams.classification_type == "OTO":  # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
-                prediction = prediction  # (N, 8)
-
-            else:  # MANY-TO-MANY 에서도 하나의 값을 추론하도록
-
-                N, T, C = prediction.shape
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
-                prediction = prediction.mean(dim=1)  # (N, 8)
+            ground_truth = batch['label'].to(torch.long)  # (N,)
+            prediction = prediction  # (N, 8)
 
             loss = self.criterion(prediction, ground_truth)
             self.val_metrics.update(prediction, ground_truth)
@@ -468,17 +446,9 @@ class PredictionForce(pl.LightningModule):
 
 
         elif self._task == "classification":
-            ground_truth = batch['label'] # (N,)
-
-            if self.hparams.classification_type == "OTO":  # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
-                prediction = prediction  # (N, 8)
-
-            else:  # MANY-TO-MANY 에서도 하나의 값을 추론하도록
-                N, T, C = prediction.shape
-
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
-                prediction = torch.nn.functional.softmax(prediction, dim=2).mean(dim=1)  # (N, 5, 8) -> (N, 8)
+            # Calculate loss
+            ground_truth = batch['label'].to(torch.long)  # (N,)
+            prediction = prediction  # (N, 8)
 
             self.test_metrics.update(prediction, ground_truth)
 

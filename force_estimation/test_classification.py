@@ -47,8 +47,6 @@ def main(cfg: DictConfig):
         dim_of_regression=3,
         classes=bodypart_label,
         task="classification",
-        refer_recent_frames_for_classification=cfg.data.refer_recent_frames_for_classification,
-        classification_type=cfg.model.classification_type,
 
         learning_rate=cfg.model.learning_rate,
         weight_decay=cfg.model.weight_decay,

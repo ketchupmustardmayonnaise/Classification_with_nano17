@@ -19,7 +19,6 @@ class CapacitiveImageDataModule(LightningDataModule):
         if stage == 'fit' or stage is None:
             self.train_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                               num_classes=self.hparams.cfg.data.num_classes,
-                                              refer_recent_frames_for_classification=self.hparams.cfg.data.refer_recent_frames_for_classification,
                                               path=f"{self.hparams.cfg.data.data_dir}/train.h5",
                                               dataset_type='train',
 
@@ -29,14 +28,12 @@ class CapacitiveImageDataModule(LightningDataModule):
 
             self.val_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                             num_classes=self.hparams.cfg.data.num_classes,
-                                            refer_recent_frames_for_classification=self.hparams.cfg.data.refer_recent_frames_for_classification,
                                             path=f"{self.hparams.cfg.data.data_dir}/val.h5",
                                             dataset_type='val')
 
         if stage == 'test' or stage == 'predict':
             self.test_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                              num_classes=self.hparams.cfg.data.num_classes,
-                                             refer_recent_frames_for_classification=self.hparams.cfg.data.refer_recent_frames_for_classification,
                                              path=f"{self.hparams.cfg.data.data_dir}/test.h5",
                                              dataset_type='test')
 

@@ -16,7 +16,6 @@ class CapTSDataset(Dataset):
     def __init__(self,
                  length_of_window : int,
                  num_classes : int,
-                 refer_recent_frames_for_classification : int,
 
                  path : str = './preprocessed_train_dataset',
                  dataset_type : str = 'train',
@@ -30,9 +29,6 @@ class CapTSDataset(Dataset):
         self.length_of_window = length_of_window
         self.num_classes = num_classes
         self.stride = 1
-
-        # classification 할 때, 하나의 프레임만 참조하지 않고 여러 프레임을 동시에 참조하여 예측함.
-        self.refer_recent_frames_for_classification = refer_recent_frames_for_classification
 
         self.frame = []
         self.name = []
@@ -97,14 +93,12 @@ class CapTSDataset(Dataset):
         img = (img - self.img_mean) / (self.img_std + 1e-8)
 
         force = torch.from_numpy(self.force[sequence_idx][frame_idx:frame_idx + self.length_of_window, 0:3]).float()
-        label = torch.from_numpy(self.label[sequence_idx][
-                frame_idx + self.length_of_window - self.refer_recent_frames_for_classification:
-                frame_idx + self.length_of_window]).long()
+        label = self.label[sequence_idx][frame_idx + self.length_of_window - 1] # 마지막 프레임의 레이블만 뱉음
 
         return {
             'img': img, # (length of sliding window, 3, 6, 6)
             'force': force, # (length of sliding window, 3)
-            'label': label, # (refer_recent_frames_for_classification, 1)
+            'label': label, # scalar - 리턴될 때, tensor로 stack됨.
 
             # metadata
             'bodypart' : self.bodypart[sequence_idx], # string - 리턴될 때, 리스트로 유지됨

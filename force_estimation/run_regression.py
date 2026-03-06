@@ -1,17 +1,17 @@
+import os
 import time
+import torch
 import hydra
-from omegaconf import OmegaConf
-from models import *
-from utils.bodypart_label import bodypart_label
-from omegaconf import DictConfig
+import wandb
+import pytorch_lightning as pl
 
+from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
-from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
-
-# ===================================
-# wandb
-# ===================================
 from pytorch_lightning.loggers import WandbLogger
+
+from force_estimation.models import *
+from force_estimation.utils.bodypart_label import bodypart_label
+from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
@@ -23,17 +23,34 @@ def main(cfg: DictConfig):
 
     time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
 
-    # =========================================
-    # callback 함수들
-    # =========================================
-
-    wandb_logger = WandbLogger(
-        name=f'{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}',
+    # -----------------------------
+    # wandb init (sweep 대응)
+    # -----------------------------
+    wandb.init(
+        name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         group=cfg.wandb.group,
-        log_model= cfg.wandb.log_model
     )
+
+    # W&B logger 시작
+    wandb_logger = WandbLogger(
+        name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
+        project=cfg.wandb.project,
+        entity=cfg.wandb.entity,
+        group=cfg.wandb.group,
+        log_model=cfg.wandb.log_model,
+    )
+
+    # 최종 config를 W&B에 기록
+    wandb.config.update(
+        OmegaConf.to_container(cfg, resolve=True),
+        allow_val_change=True
+    )
+
+    # =========================================
+    # callback 함수들
+    # =========================================
 
     save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
     if not os.path.exists(save_dir): os.makedirs(save_dir)
@@ -77,7 +94,13 @@ def main(cfg: DictConfig):
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
 
-    model = PredictionForce(vf_net, tf_net,
+    cf_net = LSTM(size_of_input=vf_net.size_of_output,
+                  size_of_hidden_layer_features=cfg.model.lstm.size_of_hidden_layer_features,
+                  num_layer=cfg.model.lstm.num_layers,
+                  is_bidirectional=cfg.model.lstm.is_bidirectional,
+                  export_multistep=cfg.model.lstm.export_multistep)
+
+    model = PredictionForce(vf_net, tf_net, cf_net,
                     dim_of_regression=3, # axis
                     classes=bodypart_label,
                     task="regression",
@@ -88,7 +111,7 @@ def main(cfg: DictConfig):
                     directory=save_dir)
 
     trainer = pl.Trainer(
-        accelerator='gpu',
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
         precision=16,
         logger=wandb_logger,
@@ -98,6 +121,7 @@ def main(cfg: DictConfig):
 
     trainer.fit(model, datamodule=data_module)
     trainer.test(model, datamodule=data_module, ckpt_path="best")
+
     wandb.finish()
 
 

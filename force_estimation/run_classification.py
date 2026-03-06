@@ -71,7 +71,7 @@ def main(cfg: DictConfig):
     vf_net = VisionFeatureExtractor(cfg.model.encoder_type,
                                     cfg.data.image_size)
 
-    tf_net = Transformer(size_of_input=vf_net.size_of_output,
+    rf_net = Transformer(size_of_input=vf_net.size_of_output,
                         num_rnn_layer=cfg.model.transformer.num_layers,
                         num_of_heads=cfg.model.transformer.num_of_head,
 
@@ -81,18 +81,21 @@ def main(cfg: DictConfig):
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
 
+    cf_net = LSTM(size_of_input=vf_net.size_of_output,
+                  size_of_hidden_layer_features=cfg.model.lstm.size_of_hidden_layer_features,
+                  num_layer=cfg.model.lstm.num_layers,
+                  is_bidirectional=cfg.model.lstm.is_bidirectional,
+                  export_multistep=cfg.model.lstm.export_multistep)
+
     model = load_model_from_local(
         PredictionForce, f"{PATH}/{MODEL_NAME}",
         vision_feature_extractor=vf_net,
-        temporal_feature_extractor=tf_net,
+        regression_feature_extractor=rf_net,
+        classification_feature_extractor=cf_net,
 
         dim_of_regression=3,
         classes=bodypart_label,
         task="classification",
-
-        # classification 관련 코드
-        refer_recent_frames_for_classification=cfg.data.refer_recent_frames_for_classification,
-        classification_type=cfg.model.classification_type,
 
         learning_rate=cfg.model.learning_rate,
         weight_decay=cfg.model.weight_decay,
