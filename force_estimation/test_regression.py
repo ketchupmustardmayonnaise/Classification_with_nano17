@@ -53,6 +53,13 @@ def main(cfg: DictConfig):
         classes=bodypart_label,
         task="regression",
 
+        # [기존] use_force_axis_normalization 인자를 전달하지 않았음.
+        use_force_axis_normalization=cfg.model.use_force_axis_normalization,
+        # [기존] force_axis_norm_eps 인자를 전달하지 않았음.
+        force_axis_norm_eps=cfg.model.force_axis_norm_eps,
+        # [기존] data_dir 인자를 전달하지 않았음.
+        data_dir=cfg.data.data_dir,
+
         learning_rate=cfg.model.learning_rate,
         weight_decay=cfg.model.weight_decay,
         # !!!!!!! 이거 수정 !!!!!!!

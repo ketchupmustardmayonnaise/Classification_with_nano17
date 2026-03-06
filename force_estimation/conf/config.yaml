@@ -26,12 +26,16 @@ model:
   dropout: 0.0
   learning_rate: 0.0001
   weight_decay: 0.001
+  # [기존] force axis 정규화 loss 옵션이 없었음.
+  use_force_axis_normalization: true
+  # [기존] force axis 정규화 epsilon 옵션이 없었음.
+  force_axis_norm_eps: 1.0e-8
 
   encoder_type: lightweight_convnexttiny
   decoder_type: transformer
 
   classification_type: OTO # MTM or OTO
-  classification_head_type: tcn # linear | gru | lstm | tcn
+  classification_head_type: lstm # linear | gru | lstm | tcn
   classification_head_hidden_size: 128
   classification_head_num_layers: 1
   classification_head_dropout: 0.1

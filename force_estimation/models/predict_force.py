@@ -2,6 +2,7 @@ import json
 
 import torch
 import matplotlib.pyplot as plt
+import h5py
 from torch.nn.functional import cross_entropy
 from wandb.integration.sklearn.calculate import confusion_matrix
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, precision_recall_fscore_support
@@ -55,6 +56,11 @@ class PredictionForce(pl.LightningModule):
                  freeze_vf_net_for_classification: bool = True,
                  freeze_tf_net_for_classification: bool = True,
 
+                 # [기존] use_force_axis_normalization / force_axis_norm_eps / data_dir 인자가 없었음.
+                 use_force_axis_normalization: bool = False,
+                 force_axis_norm_eps: float = 1e-8,
+                 data_dir: str = None,
+
                  # === Hyperparameter ===
                  learning_rate : float = 1e-4,
                  weight_decay : float = 1e-3,
@@ -80,6 +86,12 @@ class PredictionForce(pl.LightningModule):
 
         if classes is not None:
             self.classes = classes
+        if self._task == "regression":
+            # [기존] regression task에서도 force_mean / force_std buffer를 만들지 않았음.
+            self.register_buffer("force_mean", torch.zeros(dim_of_regression, dtype=torch.float32))
+            self.register_buffer("force_std", torch.ones(dim_of_regression, dtype=torch.float32))
+            # [기존] regression task에서는 force 통계를 따로 읽지 않았음.
+            self._initialize_force_axis_stats(dim_of_regression)
         if self._task == "classification":
             if classes is None:
                 raise ValueError("Classification task에서는 classes 인자가 필요합니다.")
@@ -234,6 +246,59 @@ class PredictionForce(pl.LightningModule):
             return raw_label
 
         return str(raw_label)
+
+    def _initialize_force_axis_stats(self, dim_of_regression: int):
+        if not self.hparams.use_force_axis_normalization:
+            return
+
+        if self.hparams.data_dir is None:
+            raise ValueError("use_force_axis_normalization=True 이면 data_dir가 필요합니다.")
+
+        train_h5_path = os.path.join(self.hparams.data_dir, "train.h5")
+        if not os.path.exists(train_h5_path):
+            raise FileNotFoundError(f"train.h5를 찾을 수 없습니다: {train_h5_path}")
+
+        with h5py.File(train_h5_path, "r") as f:
+            if "force_mean" in f.attrs and "force_std" in f.attrs:
+                force_mean = np.asarray(f.attrs["force_mean"], dtype=np.float32)[:dim_of_regression]
+                force_std = np.asarray(f.attrs["force_std"], dtype=np.float32)[:dim_of_regression]
+            else:
+                force_list = [
+                    f[key]["force"][:, :dim_of_regression]
+                    for key in sorted(f.keys())
+                    if key.startswith("sequence_")
+                ]
+                force_stack = np.concatenate(force_list, axis=0).astype(np.float32)
+                force_mean = force_stack.mean(axis=0)
+                force_std = force_stack.std(axis=0)
+
+        force_std = np.maximum(force_std, self.hparams.force_axis_norm_eps)
+        self.force_mean.copy_(torch.tensor(force_mean, dtype=torch.float32))
+        self.force_std.copy_(torch.tensor(force_std, dtype=torch.float32))
+
+    def _normalize_force_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        view_shape = [1] * tensor.dim()
+        view_shape[-1] = self.force_mean.shape[0]
+        force_mean = self.force_mean.view(*view_shape).to(tensor.device, tensor.dtype)
+        force_std = self.force_std.view(*view_shape).to(tensor.device, tensor.dtype)
+        return (tensor - force_mean) / force_std
+
+    def _compute_regression_losses(self, prediction: torch.Tensor, target: torch.Tensor):
+        if self.hparams.use_force_axis_normalization:
+            # [기존] prediction / target raw force에 대해 바로 MSE를 계산했음.
+            prediction_for_loss = self._normalize_force_tensor(prediction)
+            target_for_loss = self._normalize_force_tensor(target)
+        else:
+            # [기존] prediction_for_loss = prediction
+            prediction_for_loss = prediction
+            # [기존] target_for_loss = target
+            target_for_loss = target
+
+        loss = self.criterion(prediction_for_loss, target_for_loss)
+        loss_fx = self.criterion(prediction_for_loss[:, :, 0], target_for_loss[:, :, 0])
+        loss_fy = self.criterion(prediction_for_loss[:, :, 1], target_for_loss[:, :, 1])
+        loss_fz = self.criterion(prediction_for_loss[:, :, 2], target_for_loss[:, :, 2])
+        return loss, loss_fx, loss_fy, loss_fz
 
     def _build_classification_head(self, num_classes: int):
         self.classification_head = None
@@ -393,13 +458,11 @@ class PredictionForce(pl.LightningModule):
         prediction = self(batch['img'])
 
         if self._task == "regression":
-            # Calculate overall loss
-            loss = self.criterion(prediction, batch['force'])
-
-            # per-axis losses
-            loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
-            loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
-            loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            # [기존] loss = self.criterion(prediction, batch['force'])
+            # [기존] loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
+            # [기존] loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
+            # [기존] loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            loss, loss_fx, loss_fy, loss_fz = self._compute_regression_losses(prediction, batch['force'])
 
             # logging
             self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True)
@@ -502,13 +565,11 @@ class PredictionForce(pl.LightningModule):
         prediction = self(batch['img'])
 
         if self._task == "regression":
-            # Calculate overall loss
-            loss = self.criterion(prediction, batch['force'])
-
-            # per-axis losses
-            loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
-            loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
-            loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            # [기존] loss = self.criterion(prediction, batch['force'])
+            # [기존] loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
+            # [기존] loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
+            # [기존] loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            loss, loss_fx, loss_fy, loss_fz = self._compute_regression_losses(prediction, batch['force'])
 
             # logging
             self.log("loss_for_monitor", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
@@ -636,13 +697,11 @@ class PredictionForce(pl.LightningModule):
         prediction = self(batch['img'])
 
         if self._task == "regression":
-            # Calculate overall loss
-            loss = self.criterion(prediction, batch['force'])
-
-            # per-axis losses
-            loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
-            loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
-            loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            # [기존] loss = self.criterion(prediction, batch['force'])
+            # [기존] loss_fx = self.criterion(prediction[:, :, 0], batch['force'][:, :, 0])
+            # [기존] loss_fy = self.criterion(prediction[:, :, 1], batch['force'][:, :, 1])
+            # [기존] loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
+            loss, loss_fx, loss_fy, loss_fz = self._compute_regression_losses(prediction, batch['force'])
 
             # logging
             self.log("test/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True)
@@ -834,6 +893,11 @@ class PredictionForce(pl.LightningModule):
             # Lightning log
             self.log("test/accuracy", acc, on_epoch=True)
             self.log("test/cross_entropy", ce, on_epoch=True)
+            self.log("test/precision_macro", precision_macro, on_epoch=True)
+            self.log("test/precision_weighted", precision_weighted, on_epoch=True)
+
+            self.log("test/recall_macro", recall_macro, on_epoch=True)
+            self.log("test/recall_weighted", recall_weighted, on_epoch=True)
             self.log("test/f1_macro", f1_macro, on_epoch=True)
             self.log("test/f1_weighted", f1_weighted, on_epoch=True)
 
@@ -925,6 +989,10 @@ class PredictionForce(pl.LightningModule):
                 f.write("\n\n========= TEST REPORT (CLASSIFICATION) =========\n")
                 f.write(f"Overall Accuracy: {acc.item():.6f}\n")
                 f.write(f"Overall CrossEntropy: {ce.item():.6f}\n")
+                f.write(f"Precision (macro): {precision_macro:.6f}\n")
+                f.write(f"Precision (weighted): {precision_weighted:.6f}\n")
+                f.write(f"Recall (macro): {recall_macro:.6f}\n")
+                f.write(f"Recall (weighted): {recall_weighted:.6f}\n")
                 f.write(f"F1 (macro): {f1_macro:.6f}\n")
                 f.write(f"F1 (weighted): {f1_weighted:.6f}\n\n")
                 f.write("[Per-class]\n")
@@ -974,9 +1042,12 @@ class PredictionForce(pl.LightningModule):
 
             for sid in unique_subjects:
                 idx = np.where(subject_ids == sid)[0]
-                logits_sub = logits[idx]
-                gt_sub = gt[idx]
-                pred_sub = logits_sub.argmax(dim=1)
+                logits_sub = logits[idx]  # (Ns, C)
+                gt_sub = gt[idx]  # (Ns,)
+                pred_sub = logits_sub.argmax(dim=1)  # (Ns,)
+
+                gt_sub_np = gt_sub.cpu().numpy()
+                pred_sub_np = pred_sub.cpu().numpy()
 
                 if len(gt_sub) == 0:
                     continue
@@ -984,21 +1055,50 @@ class PredictionForce(pl.LightningModule):
                 acc_sub = Accuracy(task="multiclass", num_classes=num_classes)(logits_sub, gt_sub)
                 ce_sub = F.cross_entropy(logits_sub, gt_sub)
 
-                _, _, f1_sub, _ = precision_recall_fscore_support(
-                    gt_sub.cpu().numpy(),
-                    pred_sub.cpu().numpy(),
-                    average="macro",
+                precision_macro_sub, recall_macro_sub, f1_macro_sub, _ = precision_recall_fscore_support(
+                    gt_sub_np, pred_sub_np, average="macro", zero_division=0
+                )
+                precision_weighted_sub, recall_weighted_sub, f1_weighted_sub, _ = precision_recall_fscore_support(
+                    gt_sub_np, pred_sub_np, average="weighted", zero_division=0
+                )
+
+                # ---------------------------
+                # per-class metrics for subject
+                # ---------------------------
+                precision_sub, recall_sub, f1_sub, support_sub = precision_recall_fscore_support(
+                    gt_sub_np,
+                    pred_sub_np,
+                    labels=np.arange(num_classes),
+                    average=None,
                     zero_division=0
                 )
 
                 self.log(f"test/accuracy_subject_{sid}", acc_sub, on_epoch=True)
-                self.log(f"test/f1_subject_{sid}", f1_sub, on_epoch=True)
+                self.log(f"test/cross_entropy_subject_{sid}", ce_sub, on_epoch=True)
 
+                self.log(f"test/precision_macro_subject_{sid}", precision_macro_sub, on_epoch=True)
+                self.log(f"test/precision_weighted_subject_{sid}", precision_weighted_sub, on_epoch=True)
+
+                self.log(f"test/recall_macro_subject_{sid}", recall_macro_sub, on_epoch=True)
+                self.log(f"test/recall_weighted_subject_{sid}", recall_weighted_sub, on_epoch=True)
+
+                self.log(f"test/f1_macro_subject_{sid}", f1_macro_sub, on_epoch=True)
+                self.log(f"test/f1_weighted_subject_{sid}", f1_weighted_sub, on_epoch=True)
+                
+                
                 with open(report_path, "a", encoding="utf-8") as f:
                     f.write(f"[Subject {sid}]\n")
                     f.write(f"Accuracy: {acc_sub.item():.6f}\n")
                     f.write(f"CrossEntropy: {ce_sub.item():.6f}\n")
-                    f.write(f"F1(macro): {f1_sub:.6f}\n\n")
+                    f.write(f"Precision(macro): {precision_macro_sub:.6f}\n")
+                    f.write(f"Precision(weighted): {precision_weighted_sub:.6f}\n")
+
+                    f.write(f"Recall(macro): {recall_macro_sub:.6f}\n")
+                    f.write(f"Recall(weighted): {recall_weighted_sub:.6f}\n")
+
+                    f.write(f"F1(macro): {f1_macro_sub:.6f}\n")
+                    f.write(f"F1(weighted): {f1_weighted_sub:.6f}\n\n")
+
 
             # WandB logging
 
