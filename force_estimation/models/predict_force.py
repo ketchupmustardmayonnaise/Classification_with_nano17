@@ -6,7 +6,10 @@ from torch.nn.functional import cross_entropy
 from wandb.integration.sklearn.calculate import confusion_matrix
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, precision_recall_fscore_support
 
-from force_estimation.utils.plot_sequence import *
+try:
+    from force_estimation.utils.plot_sequence import *
+except ModuleNotFoundError:
+    from utils.plot_sequence import *
 import numpy as np
 import torch.nn as nn
 import pytorch_lightning as pl
@@ -24,7 +27,10 @@ from typing import Any, Dict, Tuple
 from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 from .cross_entropy import CrossEntropyMetrics
-from force_estimation.utils.bodypart_label import bodypart_label
+try:
+    from force_estimation.utils.bodypart_label import bodypart_label
+except ModuleNotFoundError:
+    from utils.bodypart_label import bodypart_label
 
 
 class PredictionForce(pl.LightningModule):
@@ -41,6 +47,13 @@ class PredictionForce(pl.LightningModule):
 
                  refer_recent_frames_for_classification: int = 5,
                  classification_type: str = 'MTM', # MTM, OTO
+                 classification_head_type: str = 'linear', # linear | gru | lstm | tcn
+                 classification_head_hidden_size: int = 128,
+                 classification_head_num_layers: int = 1,
+                 classification_head_dropout: float = 0.1,
+                 classification_tcn_kernel_size: int = 3,
+                 freeze_vf_net_for_classification: bool = True,
+                 freeze_tf_net_for_classification: bool = True,
 
                  # === Hyperparameter ===
                  learning_rate : float = 1e-4,
@@ -61,16 +74,17 @@ class PredictionForce(pl.LightningModule):
 
         self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
         self.classification_head = None
-
-        if self._task == "classification":
-            if self.hparams.classification_type == "MTM":
-                self.classification_head = nn.Linear(self.vf_net.size_of_output, len(classes))
-            elif self.hparams.classification_type == "OTO":
-                self.classification_head = nn.Linear(
-                    self.vf_net.size_of_output * refer_recent_frames_for_classification, len(classes))
+        self.classification_rnn = None
+        self.classification_tcn = None
+        self.classification_output_head = None
 
         if classes is not None:
             self.classes = classes
+        if self._task == "classification":
+            if classes is None:
+                raise ValueError("Classification task에서는 classes 인자가 필요합니다.")
+            self._build_classification_head(len(self.classes))
+            self._apply_classification_freeze_policy()
 
         self.directory = directory
         self.log_file = f'{self.directory}/train.txt'
@@ -123,14 +137,36 @@ class PredictionForce(pl.LightningModule):
             return x
 
         elif self._task == "classification":
-            x = x[:, -self.hparams.refer_recent_frames_for_classification:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
-            x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
+            # [기존] x = x[:, -self.hparams.refer_recent_frames_for_classification:] # 마지막 5 프레임 timestep (batch_size, 5, channels, height, width)
+            x = x[:, -self.hparams.refer_recent_frames_for_classification:] # 마지막 R 프레임 timestep (batch_size, R, channels, height, width)
+            # [기존] x = self.vf_net(x) # (batch_size, 5, dim_hidden_features=96)
+            x = self.vf_net(x) # (batch_size, R, dim_hidden_features=96)
+            head_type = self.hparams.classification_head_type.lower()
 
-            if self.hparams.classification_type == "MTM":
-                x = self.classification_head(x) # (batch_size, 5, 8)
-            elif self.hparams.classification_type == "OTO":
-                x = torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * 5)
-                x = self.classification_head(x)  # (batch_size, 8)
+            if head_type == "linear":
+                if self.hparams.classification_type == "MTM":
+                    # [기존] x = self.classification_head(x) # (batch_size, 5, 8)
+                    x = self.classification_head(x) # (batch_size, R, num_classes)
+                elif self.hparams.classification_type == "OTO":
+                    # [기존] x = torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * 5)
+                    x = torch.flatten(x, start_dim=1) # (batch_size, dim_hidden_features * R)
+                    # [기존] x = self.classification_head(x)  # (batch_size, 8)
+                    x = self.classification_head(x)  # (batch_size, num_classes)
+            elif head_type in {"gru", "lstm"}:
+                x, _ = self.classification_rnn(x) # (batch_size, R, hidden_size)
+                if self.hparams.classification_type == "MTM":
+                    x = self.classification_output_head(x) # (batch_size, R, num_classes)
+                elif self.hparams.classification_type == "OTO":
+                    x = self.classification_output_head(x[:, -1, :]) # (batch_size, num_classes)
+            elif head_type == "tcn":
+                x = x.transpose(1, 2) # (batch_size, dim_hidden_features, R)
+                x = self.classification_tcn(x) # (batch_size, hidden_size, R)
+                if self.hparams.classification_type == "MTM":
+                    x = self.classification_output_head(x.transpose(1, 2)) # (batch_size, R, num_classes)
+                elif self.hparams.classification_type == "OTO":
+                    x = self.classification_output_head(x[:, :, -1]) # (batch_size, num_classes)
+            else:
+                raise ValueError(f"Unknown classification_head_type: {head_type}")
 
             return x
 
@@ -150,15 +186,163 @@ class PredictionForce(pl.LightningModule):
         storage["prediction"].extend(preds.detach().cpu().tolist())
         storage["target"].extend(target.detach().cpu().tolist())
         storage["sequence_id"].extend(sequence_index.detach().cpu().tolist())
-        storage["subject_id"].extend(subject_id)
-        storage["bodypart"].extend(bodypart)
+        storage["subject_id"].extend(self._to_python_list(subject_id))
+        storage["bodypart"].extend(self._to_python_list(bodypart))
+
+    @staticmethod
+    def _to_python_list(value):
+        if torch.is_tensor(value):
+            value = value.detach().cpu()
+            return value.tolist() if value.ndim > 0 else [value.item()]
+
+        if isinstance(value, np.ndarray):
+            return value.tolist() if value.ndim > 0 else [value.item()]
+
+        if isinstance(value, (list, tuple)):
+            result = []
+            for v in value:
+                if torch.is_tensor(v):
+                    vv = v.detach().cpu()
+                    result.append(vv.item() if vv.ndim == 0 else vv.tolist())
+                elif isinstance(v, np.ndarray):
+                    result.append(v.tolist())
+                else:
+                    result.append(v)
+            return result
+
+        return [value]
+
+    @staticmethod
+    def _format_bodypart_name(raw_label):
+        # numpy/tensor scalar를 python scalar로 변환
+        if torch.is_tensor(raw_label):
+            raw_label = raw_label.detach().cpu().item() if raw_label.ndim == 0 else raw_label.detach().cpu().tolist()
+        elif isinstance(raw_label, np.generic):
+            raw_label = raw_label.item()
+
+        # int 라벨이면 매핑 테이블 사용
+        if isinstance(raw_label, (int, np.integer)):
+            return bodypart_label.get(int(raw_label), str(raw_label))
+
+        # 문자열 라벨이면 그대로 사용, 세부 라벨(FINGERPAD-THUMB 등)은 상위 라벨로 축약
+        if isinstance(raw_label, str):
+            if raw_label in bodypart_label.values():
+                return raw_label
+            coarse_label = raw_label.split("-")[0]
+            if coarse_label in bodypart_label.values():
+                return coarse_label
+            return raw_label
+
+        return str(raw_label)
+
+    def _build_classification_head(self, num_classes: int):
+        self.classification_head = None
+        self.classification_rnn = None
+        self.classification_tcn = None
+        self.classification_output_head = None
+
+        head_type = self.hparams.classification_head_type.lower()
+        classification_type = self.hparams.classification_type
+        vf_dim = self.vf_net.size_of_output
+        refer_frames = self.hparams.refer_recent_frames_for_classification
+
+        if head_type == "linear":
+            if classification_type == "MTM":
+                self.classification_head = nn.Linear(vf_dim, num_classes)
+            elif classification_type == "OTO":
+                self.classification_head = nn.Linear(vf_dim * refer_frames, num_classes)
+            else:
+                raise ValueError(f"Unknown classification_type: {classification_type}")
+            return
+
+        if head_type in {"gru", "lstm"}:
+            hidden_size = self.hparams.classification_head_hidden_size
+            num_layers = self.hparams.classification_head_num_layers
+            dropout = self.hparams.classification_head_dropout if num_layers > 1 else 0.0
+
+            rnn_cls = nn.GRU if head_type == "gru" else nn.LSTM
+            self.classification_rnn = rnn_cls(
+                input_size=vf_dim,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                dropout=dropout,
+                batch_first=True
+            )
+            self.classification_output_head = nn.Linear(hidden_size, num_classes)
+            return
+
+        if head_type == "tcn":
+            hidden_size = self.hparams.classification_head_hidden_size
+            kernel_size = self.hparams.classification_tcn_kernel_size
+            if kernel_size % 2 == 0:
+                raise ValueError("classification_tcn_kernel_size는 홀수여야 합니다. (예: 3, 5)")
+            padding = kernel_size // 2
+            dropout = self.hparams.classification_head_dropout
+
+            self.classification_tcn = nn.Sequential(
+                nn.Conv1d(vf_dim, hidden_size, kernel_size=kernel_size, padding=padding),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Conv1d(hidden_size, hidden_size, kernel_size=kernel_size, padding=padding),
+                nn.GELU(),
+                nn.Dropout(dropout),
+            )
+            self.classification_output_head = nn.Linear(hidden_size, num_classes)
+            return
+
+        raise ValueError(f"Unknown classification_head_type: {head_type}")
+
+    def _classification_parameters(self):
+        head_type = self.hparams.classification_head_type.lower()
+
+        if head_type == "linear":
+            return list(self.classification_head.parameters())
+        if head_type in {"gru", "lstm"}:
+            return list(self.classification_rnn.parameters()) + list(self.classification_output_head.parameters())
+        if head_type == "tcn":
+            return list(self.classification_tcn.parameters()) + list(self.classification_output_head.parameters())
+
+        raise ValueError(f"Unknown classification_head_type: {head_type}")
+
+    def _apply_classification_freeze_policy(self):
+        if self._task != "classification":
+            return
+
+        if self.hparams.freeze_vf_net_for_classification:
+            for p in self.vf_net.parameters():
+                p.requires_grad = False
+            self.vf_net.eval()
+        else:
+            for p in self.vf_net.parameters():
+                p.requires_grad = True
+
+        if self.hparams.freeze_tf_net_for_classification:
+            for p in self.tf_net.parameters():
+                p.requires_grad = False
+            self.tf_net.eval()
+        else:
+            for p in self.tf_net.parameters():
+                p.requires_grad = True
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+
+        # Lightning이 model.train()을 호출해도 freeze된 backbone은 eval 상태를 유지
+        if mode and self._task == "classification":
+            if self.hparams.freeze_vf_net_for_classification:
+                self.vf_net.eval()
+            if self.hparams.freeze_tf_net_for_classification:
+                self.tf_net.eval()
+
+        return self
 
 
     # task 변경
     def set_task(self, value):
 
         if value == "classification":
-            self.classification_head = nn.Linear(self.tf_net.size_of_output * self.hparams.refer_recent_frames_for_classification, len(self.classes))
+            self._build_classification_head(len(self.classes))
+            self._apply_classification_freeze_policy()
 
             metrics = MetricCollection({
                 "accuracy": Accuracy(task="multiclass", num_classes=len(self.classes)),
@@ -191,7 +375,11 @@ class PredictionForce(pl.LightningModule):
             )
 
         elif self._task == "classification":
-            params = self.classification_head.parameters()  # head only
+            params = list(self._classification_parameters())  # head
+            if not self.hparams.freeze_vf_net_for_classification:
+                params += list(self.vf_net.parameters())
+            if not self.hparams.freeze_tf_net_for_classification:
+                params += list(self.tf_net.parameters())
 
         elif self._task == "finetune":
             params = self.parameters()  # 전체
@@ -230,10 +418,12 @@ class PredictionForce(pl.LightningModule):
 
         elif self._task == "classification":
             # Calculate loss
-            ground_truth = batch['label'] # (N, 5)
+            # [기존] ground_truth = batch['label'] # (N, 5)
+            ground_truth = batch['label'] # (N, R)
 
             if self.hparams.classification_type == "OTO": # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long) # (N,)
+                # [기존] ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long) # (N,)
+                ground_truth = ground_truth[:, -1].to(torch.long) # (N,) : 현재(마지막) 프레임 라벨
                 prediction = prediction # (N, 8)
 
             else: # MANY-TO-MANY
@@ -337,10 +527,12 @@ class PredictionForce(pl.LightningModule):
 
         elif self._task == "classification":
             # Calculate loss
-            ground_truth = batch['label']  # (N, 5)
+            # [기존] ground_truth = batch['label']  # (N, 5)
+            ground_truth = batch['label']  # (N, R)
 
             if self.hparams.classification_type == "OTO":  # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
+                # [기존] ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
+                ground_truth = ground_truth[:, -1].to(torch.long)  # (N,) : 현재(마지막) 프레임 라벨
                 prediction = prediction  # (N, 8)
 
             else:  # MANY-TO-MANY 에서도 하나의 값을 추론하도록
@@ -468,10 +660,12 @@ class PredictionForce(pl.LightningModule):
 
 
         elif self._task == "classification":
-            ground_truth = batch['label'] # (N,)
+            # [기존] ground_truth = batch['label'] # (N,)
+            ground_truth = batch['label'] # (N, R)
 
-            if self.hparams.classification_type == "OTO":  # ONE-TO-ONE
-                ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
+            if self.hparams.classification_type == "OTO":  # MANY-TO-ONE
+                # [기존] ground_truth = torch.mode(ground_truth, dim=1).values.to(torch.long)  # (N,)
+                ground_truth = ground_truth[:, -1].to(torch.long)  # (N,) : 현재(마지막) 프레임 라벨
                 prediction = prediction  # (N, 8)
 
             else:  # MANY-TO-MANY 에서도 하나의 값을 추론하도록
@@ -603,7 +797,8 @@ class PredictionForce(pl.LightningModule):
                 mae_z = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
 
                 with open(f'{self.directory}/test_result.txt', "a") as f:
-                    f.write(f"[{bodypart_label[sid]}] R2 SCORE: {r2_for_label:.6f} RMSE: {rmse_for_label:.6f} MAE: {mae_for_label:.6f}\n")
+                    bodypart_name = self._format_bodypart_name(sid)
+                    f.write(f"[{bodypart_name}] R2 SCORE: {r2_for_label:.6f} RMSE: {rmse_for_label:.6f} MAE: {mae_for_label:.6f}\n")
                     f.write(f"(R2 SCORE) X: {r2_x:.6f}, Y: {r2_y:.6f}, Z: {r2_z:.6f}\n")
                     f.write(f"(RMSE) X: {rmse_x:.6f}, Y: {rmse_y:.6f}, Z: {rmse_z:.6f}\n")
                     f.write(f"(MAE) X: {mae_x:.6f}, Y: {mae_y:.6f}, Z: {mae_z:.6f}\n")
@@ -858,7 +1053,7 @@ class PredictionForce(pl.LightningModule):
 
             preds = [results["prediction"][i] for i in idx]
             targets = [results["target"][i] for i in idx]
-            sequence_id = [results["target"][i] for i in idx]
+            sequence_id = [results["sequence_id"][i] for i in idx]
             bodypart = [results["bodypart"][i] for i in idx]
 
             # (num_windows, T, 3) 로 stack
@@ -884,7 +1079,7 @@ class PredictionForce(pl.LightningModule):
 
             preds = [results["prediction"][i] for i in idx]
             targets = [results["target"][i] for i in idx]
-            sequence_id = [results["target"][i] for i in idx]
+            sequence_id = [results["sequence_id"][i] for i in idx]
             subject_id = [results["subject_id"][i] for i in idx]
 
             # (num_windows, T, 3) 로 stack

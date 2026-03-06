@@ -14,8 +14,8 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-PATH = "./saved_models\\02-28_05-06-44_lightweight_convnexttiny_transformer"
-MODEL_NAME = "best_model_loss_for_monitor=0.2991.ckpt"
+PATH = "./saved_models/02-17_03-32-34_lightweight_convnexttiny_transformer/03-05_08-15-46_lightweight_convnexttiny_transformer"
+MODEL_NAME = "best_model_loss_for_monitor=0.2812.ckpt"
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -70,7 +70,8 @@ def main(cfg: DictConfig):
     # test_mean = data_module.test_dataloader().get_mean_of_test_dataset()
     # PredictionForce.set_buffer("test_mean", test_mean)
 
-    trainer.test(model, datamodule=data_module, ckpt_path="best")
+    # 이미 load_model_from_local로 체크포인트를 로드했으므로 ckpt_path 지정이 필요 없음
+    trainer.test(model, datamodule=data_module)
 
 
 if __name__ == '__main__':

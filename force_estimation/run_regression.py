@@ -97,7 +97,7 @@ def main(cfg: DictConfig):
     )
 
     trainer.fit(model, datamodule=data_module)
-    trainer.test(model, datamodule=data_module, ckpt_path="best")
+    trainer.test(model, datamodule=data_module, ckpt_path="best", weights_only=False)
     wandb.finish()
 
 

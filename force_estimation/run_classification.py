@@ -18,7 +18,7 @@ from pytorch_lightning.loggers import WandbLogger
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
-    PATH = "./saved_models\\(offline augmentation) 02-17_03-32-34_lightweight_convnexttiny_transformer"
+    PATH = "./saved_models/02-17_03-32-34_lightweight_convnexttiny_transformer"
     MODEL_NAME = "best_model_loss_for_monitor=0.3210.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -83,6 +83,7 @@ def main(cfg: DictConfig):
 
     model = load_model_from_local(
         PredictionForce, f"{PATH}/{MODEL_NAME}",
+        set_eval=False,  # 학습 시작 전 train mode 유지 (RNN backward 에러 방지)
         vision_feature_extractor=vf_net,
         temporal_feature_extractor=tf_net,
 
@@ -93,6 +94,13 @@ def main(cfg: DictConfig):
         # classification 관련 코드
         refer_recent_frames_for_classification=cfg.data.refer_recent_frames_for_classification,
         classification_type=cfg.model.classification_type,
+        classification_head_type=cfg.model.classification_head_type,
+        classification_head_hidden_size=cfg.model.classification_head_hidden_size,
+        classification_head_num_layers=cfg.model.classification_head_num_layers,
+        classification_head_dropout=cfg.model.classification_head_dropout,
+        classification_tcn_kernel_size=cfg.model.classification_tcn_kernel_size,
+        freeze_vf_net_for_classification=cfg.model.freeze_vf_net_for_classification,
+        freeze_tf_net_for_classification=cfg.model.freeze_tf_net_for_classification,
 
         learning_rate=cfg.model.learning_rate,
         weight_decay=cfg.model.weight_decay,
@@ -109,7 +117,7 @@ def main(cfg: DictConfig):
     )
 
     trainer.fit(model, datamodule=data_module)
-    trainer.test(model, datamodule=data_module, ckpt_path="best")
+    trainer.test(model, datamodule=data_module, ckpt_path="best", weights_only=False)
     wandb.finish()
 
 

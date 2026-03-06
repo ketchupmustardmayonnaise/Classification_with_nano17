@@ -1,5 +1,5 @@
 
-save_directory: ./saved_models
+save_directory: ./02-17_03-32-34_lightweight_convnexttiny_transformer
 
 wandb:
   project: HandInterfacesWatch
@@ -8,7 +8,7 @@ wandb:
   log_model: all
 
 data:
-  data_dir: ./data/previous_dataset/dataset/bodypart_not_cross_person/all/h5
+  data_dir: ./data/current_dataset/dataset/12_dataset_h5
   length_of_window: 30
   batch_size: 8
   image_size: [6, 6]
@@ -19,7 +19,8 @@ data:
   translation: False
 
   # classification 할 때, 하나의 프레임만 참조하지 않고 여러 프레임을 동시에 참조하여 예측함.
-  refer_recent_frames_for_classification: 1
+  # [기존] refer_recent_frames_for_classification: 1
+  refer_recent_frames_for_classification: 30
 
 model:
   dropout: 0.0
@@ -30,6 +31,13 @@ model:
   decoder_type: transformer
 
   classification_type: OTO # MTM or OTO
+  classification_head_type: tcn # linear | gru | lstm | tcn
+  classification_head_hidden_size: 128
+  classification_head_num_layers: 1
+  classification_head_dropout: 0.1
+  classification_tcn_kernel_size: 3
+  freeze_vf_net_for_classification: true
+  freeze_tf_net_for_classification: true
 
   transformer:
     num_layers: 2
