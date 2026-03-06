@@ -639,6 +639,13 @@ class PredictionForce(pl.LightningModule):
             # Lightning log
             self.log("test/accuracy", acc, on_epoch=True)
             self.log("test/cross_entropy", ce, on_epoch=True)
+
+            self.log("test/precision_macro", precision_macro, on_epoch=True)
+            self.log("test/precision_weighted", precision_weighted, on_epoch=True)
+
+            self.log("test/recall_macro", recall_macro, on_epoch=True)
+            self.log("test/recall_weighted", recall_weighted, on_epoch=True)
+
             self.log("test/f1_macro", f1_macro, on_epoch=True)
             self.log("test/f1_weighted", f1_weighted, on_epoch=True)
 
@@ -730,8 +737,16 @@ class PredictionForce(pl.LightningModule):
                 f.write("\n\n========= TEST REPORT (CLASSIFICATION) =========\n")
                 f.write(f"Overall Accuracy: {acc.item():.6f}\n")
                 f.write(f"Overall CrossEntropy: {ce.item():.6f}\n")
+
+                f.write(f"Precision (macro): {precision_macro:.6f}\n")
+                f.write(f"Precision (weighted): {precision_weighted:.6f}\n")
+
+                f.write(f"Recall (macro): {recall_macro:.6f}\n")
+                f.write(f"Recall (weighted): {recall_weighted:.6f}\n")
+
                 f.write(f"F1 (macro): {f1_macro:.6f}\n")
                 f.write(f"F1 (weighted): {f1_weighted:.6f}\n\n")
+
                 f.write("[Per-class]\n")
 
                 for r in per_class_rows:
@@ -779,34 +794,71 @@ class PredictionForce(pl.LightningModule):
 
             for sid in unique_subjects:
                 idx = np.where(subject_ids == sid)[0]
-                logits_sub = logits[idx]
-                gt_sub = gt[idx]
-                pred_sub = logits_sub.argmax(dim=1)
+
+                logits_sub = logits[idx]  # (Ns, C)
+                gt_sub = gt[idx]  # (Ns,)
+                pred_sub = logits_sub.argmax(dim=1)  # (Ns,)
+
+                gt_sub_np = gt_sub.cpu().numpy()
+                pred_sub_np = pred_sub.cpu().numpy()
 
                 if len(gt_sub) == 0:
                     continue
 
+                # ---------------------------
+                # overall metrics for subject
+                # ---------------------------
                 acc_sub = Accuracy(task="multiclass", num_classes=num_classes)(logits_sub, gt_sub)
                 ce_sub = F.cross_entropy(logits_sub, gt_sub)
 
-                _, _, f1_sub, _ = precision_recall_fscore_support(
-                    gt_sub.cpu().numpy(),
-                    pred_sub.cpu().numpy(),
-                    average="macro",
+                precision_macro_sub, recall_macro_sub, f1_macro_sub, _ = precision_recall_fscore_support(
+                    gt_sub_np, pred_sub_np, average="macro", zero_division=0
+                )
+                precision_weighted_sub, recall_weighted_sub, f1_weighted_sub, _ = precision_recall_fscore_support(
+                    gt_sub_np, pred_sub_np, average="weighted", zero_division=0
+                )
+
+                # ---------------------------
+                # per-class metrics for subject
+                # ---------------------------
+                precision_sub, recall_sub, f1_sub, support_sub = precision_recall_fscore_support(
+                    gt_sub_np,
+                    pred_sub_np,
+                    labels=np.arange(num_classes),
+                    average=None,
                     zero_division=0
                 )
 
+                # ---------------------------
+                # lightning log
+                # ---------------------------
                 self.log(f"test/accuracy_subject_{sid}", acc_sub, on_epoch=True)
-                self.log(f"test/f1_subject_{sid}", f1_sub, on_epoch=True)
+                self.log(f"test/cross_entropy_subject_{sid}", ce_sub, on_epoch=True)
+
+                self.log(f"test/precision_macro_subject_{sid}", precision_macro_sub, on_epoch=True)
+                self.log(f"test/precision_weighted_subject_{sid}", precision_weighted_sub, on_epoch=True)
+
+                self.log(f"test/recall_macro_subject_{sid}", recall_macro_sub, on_epoch=True)
+                self.log(f"test/recall_weighted_subject_{sid}", recall_weighted_sub, on_epoch=True)
+
+                self.log(f"test/f1_macro_subject_{sid}", f1_macro_sub, on_epoch=True)
+                self.log(f"test/f1_weighted_subject_{sid}", f1_weighted_sub, on_epoch=True)
 
                 with open(report_path, "a", encoding="utf-8") as f:
                     f.write(f"[Subject {sid}]\n")
                     f.write(f"Accuracy: {acc_sub.item():.6f}\n")
                     f.write(f"CrossEntropy: {ce_sub.item():.6f}\n")
-                    f.write(f"F1(macro): {f1_sub:.6f}\n\n")
+
+                    f.write(f"Precision(macro): {precision_macro_sub:.6f}\n")
+                    f.write(f"Precision(weighted): {precision_weighted_sub:.6f}\n")
+
+                    f.write(f"Recall(macro): {recall_macro_sub:.6f}\n")
+                    f.write(f"Recall(weighted): {recall_weighted_sub:.6f}\n")
+
+                    f.write(f"F1(macro): {f1_macro_sub:.6f}\n")
+                    f.write(f"F1(weighted): {f1_weighted_sub:.6f}\n\n")
 
             # WandB logging
-
             if wandb.run is not None:
                 wandb.log({"test/confusion_matrix": wandb.Image(cm_path)})
 

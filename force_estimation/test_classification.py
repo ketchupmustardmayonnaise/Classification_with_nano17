@@ -9,8 +9,8 @@ from omegaconf import DictConfig
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
 from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 
-PATH = "./saved_models\\(offline augmentation) 02-17_03-32-34_lightweight_convnexttiny_transformer\\[ONE-TO-ONE] CLASSIFICATION_02-20_20-46-43"
-MODEL_NAME = "model.ckpt"
+PATH = "./saved_models\\(offline augmentation) 02-17_03-32-34_lightweight_convnexttiny_transformer\\[1frame] [ONE-TO-ONE] CLASSIFICATION_03-05_01-08-18"
+MODEL_NAME = "best_model_loss_for_monitor=0.7336.ckpt"
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
