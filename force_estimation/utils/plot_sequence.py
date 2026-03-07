@@ -34,7 +34,7 @@ def plot_sequence(f, pf, save_dir, index,
     fig, axes = plt.subplots(3, 1, figsize=(14, 12))  # plot 만듦
 
     if label is not None:
-        plt.suptitle(f"{index}th test sequence data ({bodypart_label.get(label)})")
+        plt.suptitle(f"{index}th test sequence data ({label})")
     else:
         plt.suptitle(f"{index}th test sequence data")
 
@@ -79,8 +79,8 @@ def plot_sequence(f, pf, save_dir, index,
         else: filename = f'[{str(name)}] test_{index}th_data'
     else:
         if name is None:
-            filename = f'[{bodypart_label.get(label)}] test_{index}th_data'
-        else: filename = f'[{str(name)}] [{bodypart_label.get(label)}] test_{index}th_data'
+            filename = f'[{label}] test_{index}th_data'
+        else: filename = f'[{str(name)}] [{label}] test_{index}th_data'
 
     plt.savefig(f'{save_dir}/png/{filename}.png',
                 dpi=300, facecolor='white', edgecolor='black',

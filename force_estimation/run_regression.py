@@ -84,7 +84,7 @@ def main(cfg: DictConfig):
     vf_net = VisionFeatureExtractor(cfg.model.encoder_type,
                                     cfg.data.image_size)
 
-    tf_net = Transformer(size_of_input=vf_net.size_of_output,
+    rf_net = Transformer(size_of_input=vf_net.size_of_output,
                         num_rnn_layer=cfg.model.transformer.num_layers,
                         num_of_heads=cfg.model.transformer.num_of_head,
 
@@ -100,7 +100,7 @@ def main(cfg: DictConfig):
                   is_bidirectional=cfg.model.lstm.is_bidirectional,
                   export_multistep=cfg.model.lstm.export_multistep)
 
-    model = PredictionForce(vf_net, tf_net, cf_net,
+    model = PredictionForce(vf_net, rf_net, cf_net,
                     dim_of_regression=3, # axis
                     classes=bodypart_label,
                     task="regression",

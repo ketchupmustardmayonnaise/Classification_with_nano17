@@ -573,7 +573,7 @@ class PredictionForce(pl.LightningModule):
                 mae_z = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
 
                 with open(f'{self.directory}/test_result.txt', "a") as f:
-                    f.write(f"[{bodypart_label[sid]}] R2 SCORE: {r2_for_label:.6f} RMSE: {rmse_for_label:.6f} MAE: {mae_for_label:.6f}\n")
+                    f.write(f"[{sid}] R2 SCORE: {r2_for_label:.6f} RMSE: {rmse_for_label:.6f} MAE: {mae_for_label:.6f}\n")
                     f.write(f"(R2 SCORE) X: {r2_x:.6f}, Y: {r2_y:.6f}, Z: {r2_z:.6f}\n")
                     f.write(f"(RMSE) X: {rmse_x:.6f}, Y: {rmse_y:.6f}, Z: {rmse_z:.6f}\n")
                     f.write(f"(MAE) X: {mae_x:.6f}, Y: {mae_y:.6f}, Z: {mae_z:.6f}\n")
