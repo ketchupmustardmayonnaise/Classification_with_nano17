@@ -26,14 +26,52 @@ class VisionFeatureExtractor(nn.Module):
                          image_size : (int, int)):
 
         if cnn_name.lower() == "resnet18":
-            self.model = models.resnet18(pretrained=True)
-            for param in self.model.parameters():
+            self._size_of_output = 64
+
+            pretrained_model = models.resnet18(pretrained=True)
+
+            # 이미지가 6x6으로 매우 작기 때문에, 기존의 stem 대신 우리 방식대로 customize된 stem을 사용합니다.
+            customized_stem = nn.Sequential(
+                nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1),
+                # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
+                nn.LayerNorm([64, image_size[0], image_size[1]])
+            )
+
+            # customized stem -> Stage 1 of pretrained model -> AdaptiveAvgPool2d
+            self.model = nn.Sequential(
+                customized_stem,
+                pretrained_model.layer1,  # stage 1 of pretrained model
+                nn.AdaptiveAvgPool2d((1, 1))  # AdaptiveAvgPool2d
+            )
+
+            # stem과 pooling 제외하고, pretrained model에서 떼어 온 부분을 동결합니다.
+            for param in self.model[1].parameters():
                 param.requires_grad = False
 
+
         elif cnn_name.lower() == 'densenet121':
-            self.model = models.densenet121(pretrained=True)
-            for param in self.model.parameters():
+            self._size_of_output = 256
+
+            pretrained_model = models.densenet121(pretrained=True)
+
+            # 이미지가 6x6으로 매우 작기 때문에, 기존의 stem 대신 우리 방식대로 customize된 stem을 사용합니다.
+            customized_stem = nn.Sequential(
+                nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding=1),
+                # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
+                nn.LayerNorm([64, image_size[0], image_size[1]])
+            )
+
+            # customized stem -> Stage 1 of pretrained model -> AdaptiveAvgPool2d
+            self.model = nn.Sequential(
+                customized_stem,
+                pretrained_model.features.denseblock1,  # stage 1 of pretrained model
+                nn.AdaptiveAvgPool2d((1, 1))  # AdaptiveAvgPool2d
+            )
+
+            # stem과 pooling 제외하고, pretrained model에서 떼어 온 부분을 동결합니다.
+            for param in self.model[1].parameters():
                 param.requires_grad = False
+
 
         elif cnn_name.lower() == 'alexnet':
             self.model = models.alexnet(pretrained=True)
@@ -55,7 +93,8 @@ class VisionFeatureExtractor(nn.Module):
             customized_stem = nn.Sequential(
                         nn.Conv2d(in_channels= 3, out_channels= 96, kernel_size=3, stride=1, padding=1),
                         # LayerNorm은 채널 수(96)와 이미지 크기(8x10)를 알아야 합니다.
-                        nn.LayerNorm([96, image_size[0], image_size[1]]))
+                        nn.LayerNorm([96, image_size[0], image_size[1]])
+            )
 
             # customized stem -> Stage 1 of pretrained model -> AdaptiveAvgPool2d
             self.model = nn.Sequential(
