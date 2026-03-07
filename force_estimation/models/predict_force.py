@@ -32,8 +32,8 @@ class PredictionForce(pl.LightningModule):
     def __init__(self,
                  # === 모델 구조 관련 파라미터 ===
                  vision_feature_extractor,
-                 regression_feature_extractor,
-                 classification_feature_extractor,
+                 regression_feature_extractor=None,
+                 classification_feature_extractor=None,
 
                  # === 입력 관련 파라미터 ===
                  dim_of_regression : int = 3,
@@ -58,15 +58,28 @@ class PredictionForce(pl.LightningModule):
             self.classes = classes
 
         # 모델 정의
+        # shared backbone
         self.vf_net = vision_feature_extractor
+
+        # optional task branches
         self.rf_net = regression_feature_extractor
         self.cf_net = classification_feature_extractor
 
-        self.regression_head = nn.Linear(self.vf_net.size_of_output, dim_of_regression)
+        # optional heads
+        self.regression_head = None
         self.classification_head = None
-        if self._task == "classification":
-            if classes is not None: self.classification_head = nn.Linear(self.vf_net.size_of_output, len(self.classes))
-            else: raise Exception("classes가 확인되지 않습니다. Classification을 진행할 수 없습니다.")
+
+        if self.rf_net is not None:
+            self.regression_head = nn.Linear(
+                self.vf_net.size_of_output,
+                dim_of_regression
+            )
+
+        if self.cf_net is not None and self.classes is not None:
+            self.classification_head = nn.Linear(
+                self.vf_net.size_of_output,
+                len(self.classes)
+            )
 
         # directory 또는 log file
         self.directory = directory
@@ -113,18 +126,25 @@ class PredictionForce(pl.LightningModule):
     def forward(self, x):
         batch_size, timestep, channels, height, width = x.shape
 
+        x = self.vf_net(x) # (batch_size, timestep, dim_hidden_features=96)
+
         if self._task == "regression":
-            x = self.vf_net(x)
+            if self.rf_net is None or self.regression_head is None:
+                raise RuntimeError("Regression branch is not attached.")
             x = self.rf_net(x)
             x = self.regression_head(x)
             return x
 
         elif self._task == "classification":
-            x = self.vf_net(x) # (batch_size, timestep, dim_hidden_features=96)
+            if self.cf_net is None or self.classification_head is None:
+                raise RuntimeError("Classification branch is not attached.")
             x = self.cf_net(x) # (batch_size, dim_hidden_features=96) - 마지막 timestep의 feature
             x = self.classification_head(x)
 
             return x
+
+        else:
+            raise ValueError(f"Unknown task: {self._task}")
 
 
     # =================== Methods ===================
@@ -147,12 +167,15 @@ class PredictionForce(pl.LightningModule):
 
 
     # task 변경
-    def set_task(self, value):
+    def set_task(self, value, network):
 
         if value == "classification":
-            if self.classes is not None: self.classification_head = nn.Linear(self.vf_net.size_of_output, len(self.classes))
+            if self.classes is not None:
+                self.cf_net = network
+                self.classification_head = nn.Linear(self.vf_net.size_of_output, len(self.classes))
             else: raise Exception("classes가 확인되지 않습니다. Classification을 진행할 수 없습니다.")
 
+            self._task = value
             metrics = MetricCollection({
                 "accuracy": Accuracy(task="multiclass", num_classes=len(self.classes)),
                 "cross_entropy": CrossEntropyMetrics()  # cross entropy 평균용
@@ -164,8 +187,25 @@ class PredictionForce(pl.LightningModule):
 
             self.configure_optimizers()
 
+        elif value == "regression":
+            self.rf_net = network
+            self.regression_head = nn.Linear(self.vf_net.size_of_output, self.hparams.dim_of_regression)
+
+            self._task = value
+            metrics = MetricCollection({
+                "rmse": MeanSquaredError(squared=False),
+                "mae": MeanAbsoluteError(),
+                "r2": R2Score() })
+
+            self.train_metrics = metrics.clone(prefix="train/")
+            self.val_metrics = metrics.clone(prefix="val/")
+            self.test_metrics = metrics.clone(prefix="test/")
+
+            self.configure_optimizers()
+
         elif value == "finetuning":
             self.learning_rate = self.hparams.learning_rate * 0.1
+
 
         else:
             raise Exception("정확한 Task 기입")

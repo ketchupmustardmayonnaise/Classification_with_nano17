@@ -94,21 +94,28 @@ def main(cfg: DictConfig):
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
 
+    '''
     cf_net = LSTM(size_of_input=vf_net.size_of_output,
                   size_of_hidden_layer_features=cfg.model.lstm.size_of_hidden_layer_features,
                   num_layer=cfg.model.lstm.num_layers,
                   is_bidirectional=cfg.model.lstm.is_bidirectional,
                   export_multistep=cfg.model.lstm.export_multistep)
+    '''
 
-    model = PredictionForce(vf_net, rf_net, cf_net,
-                    dim_of_regression=3, # axis
-                    classes=bodypart_label,
-                    task="regression",
+    model = PredictionForce(
+                vision_feature_extractor=vf_net,
+                regression_feature_extractor=rf_net,
+                # classification_feature_extractor=cf_net,
 
-                    learning_rate=cfg.model.learning_rate,
-                    weight_decay=cfg.model.weight_decay,
+                dim_of_regression=3, # axis
+                classes=bodypart_label,
+                task="regression",
 
-                    directory=save_dir)
+                learning_rate=cfg.model.learning_rate,
+                weight_decay=cfg.model.weight_decay,
+
+                directory=save_dir
+    )
 
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
