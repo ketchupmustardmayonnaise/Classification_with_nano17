@@ -1,0 +1,9 @@
+method: grid
+
+metric:
+  name: loss_for_monitor
+  goal: minimize
+
+parameters:
+  dropout:
+    values: [0.0, 0.1, 0.2, 0.3]
