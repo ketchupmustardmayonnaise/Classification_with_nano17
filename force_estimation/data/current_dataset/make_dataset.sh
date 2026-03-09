@@ -21,8 +21,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/fingerpad" \
   --split loso \
-  --test_subjects "subject9 subject13 subject20 subject22" \
-  --val_subjects "subject11 subject17 subject18 subject24" \
+  --test_subjects "subject7 subject8 subject13 subject23" \
+  --val_subjects "subject1 subject4 subject18 subject24" \
   --use_only_fingerpad True \
   --otsu_k 0.0
 
@@ -31,8 +31,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold1" \
   --split loso \
-  --test_subjects "subject9 subject13 subject20 subject22" \
-  --val_subjects "subject11 subject17 subject18 subject24" \
+  --test_subjects "subject7 subject8 subject13 subject23" \
+  --val_subjects "subject1 subject4 subject18 subject24" \
   --use_only_fingerpad False \
   --otsu_k 0.0
 
@@ -41,8 +41,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold2" \
   --split loso \
-  --test_subjects "subject11 subject17 subject18 subject24" \
-  --val_subjects "subject10 subject12 subject21 subject23" \
+  --test_subjects "subject1 subject4 subject18 subject24" \
+  --val_subjects "subject3 subject9 subject12 subject17" \
   --use_only_fingerpad False \
   --otsu_k 0.0
 
@@ -50,8 +50,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold3" \
   --split loso \
-  --test_subjects "subject10 subject12 subject21 subject23" \
-  --val_subjects "subject6 subject7 subject14 subject15" \
+  --test_subjects "subject3 subject9 subject12 subject17" \
+  --val_subjects "subject2 subject6 subject20 subject22" \
   --use_only_fingerpad False \
   --otsu_k 0.0
 
@@ -59,8 +59,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold4" \
   --split loso \
-  --test_subjects "subject6 subject7 subject14 subject15" \
-  --val_subjects "subject1 subject2 subject4 subject16" \
+  --test_subjects "subject2 subject6 subject20 subject22" \
+  --val_subjects "subject11 subject16 subject19 subject21" \
   --use_only_fingerpad False \
   --otsu_k 0.0
 
@@ -68,8 +68,8 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold5" \
   --split loso \
-  --test_subjects "subject1 subject2 subject4 subject16" \
-  --val_subjects "subject3 subject5 subject8 subject19" \
+  --test_subjects "subject11 subject16 subject19 subject21" \
+  --val_subjects "subject5 subject10 subject14 subject15" \
   --use_only_fingerpad False \
   --otsu_k 0.0
 
@@ -77,7 +77,7 @@ cd "$ROOT"
   --root "$DATASET_ROOT" \
   --out_dir "$OUT_BASE/bodypart/fold6" \
   --split loso \
-  --test_subjects "subject3 subject5 subject8 subject19" \
-  --val_subjects "subject9 subject13 subject20 subject22" \
+  --test_subjects "subject5 subject10 subject14 subject15" \
+  --val_subjects "subject7 subject8 subject13 subject23" \
   --use_only_fingerpad False \
   --otsu_k 0.0
