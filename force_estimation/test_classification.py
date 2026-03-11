@@ -2,7 +2,7 @@ import time
 import hydra
 from omegaconf import OmegaConf
 from models import *
-from utils.bodypart_label import bodypart_label
+from utils.bodypart_label import *
 from utils.load_model import *
 from omegaconf import DictConfig
 
@@ -52,7 +52,7 @@ def main(cfg: DictConfig):
         classification_feature_extractor=cf_net,
 
         dim_of_regression=3,
-        classes=bodypart_label,
+        classes=bodypart_14_label,
         task="classification",
 
         learning_rate=cfg.model.learning_rate,

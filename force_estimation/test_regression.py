@@ -3,7 +3,7 @@ import hydra
 from omegaconf import OmegaConf
 from models import *
 from utils.load_model import *
-from utils.bodypart_label import bodypart_label
+from utils.bodypart_label import *
 from omegaconf import DictConfig
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
@@ -14,8 +14,8 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-PATH = "./saved_models\\03-07_05-28-04_lightweight_convnexttiny_transformer"
-MODEL_NAME = "best_model_loss_for_monitor=0.1677.ckpt"
+PATH = "./saved_models\\(Transformer 12x) 03-10_18-31-17_lightweight_convnexttiny_transformer"
+MODEL_NAME = "best_model_loss_for_monitor=0.1617.ckpt"
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
@@ -59,7 +59,7 @@ def main(cfg: DictConfig):
         # classification_feature_extractor=cf_net,
 
         dim_of_regression=3,
-        classes=bodypart_label,
+        classes=bodypart_14_label,
         task="regression",
 
         learning_rate=cfg.model.learning_rate,

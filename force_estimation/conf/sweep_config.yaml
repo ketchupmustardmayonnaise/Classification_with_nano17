@@ -1,9 +1,9 @@
 method: grid
 
 metric:
-  name: loss_for_monitor
+  name: test/rmse_all
   goal: minimize
 
 parameters:
-  dropout:
-    values: [0.0, 0.1, 0.2, 0.3]
+  length_of_window:
+    values: [30, 60, 90, 120, 150]

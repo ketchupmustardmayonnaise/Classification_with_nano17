@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, Learning
 from pytorch_lightning.loggers import WandbLogger
 
 from force_estimation.models import *
-from force_estimation.utils.bodypart_label import bodypart_label
+from force_estimation.utils.bodypart_label import *
 from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 
 
@@ -108,7 +108,7 @@ def main(cfg: DictConfig):
                 # classification_feature_extractor=cf_net,
 
                 dim_of_regression=3, # axis
-                classes=bodypart_label,
+                classes=bodypart_14_label,
                 task="regression",
 
                 learning_rate=cfg.model.learning_rate,

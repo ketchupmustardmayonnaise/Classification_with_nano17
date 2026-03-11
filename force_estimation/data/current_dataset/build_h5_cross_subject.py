@@ -302,7 +302,7 @@ def main():# 랜덤 split
                     threshold = float(threshold)
                     label_frame = np.where(
                         s_sum > threshold,
-                        MERGED_MAP[int(TAG_INV[bodypart])],
+                        int(TAG_INV[bodypart]),
                         idle_label_id
                     ).astype(np.int32)
                 # ==============================================

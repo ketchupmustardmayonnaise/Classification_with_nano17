@@ -5,7 +5,6 @@ import wandb
 
 import seaborn as sns
 import matplotlib.pyplot as plt
-from .bodypart_label import bodypart_label
 
 
 def reconstruct_list_from_windows(raw_windows : list,

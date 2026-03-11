@@ -20,7 +20,7 @@ from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveIm
 BASE_CONFIG_PATH = "conf/config.yaml"
 SWEEP_CONFIG_PATH = "conf/sweep_config.yaml"
 
-SWEEP_RUN_COUNT = 4   # None이면 무한 실행
+SWEEP_RUN_COUNT = 5   # None이면 무한 실행
 # ================================
 
 
@@ -47,6 +47,9 @@ def build_cfg(base_config_path, sweep_params):
     if "weight_decay" in sweep_params:
         cfg.model.weight_decay = float(sweep_params["weight_decay"])
 
+    if "length_of_window" in sweep_params:
+        cfg.data.length_of_window = int(sweep_params["length_of_window"])
+
     return cfg
 
 
@@ -68,9 +71,7 @@ def train_one_run():
 
         run_name = (
             f"{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-            f"_do{cfg.model.dropout}"
-            f"_lr{cfg.model.learning_rate}"
-            f"_wd{cfg.model.weight_decay}"
+            f"_{cfg.data.length_of_window}frames"
             f"_{time_suffix}"
         )
 
