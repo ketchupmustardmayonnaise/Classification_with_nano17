@@ -249,10 +249,10 @@ class PredictionForce(pl.LightningModule):
             loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
 
             # logging
-            self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True)
-            self.log("train/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("train/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("train/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
+            self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("train/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("train/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("train/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
             # (B, T, 3) -> (B*T, 3)
             preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
@@ -271,7 +271,7 @@ class PredictionForce(pl.LightningModule):
             loss = self.criterion(prediction, ground_truth)
             self.train_metrics.update(prediction, ground_truth)
 
-            self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True)
+            self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, sync_dist=True)
             self._save_result(self.train_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
@@ -288,45 +288,45 @@ class PredictionForce(pl.LightningModule):
                 f.write(
                     f"train_rmse={metrics['train/rmse']:.6f}, train_mae={metrics['train/mae']:.6f}, train_r2={metrics['train/r2']:.6f}\n")
 
-            prediction = torch.Tensor(self.train_results['prediction']).reshape((-1, 3))
-            ground_truth = torch.Tensor(self.train_results['target']).reshape((-1, 3))
+            prediction = torch.Tensor(self.train_results['prediction']).reshape((-1, 3)).to(self.device)
+            ground_truth = torch.Tensor(self.train_results['target']).reshape((-1, 3)).to(self.device)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            r2_fx = R2Score()(prediction[:, 0], ground_truth[:, 0])
-            r2_fy = R2Score()(prediction[:, 1], ground_truth[:, 1])
-            r2_fz = R2Score()(prediction[:, 2], ground_truth[:, 2])
+            r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            r2_fy = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            r2_fz = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            rmse_fx = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
-            rmse_fy = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
-            rmse_fz = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
+            rmse_fx = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            rmse_fy = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            rmse_fz = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            mae_fx = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
-            mae_fy = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
-            mae_fz = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
+            mae_fx = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            mae_fy = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            mae_fz = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            self.log("train/r2_fx", r2_fx, on_epoch=True, logger=True)
-            self.log("train/r2_fy", r2_fy, on_epoch=True, logger=True)
-            self.log("train/r2_fz", r2_fz, on_epoch=True, logger=True)
-            self.log("train/rmse_fx", rmse_fx, on_epoch=True, logger=True)
-            self.log("train/rmse_fy", rmse_fy, on_epoch=True, logger=True)
-            self.log("train/rmse_fz", rmse_fz, on_epoch=True, logger=True)
-            self.log("train/mae_fx", mae_fx, on_epoch=True, logger=True)
-            self.log("train/mae_fy", mae_fy, on_epoch=True, logger=True)
-            self.log("train/mae_fz", mae_fz, on_epoch=True, logger=True)
+            self.log("train/r2_fx", r2_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/r2_fy", r2_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/r2_fz", r2_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/rmse_fx", rmse_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/rmse_fy", rmse_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/rmse_fz", rmse_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/mae_fx", mae_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/mae_fy", mae_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("train/mae_fz", mae_fz, on_epoch=True, logger=True, sync_dist=False)
 
         elif self._task == "classification":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
                     f"train_ce={metrics['train/cross_entropy']:.6f}, train_acc={metrics['train/accuracy']:.6f}\n")
 
-            prediction = torch.Tensor(self.train_results['prediction'])  # (N, C)
-            ground_truth = torch.Tensor(self.train_results['target']).to(torch.long)  # (N,)
+            prediction = torch.Tensor(self.train_results['prediction']).to(self.device)  # (N, C)
+            ground_truth = torch.Tensor(self.train_results['target']).to(self.device).to(torch.long)  # (N,)
 
             acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
             ce = cross_entropy(prediction, ground_truth)
 
-            self.log(f"train/accuracy", acc, on_epoch=True, logger=True)
-            self.log(f"train/cross_entropy", ce, on_epoch=True, logger=True)
+            self.log(f"train/accuracy", acc, on_epoch=True, logger=True, sync_dist=False)
+            self.log(f"train/cross_entropy", ce, on_epoch=True, logger=True, sync_dist=False)
 
         self.train_metrics.reset()
         self.train_results = self._init_result_dict()
@@ -347,11 +347,11 @@ class PredictionForce(pl.LightningModule):
             loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
 
             # logging
-            self.log("loss_for_monitor", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("val/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True)
-            self.log("val/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("val/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("val/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
+            self.log("loss_for_monitor", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("val/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("val/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("val/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("val/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
             # (B, T, 3) -> (B*T, 3)
             preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
@@ -390,31 +390,31 @@ class PredictionForce(pl.LightningModule):
                     f"[{self.current_epoch} Epoch] val_rmse={metrics['val/rmse']:.6f}, val_mae={metrics['val/mae']:.6f}, val_r2={metrics['val/r2']:.6f} ")
 
 
-            prediction = torch.Tensor(self.val_results['prediction']).reshape((-1, 3))
-            ground_truth = torch.Tensor(self.val_results['target']).reshape((-1, 3))
+            prediction = torch.Tensor(self.val_results['prediction']).reshape((-1, 3)).to(self.device)
+            ground_truth = torch.Tensor(self.val_results['target']).reshape((-1, 3)).to(self.device)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            r2_fx = R2Score()(prediction[:, 0], ground_truth[:, 0])
-            r2_fy = R2Score()(prediction[:, 1], ground_truth[:, 1])
-            r2_fz = R2Score()(prediction[:, 2], ground_truth[:, 2])
+            r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            r2_fy = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            r2_fz = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            rmse_fx = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
-            rmse_fy = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
-            rmse_fz = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
+            rmse_fx = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            rmse_fy = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            rmse_fz = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            mae_fx = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
-            mae_fy = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
-            mae_fz = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
+            mae_fx = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            mae_fy = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            mae_fz = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            self.log("val/r2_fx", r2_fx, on_epoch=True, logger=True)
-            self.log("val/r2_fy", r2_fy, on_epoch=True, logger=True)
-            self.log("val/r2_fz", r2_fz, on_epoch=True, logger=True)
-            self.log("val/rmse_fx", rmse_fx, on_epoch=True, logger=True)
-            self.log("val/rmse_fy", rmse_fy, on_epoch=True, logger=True)
-            self.log("val/rmse_fz", rmse_fz, on_epoch=True, logger=True)
-            self.log("val/mae_fx", mae_fx, on_epoch=True, logger=True)
-            self.log("val/mae_fy", mae_fy, on_epoch=True, logger=True)
-            self.log("val/mae_fz", mae_fz, on_epoch=True, logger=True)
+            self.log("val/r2_fx", r2_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/r2_fy", r2_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/r2_fz", r2_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/rmse_fx", rmse_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/rmse_fy", rmse_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/rmse_fz", rmse_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/mae_fx", mae_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/mae_fy", mae_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("val/mae_fz", mae_fz, on_epoch=True, logger=True, sync_dist=False)
 
 
         # =================================================
@@ -425,18 +425,19 @@ class PredictionForce(pl.LightningModule):
                 f.write(
                     f"[{self.current_epoch} Epoch] val_ce={metrics['val/cross_entropy']:.6f}, val_acc={metrics['val/accuracy']:.6f} ")
 
-            prediction = torch.Tensor(self.val_results['prediction']) # (N, C)
-            ground_truth = torch.Tensor(self.val_results['target']).to(torch.long) # (N,)
+            prediction = torch.Tensor(self.val_results['prediction']).to(self.device)  # (N, C)
+            ground_truth = torch.Tensor(self.val_results['target']).to(self.device).to(torch.long)  # (N,)
 
             loss = self.criterion(prediction, ground_truth)
             acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
             ce = cross_entropy(prediction, ground_truth)
 
-            self.log(f"val/accuracy", acc, on_epoch=True, logger=True)
-            self.log(f"val/cross_entropy", ce, on_epoch=True, logger=True)
-            self.log(f"loss_for_monitor", loss, on_epoch=True, logger=True)
+            self.log(f"val/accuracy", acc, on_epoch=True, logger=True, sync_dist=False)
+            self.log(f"val/cross_entropy", ce, on_epoch=True, logger=True, sync_dist=False)
 
             # 각 class별 Accuracy와 Cross_Entropy
+            # sync_dist=False: GPU마다 보유한 클래스가 달라 continue로 건너뛰면
+            # 서로 다른 key로 all_reduce를 시도해 deadlock 발생
             gt_class, pred_class = ground_truth, prediction.argmax(dim=1)  # (N,)
             for c in range(len(self.classes)):
                 mask = (gt_class == c)
@@ -447,8 +448,8 @@ class PredictionForce(pl.LightningModule):
                 # Cross Entropy
                 ce_c = F.cross_entropy(prediction[mask], gt_class[mask]) # (Nc, C), (Nc)
 
-                self.log(f"val/acc_class_{c}", acc_c, on_epoch=True, logger=True)
-                self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True)
+                self.log(f"val/acc_class_{c}", acc_c, on_epoch=True, logger=True, sync_dist=False)
+                self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True, sync_dist=False)
 
         self.val_metrics.reset()
         self.val_results = self._init_result_dict()
@@ -470,10 +471,10 @@ class PredictionForce(pl.LightningModule):
             loss_fz = self.criterion(prediction[:, :, 2], batch['force'][:, :, 2])
 
             # logging
-            self.log("test/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True)
-            self.log("test/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("test/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
-            self.log("test/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False)
+            self.log("test/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("test/loss_fx", loss_fx, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("test/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
+            self.log("test/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
             # (B, T, 3) -> (B*T, 3)
             preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
@@ -491,8 +492,8 @@ class PredictionForce(pl.LightningModule):
 
             self.test_metrics.update(prediction, ground_truth)
 
-            self.log("test/accuracy", self.test_metrics["accuracy"], on_epoch=True)
-            self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True)
+            self.log("test/accuracy", self.test_metrics["accuracy"], on_epoch=True, sync_dist=True)
+            self.log("test/cross_entropy", self.test_metrics["cross_entropy"], on_epoch=True, sync_dist=True)
 
             self._save_result(self.test_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
@@ -539,38 +540,38 @@ class PredictionForce(pl.LightningModule):
             raw_df.to_csv(f"{self.directory}/test_predictions_regression.csv", index=False)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3))  # (B, T, 3) -> (B*T, 3)
-            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3))  # (B, T, 3) -> (B*T, 3)
+            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
+            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
 
-            r2_all = R2Score()(prediction, ground_truth)
-            r2_fx = R2Score()(prediction[:, 0], ground_truth[:, 0])
-            r2_fy = R2Score()(prediction[:, 1], ground_truth[:, 1])
-            r2_fz = R2Score()(prediction[:, 2], ground_truth[:, 2])
+            r2_all = R2Score().to(self.device)(prediction, ground_truth)
+            r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            r2_fy = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            r2_fz = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            rmse_all = MeanSquaredError(squared=False)(prediction, ground_truth)
-            rmse_fx = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
-            rmse_fy = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
-            rmse_fz = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
+            rmse_all = MeanSquaredError(squared=False).to(self.device)(prediction, ground_truth)
+            rmse_fx = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            rmse_fy = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            rmse_fz = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            mae_all = MeanAbsoluteError()(prediction, ground_truth)
-            mae_fx = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
-            mae_fy = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
-            mae_fz = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
+            mae_all = MeanAbsoluteError().to(self.device)(prediction, ground_truth)
+            mae_fx = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+            mae_fy = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+            mae_fz = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-            self.log("test/r2_all", r2_all, on_epoch=True, logger=True)
-            self.log("test/r2_fx", r2_fx, on_epoch=True, logger=True)
-            self.log("test/r2_fy", r2_fy, on_epoch=True, logger=True)
-            self.log("test/r2_fz", r2_fz, on_epoch=True, logger=True)
+            self.log("test/r2_all", r2_all, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/r2_fx", r2_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/r2_fy", r2_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/r2_fz", r2_fz, on_epoch=True, logger=True, sync_dist=False)
 
-            self.log("test/rmse_all", rmse_all, on_epoch=True, logger=True)
-            self.log("test/rmse_fx", rmse_fx, on_epoch=True, logger=True)
-            self.log("test/rmse_fy", rmse_fy, on_epoch=True, logger=True)
-            self.log("test/rmse_fz", rmse_fz, on_epoch=True, logger=True)
+            self.log("test/rmse_all", rmse_all, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/rmse_fx", rmse_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/rmse_fy", rmse_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/rmse_fz", rmse_fz, on_epoch=True, logger=True, sync_dist=False)
 
-            self.log("test/mae_all", mae_all, on_epoch=True, logger=True)
-            self.log("test/mae_fx", mae_fx, on_epoch=True, logger=True)
-            self.log("test/mae_fy", mae_fy, on_epoch=True, logger=True)
-            self.log("test/mae_fz", mae_fz, on_epoch=True, logger=True)
+            self.log("test/mae_all", mae_all, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/mae_fx", mae_fx, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/mae_fy", mae_fy, on_epoch=True, logger=True, sync_dist=False)
+            self.log("test/mae_fz", mae_fz, on_epoch=True, logger=True, sync_dist=False)
 
             # REPORT
             with open(f'{self.directory}/test_result.txt', "a") as f:
@@ -656,8 +657,8 @@ class PredictionForce(pl.LightningModule):
             # ==========================================================
             # 1. 결과 텐서 정리
             # ==========================================================
-            logits = torch.tensor(self.test_results["prediction"])  # (N, C)
-            gt = torch.tensor(self.test_results["target"]).long()  # (N,)
+            logits = torch.tensor(self.test_results["prediction"]).to(self.device)  # (N, C)
+            gt = torch.tensor(self.test_results["target"]).to(self.device).long()  # (N,)
             pred = logits.argmax(dim=1)  # (N,)
             num_classes = len(self.classes)
 
@@ -680,17 +681,17 @@ class PredictionForce(pl.LightningModule):
             )
 
             # Lightning log
-            self.log("test/accuracy", acc, on_epoch=True)
-            self.log("test/cross_entropy", ce, on_epoch=True)
+            self.log("test/accuracy", acc, on_epoch=True, sync_dist=False)
+            self.log("test/cross_entropy", ce, on_epoch=True, sync_dist=False)
 
-            self.log("test/precision_macro", precision_macro, on_epoch=True)
-            self.log("test/precision_weighted", precision_weighted, on_epoch=True)
+            self.log("test/precision_macro", precision_macro, on_epoch=True, sync_dist=False)
+            self.log("test/precision_weighted", precision_weighted, on_epoch=True, sync_dist=False)
 
-            self.log("test/recall_macro", recall_macro, on_epoch=True)
-            self.log("test/recall_weighted", recall_weighted, on_epoch=True)
+            self.log("test/recall_macro", recall_macro, on_epoch=True, sync_dist=False)
+            self.log("test/recall_weighted", recall_weighted, on_epoch=True, sync_dist=False)
 
-            self.log("test/f1_macro", f1_macro, on_epoch=True)
-            self.log("test/f1_weighted", f1_weighted, on_epoch=True)
+            self.log("test/f1_macro", f1_macro, on_epoch=True, sync_dist=False)
+            self.log("test/f1_weighted", f1_weighted, on_epoch=True, sync_dist=False)
 
             # ==========================================================
             # 3. Per-Class Metrics
@@ -716,10 +717,10 @@ class PredictionForce(pl.LightningModule):
                     acc_c = (pred[mask] == c).float().mean().item()
                     ce_c = F.cross_entropy(logits[mask], gt[mask]).item()
 
-                # Lightning log
-                self.log(f"test/acc_class_{c}", acc_c, on_epoch=True)
-                self.log(f"test/ce_class_{c}", ce_c, on_epoch=True)
-                self.log(f"test/f1_class_{c}", f1[c], on_epoch=True)
+                # Lightning log (sync_dist=False: 데드락 방지 - n_c==0이면 continue 대신 nan으로 처리하므로 safe)
+                self.log(f"test/acc_class_{c}", acc_c, on_epoch=True, sync_dist=False)
+                self.log(f"test/ce_class_{c}", ce_c, on_epoch=True, sync_dist=False)
+                self.log(f"test/f1_class_{c}", f1[c], on_epoch=True, sync_dist=False)
 
                 per_class_rows.append({
                     "class_index": c,
@@ -838,8 +839,9 @@ class PredictionForce(pl.LightningModule):
             for sid in unique_subjects:
                 idx = np.where(subject_ids == sid)[0]
 
-                logits_sub = logits[idx]  # (Ns, C)
-                gt_sub = gt[idx]  # (Ns,)
+                idx_tensor = torch.from_numpy(idx).to(self.device)
+                logits_sub = logits[idx_tensor]  # (Ns, C)
+                gt_sub = gt[idx_tensor]  # (Ns,)
                 pred_sub = logits_sub.argmax(dim=1)  # (Ns,)
 
                 gt_sub_np = gt_sub.cpu().numpy()
@@ -875,17 +877,18 @@ class PredictionForce(pl.LightningModule):
                 # ---------------------------
                 # lightning log
                 # ---------------------------
-                self.log(f"test/accuracy_subject_{sid}", acc_sub, on_epoch=True)
-                self.log(f"test/cross_entropy_subject_{sid}", ce_sub, on_epoch=True)
+                # sync_dist=False: GPU마다 다른 subject 집합 → 다른 key로 all_reduce → deadlock
+                self.log(f"test/accuracy_subject_{sid}", acc_sub, on_epoch=True, sync_dist=False)
+                self.log(f"test/cross_entropy_subject_{sid}", ce_sub, on_epoch=True, sync_dist=False)
 
-                self.log(f"test/precision_macro_subject_{sid}", precision_macro_sub, on_epoch=True)
-                self.log(f"test/precision_weighted_subject_{sid}", precision_weighted_sub, on_epoch=True)
+                self.log(f"test/precision_macro_subject_{sid}", precision_macro_sub, on_epoch=True, sync_dist=False)
+                self.log(f"test/precision_weighted_subject_{sid}", precision_weighted_sub, on_epoch=True, sync_dist=False)
 
-                self.log(f"test/recall_macro_subject_{sid}", recall_macro_sub, on_epoch=True)
-                self.log(f"test/recall_weighted_subject_{sid}", recall_weighted_sub, on_epoch=True)
+                self.log(f"test/recall_macro_subject_{sid}", recall_macro_sub, on_epoch=True, sync_dist=False)
+                self.log(f"test/recall_weighted_subject_{sid}", recall_weighted_sub, on_epoch=True, sync_dist=False)
 
-                self.log(f"test/f1_macro_subject_{sid}", f1_macro_sub, on_epoch=True)
-                self.log(f"test/f1_weighted_subject_{sid}", f1_weighted_sub, on_epoch=True)
+                self.log(f"test/f1_macro_subject_{sid}", f1_macro_sub, on_epoch=True, sync_dist=False)
+                self.log(f"test/f1_weighted_subject_{sid}", f1_weighted_sub, on_epoch=True, sync_dist=False)
 
                 with open(report_path, "a", encoding="utf-8") as f:
                     f.write(f"[Subject {sid}]\n")

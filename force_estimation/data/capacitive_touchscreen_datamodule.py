@@ -38,10 +38,12 @@ class CapacitiveImageDataModule(LightningDataModule):
                                              dataset_type='test')
 
     def train_dataloader(self):
-        return DataLoader(self.train_dataset, batch_size=self.hparams.cfg.data.batch_size, num_workers=4, shuffle=True, pin_memory=True, drop_last=True, persistent_workers=True)
+        return DataLoader(self.train_dataset, batch_size=self.hparams.cfg.data.batch_size,
+                          num_workers=8, shuffle=True, pin_memory=True, drop_last=True, persistent_workers=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.hparams.cfg.data.batch_size, num_workers=4, shuffle=False, pin_memory=True, drop_last=True, persistent_workers=True)
+        return DataLoader(self.val_dataset, batch_size=self.hparams.cfg.data.batch_size,
+                          num_workers=8, shuffle=False, pin_memory=True, drop_last=True, persistent_workers=True)
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=1, shuffle=False, pin_memory=True)

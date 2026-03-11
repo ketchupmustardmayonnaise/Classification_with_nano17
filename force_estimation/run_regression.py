@@ -21,19 +21,27 @@ def main(cfg: DictConfig):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
 
-    time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+    # DDP subprocess에서는 LOCAL_RANK 환경변수가 설정됨
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    _save_dir_marker = os.path.join(cfg.save_directory, ".current_save_dir")
 
-    # -----------------------------
-    # wandb init (sweep 대응)
-    # -----------------------------
-    wandb.init(
-        name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
-        project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
-    )
+    if local_rank == 0:
+        time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+        save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
+        os.makedirs(save_dir, exist_ok=True)
+        # 다른 rank들이 같은 경로를 쓸 수 있도록 기록
+        with open(_save_dir_marker, "w") as f:
+            f.write(save_dir)
+    else:
+        # rank 0가 디렉토리를 생성할 때까지 대기
+        while not os.path.exists(_save_dir_marker):
+            time.sleep(0.2)
+        with open(_save_dir_marker) as f:
+            save_dir = f.read().strip()
 
-    # W&B logger 시작
+    time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())  # 로그 이름용
+
+    # W&B logger (WandbLogger는 rank 0에서만 실제 run을 생성함)
     wandb_logger = WandbLogger(
         name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
         project=cfg.wandb.project,
@@ -42,18 +50,12 @@ def main(cfg: DictConfig):
         log_model=cfg.wandb.log_model,
     )
 
-    # 최종 config를 W&B에 기록
-    wandb.config.update(
-        OmegaConf.to_container(cfg, resolve=True),
-        allow_val_change=True
-    )
+    if local_rank == 0:
+        wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
 
     # =========================================
     # callback 함수들
     # =========================================
-
-    save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-    if not os.path.exists(save_dir): os.makedirs(save_dir)
 
     checkpoint_callback = ModelCheckpoint(
         monitor='loss_for_monitor',
@@ -120,6 +122,7 @@ def main(cfg: DictConfig):
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
+        # strategy="ddp",         # multi-GPU 전략
         precision=16,
         logger=wandb_logger,
         max_epochs=200,
