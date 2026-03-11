@@ -21,8 +21,8 @@ class CapTSDataset(Dataset):
                  dataset_type : str = 'train',
 
                  xflip : bool = True,
-                 yflip : bool = True,
-                 translation : bool = True):
+                 yflip : bool = False,
+                 translation : bool = False):
 
         self.path = path
         self.dataset_type = dataset_type

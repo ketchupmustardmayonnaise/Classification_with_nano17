@@ -24,7 +24,6 @@ from typing import Any, Dict, Tuple
 from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 from .cross_entropy import CrossEntropyMetrics
-from force_estimation.utils.bodypart_label import bodypart_label
 
 
 class PredictionForce(pl.LightningModule):
@@ -505,10 +504,44 @@ class PredictionForce(pl.LightningModule):
         self.log_dict(metrics)
 
         if self._task == "regression":
-            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)) # (B, T, 3) -> (B*T, 3)
-            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)) # (B, T, 3) -> (B*T, 3)
+            # test 결과를 csv 파일로 저장함
+            ground_truth = np.array(self.test_results["target"])  # (num_windows, window_size, 3)
+            prediction = np.array(self.test_results["prediction"])  # (num_windows, window_size, 3)
+
+            sequence_ids = np.array(self.test_results["sequence_id"])
+            subject_ids = np.array(self.test_results["subject_id"])
+            bodyparts = np.array(self.test_results["bodypart"])
+
+            num_windows, window_size, _ = ground_truth.shape
+
+            rows = []
+
+            for w in range(num_windows):
+                for f in range(window_size):
+                    rows.append({
+                        "window_idx": w,
+                        "frame_idx": f,
+
+                        "gt_x": ground_truth[w, f, 0],
+                        "gt_y": ground_truth[w, f, 1],
+                        "gt_z": ground_truth[w, f, 2],
+
+                        "pred_x": prediction[w, f, 0],
+                        "pred_y": prediction[w, f, 1],
+                        "pred_z": prediction[w, f, 2],
+
+                        "sequence_id": sequence_ids[w],
+                        "subject_id": subject_ids[w],
+                        "bodypart": bodyparts[w],
+                    })
+
+            raw_df = pd.DataFrame(rows)
+            raw_df.to_csv(f"{self.directory}/test_predictions_regression.csv", index=False)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
+            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3))  # (B, T, 3) -> (B*T, 3)
+            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3))  # (B, T, 3) -> (B*T, 3)
+
             r2_all = R2Score()(prediction, ground_truth)
             r2_fx = R2Score()(prediction[:, 0], ground_truth[:, 0])
             r2_fy = R2Score()(prediction[:, 1], ground_truth[:, 1])
@@ -690,7 +723,7 @@ class PredictionForce(pl.LightningModule):
 
                 per_class_rows.append({
                     "class_index": c,
-                    "class_name": bodypart_label[c],
+                    "class_name": self.classes[c],
                     "n": n_c,
                     "accuracy": acc_c,
                     "cross_entropy": ce_c,
@@ -790,7 +823,7 @@ class PredictionForce(pl.LightningModule):
                 "bodypart": np.array(self.test_results["bodypart"]),
             })
 
-            raw_df.to_csv(f"{self.directory}/test_predictions.csv", index=False)
+            raw_df.to_csv(f"{self.directory}/test_predictions_classification.csv", index=False)
 
             # ==========================================================
             # 7. Subject-wise Report
