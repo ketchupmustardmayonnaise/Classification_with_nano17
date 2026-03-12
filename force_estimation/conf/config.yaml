@@ -8,11 +8,13 @@ wandb:
   log_model: all
 
 data:
-  data_dir: ./data/current_dataset/output/bodypart/fold1
+  data_dir: ./data/current_dataset/output/bodypart/fold2
   length_of_window: 150
   batch_size: 32
   image_size: [6, 6]
   num_classes: 8
+
+  num_workers: 0  # Windows에서 hang 방지. Linux 서버라면 4~8로 올려도 됨
 
   xflip: True
   yflip: False

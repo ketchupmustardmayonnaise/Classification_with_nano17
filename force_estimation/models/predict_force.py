@@ -95,8 +95,18 @@ class PredictionForce(pl.LightningModule):
                 "r2": R2Score() })
 
             self.train_metrics = metrics.clone(prefix="train/")
+            self.train_metrics_fx = metrics.clone(prefix="train/", postfix="_fx")
+            self.train_metrics_fy = metrics.clone(prefix="train/", postfix="_fy")
+            self.train_metrics_fz = metrics.clone(prefix="train/", postfix="_fz")
+
             self.val_metrics = metrics.clone(prefix="val/")
+            self.val_metrics_fx = metrics.clone(prefix="val/", postfix="_fx")
+            self.val_metrics_fy = metrics.clone(prefix="val/", postfix="_fy")
+            self.val_metrics_fz = metrics.clone(prefix="val/", postfix="_fz")
+
+            # ================= Results =================
             self.test_metrics = metrics.clone(prefix="test/")
+            self.test_results = self._init_result_dict()
 
         elif self._task == "classification":
             self.criterion = torch.nn.CrossEntropyLoss(reduction='mean')
@@ -109,16 +119,10 @@ class PredictionForce(pl.LightningModule):
             self.train_metrics = metrics.clone(prefix="train/")
             self.val_metrics = metrics.clone(prefix="val/")
             self.test_metrics = metrics.clone(prefix="test/")
+            self.test_results = self._init_result_dict()
 
         else:
             raise Exception("정확한 Task 기입")
-
-
-        # ================= Results =================
-
-        self.train_results = self._init_result_dict()
-        self.val_results = self._init_result_dict()
-        self.test_results = self._init_result_dict()
 
 
 
@@ -197,8 +201,18 @@ class PredictionForce(pl.LightningModule):
                 "r2": R2Score() })
 
             self.train_metrics = metrics.clone(prefix="train/")
+            self.train_metrics_fx = metrics.clone(prefix="train/", postfix="_fx")
+            self.train_metrics_fy = metrics.clone(prefix="train/", postfix="_fy")
+            self.train_metrics_fz = metrics.clone(prefix="train/", postfix="_fz")
+
             self.val_metrics = metrics.clone(prefix="val/")
+            self.val_metrics_fx = metrics.clone(prefix="val/", postfix="_fx")
+            self.val_metrics_fy = metrics.clone(prefix="val/", postfix="_fy")
+            self.val_metrics_fz = metrics.clone(prefix="val/", postfix="_fz")
+
+            # ================= Results =================
             self.test_metrics = metrics.clone(prefix="test/")
+            self.test_results = self._init_result_dict()
 
             self.configure_optimizers()
 
@@ -259,8 +273,9 @@ class PredictionForce(pl.LightningModule):
             targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
             self.train_metrics.update(preds_flat, targets_flat)
-            self._save_result(self.train_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
+            self.train_metrics_fx.update(preds_flat[:, 0], targets_flat[:, 0])
+            self.train_metrics_fy.update(preds_flat[:, 1], targets_flat[:, 1])
+            self.train_metrics_fz.update(preds_flat[:, 2], targets_flat[:, 2])
 
 
         elif self._task == "classification":
@@ -288,31 +303,10 @@ class PredictionForce(pl.LightningModule):
                 f.write(
                     f"train_rmse={metrics['train/rmse']:.6f}, train_mae={metrics['train/mae']:.6f}, train_r2={metrics['train/r2']:.6f}\n")
 
-            prediction = torch.Tensor(self.train_results['prediction']).reshape((-1, 3)).to(self.device)
-            ground_truth = torch.Tensor(self.train_results['target']).reshape((-1, 3)).to(self.device)
-
-            # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            r2_fy = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            r2_fz = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            rmse_fx = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            rmse_fy = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            rmse_fz = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            mae_fx = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            mae_fy = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            mae_fz = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            self.log("train/r2_fx", r2_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/r2_fy", r2_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/r2_fz", r2_fz, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/rmse_fx", rmse_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/rmse_fy", rmse_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/rmse_fz", rmse_fz, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/mae_fx", mae_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/mae_fy", mae_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("train/mae_fz", mae_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log_dict(self.train_metrics.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.train_metrics_fx.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.train_metrics_fy.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.train_metrics_fz.compute(), on_epoch=True, logger=True)
 
         elif self._task == "classification":
             with open(f'{self.directory}/train.txt', "a") as f:
@@ -329,6 +323,9 @@ class PredictionForce(pl.LightningModule):
             self.log(f"train/cross_entropy", ce, on_epoch=True, logger=True, sync_dist=False)
 
         self.train_metrics.reset()
+        self.train_metrics_fx.reset()
+        self.train_metrics_fy.reset()
+        self.train_metrics_fz.reset()
         self.train_results = self._init_result_dict()
 
 
@@ -358,8 +355,9 @@ class PredictionForce(pl.LightningModule):
             targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
             self.val_metrics.update(preds_flat, targets_flat)
-            self._save_result(self.val_results, prediction.detach(), batch['force'].detach(),
-                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
+            self.val_metrics_fx.update(preds_flat[:, 0], targets_flat[:, 0])
+            self.val_metrics_fy.update(preds_flat[:, 1], targets_flat[:, 1])
+            self.val_metrics_fz.update(preds_flat[:, 2], targets_flat[:, 2])
 
         elif self._task == "classification":
             # Calculate loss
@@ -389,32 +387,10 @@ class PredictionForce(pl.LightningModule):
                 f.write(
                     f"[{self.current_epoch} Epoch] val_rmse={metrics['val/rmse']:.6f}, val_mae={metrics['val/mae']:.6f}, val_r2={metrics['val/r2']:.6f} ")
 
-
-            prediction = torch.Tensor(self.val_results['prediction']).reshape((-1, 3)).to(self.device)
-            ground_truth = torch.Tensor(self.val_results['target']).reshape((-1, 3)).to(self.device)
-
-            # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            r2_fy = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            r2_fz = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            rmse_fx = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            rmse_fy = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            rmse_fz = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            mae_fx = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
-            mae_fy = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
-            mae_fz = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
-
-            self.log("val/r2_fx", r2_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/r2_fy", r2_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/r2_fz", r2_fz, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/rmse_fx", rmse_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/rmse_fy", rmse_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/rmse_fz", rmse_fz, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/mae_fx", mae_fx, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/mae_fy", mae_fy, on_epoch=True, logger=True, sync_dist=False)
-            self.log("val/mae_fz", mae_fz, on_epoch=True, logger=True, sync_dist=False)
+            self.log_dict(self.val_metrics.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.val_metrics_fx.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.val_metrics_fy.compute(), on_epoch=True, logger=True)
+            self.log_dict(self.val_metrics_fz.compute(), on_epoch=True, logger=True)
 
 
         # =================================================
@@ -452,6 +428,9 @@ class PredictionForce(pl.LightningModule):
                 self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True, sync_dist=False)
 
         self.val_metrics.reset()
+        self.val_metrics_fx.reset()
+        self.val_metrics_fy.reset()
+        self.val_metrics_fz.reset()
         self.val_results = self._init_result_dict()
 
 
