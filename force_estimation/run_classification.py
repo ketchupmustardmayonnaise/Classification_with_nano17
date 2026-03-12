@@ -18,8 +18,8 @@ from pytorch_lightning.loggers import WandbLogger
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
-    PATH = "./saved_models\\(offline augmentation) 02-17_03-32-34_lightweight_convnexttiny_transformer"
-    MODEL_NAME = "best_model_loss_for_monitor=0.3210.ckpt"
+    PATH = "./saved_models\\03-12_11-32-22_lightweight_convnexttiny_transformer"
+    MODEL_NAME = "best_model_loss_for_monitor=0.3571.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
@@ -111,6 +111,7 @@ def main(cfg: DictConfig):
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
     )
 
+    model.train()
     trainer.fit(model, datamodule=data_module)
     trainer.test(model, datamodule=data_module, ckpt_path="best")
     wandb.finish()

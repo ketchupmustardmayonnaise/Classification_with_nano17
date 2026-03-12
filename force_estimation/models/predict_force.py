@@ -76,7 +76,7 @@ class PredictionForce(pl.LightningModule):
 
         if self.cf_net is not None and self.classes is not None:
             self.classification_head = nn.Linear(
-                self.vf_net.size_of_output,
+                self.cf_net.size_of_output,
                 len(self.classes)
             )
 
@@ -119,6 +119,9 @@ class PredictionForce(pl.LightningModule):
             self.train_metrics = metrics.clone(prefix="train/")
             self.val_metrics = metrics.clone(prefix="val/")
             self.test_metrics = metrics.clone(prefix="test/")
+
+            self.train_results = self._init_result_dict()
+            self.val_results = self._init_result_dict()
             self.test_results = self._init_result_dict()
 
         else:
@@ -308,6 +311,10 @@ class PredictionForce(pl.LightningModule):
             self.log_dict(self.train_metrics_fy.compute(), on_epoch=True, logger=True)
             self.log_dict(self.train_metrics_fz.compute(), on_epoch=True, logger=True)
 
+            self.train_metrics_fx.reset()
+            self.train_metrics_fy.reset()
+            self.train_metrics_fz.reset()
+
         elif self._task == "classification":
             with open(f'{self.directory}/train.txt', "a") as f:
                 f.write(
@@ -316,16 +323,13 @@ class PredictionForce(pl.LightningModule):
             prediction = torch.Tensor(self.train_results['prediction']).to(self.device)  # (N, C)
             ground_truth = torch.Tensor(self.train_results['target']).to(self.device).to(torch.long)  # (N,)
 
-            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
+            acc = Accuracy(task="multiclass", num_classes=len(self.classes)).to(self.device)(prediction, ground_truth)
             ce = cross_entropy(prediction, ground_truth)
 
             self.log(f"train/accuracy", acc, on_epoch=True, logger=True, sync_dist=False)
             self.log(f"train/cross_entropy", ce, on_epoch=True, logger=True, sync_dist=False)
 
         self.train_metrics.reset()
-        self.train_metrics_fx.reset()
-        self.train_metrics_fy.reset()
-        self.train_metrics_fz.reset()
         self.train_results = self._init_result_dict()
 
 
@@ -368,6 +372,8 @@ class PredictionForce(pl.LightningModule):
             self.val_metrics.update(prediction, ground_truth)
 
             # logging
+            self.log("loss_for_monitor", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True,
+                     prog_bar=False, sync_dist=True)
             self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
@@ -392,6 +398,10 @@ class PredictionForce(pl.LightningModule):
             self.log_dict(self.val_metrics_fy.compute(), on_epoch=True, logger=True)
             self.log_dict(self.val_metrics_fz.compute(), on_epoch=True, logger=True)
 
+            self.val_metrics_fx.reset()
+            self.val_metrics_fy.reset()
+            self.val_metrics_fz.reset()
+
 
         # =================================================
         # Classification
@@ -405,7 +415,7 @@ class PredictionForce(pl.LightningModule):
             ground_truth = torch.Tensor(self.val_results['target']).to(self.device).to(torch.long)  # (N,)
 
             loss = self.criterion(prediction, ground_truth)
-            acc = Accuracy(task="multiclass", num_classes=len(self.classes))(prediction, ground_truth)
+            acc = Accuracy(task="multiclass", num_classes=len(self.classes)).to(self.device)(prediction, ground_truth)
             ce = cross_entropy(prediction, ground_truth)
 
             self.log(f"val/accuracy", acc, on_epoch=True, logger=True, sync_dist=False)
@@ -428,9 +438,6 @@ class PredictionForce(pl.LightningModule):
                 self.log(f"val/ce_class_{c}", ce_c, on_epoch=True, logger=True, sync_dist=False)
 
         self.val_metrics.reset()
-        self.val_metrics_fx.reset()
-        self.val_metrics_fy.reset()
-        self.val_metrics_fz.reset()
         self.val_results = self._init_result_dict()
 
 
@@ -649,7 +656,7 @@ class PredictionForce(pl.LightningModule):
             # 2. Overall Metrics
             # ==========================================================
 
-            acc = Accuracy(task="multiclass", num_classes=num_classes)(logits, gt)
+            acc = Accuracy(task="multiclass", num_classes=num_classes).to(logits.device)(logits, gt)
             ce = F.cross_entropy(logits, gt)
             precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
                 gt_np, pred_np, average="macro", zero_division=0
@@ -832,7 +839,7 @@ class PredictionForce(pl.LightningModule):
                 # ---------------------------
                 # overall metrics for subject
                 # ---------------------------
-                acc_sub = Accuracy(task="multiclass", num_classes=num_classes)(logits_sub, gt_sub)
+                acc_sub = Accuracy(task="multiclass", num_classes=num_classes).to(logits_sub.device)(logits_sub, gt_sub)
                 ce_sub = F.cross_entropy(logits_sub, gt_sub)
 
                 precision_macro_sub, recall_macro_sub, f1_macro_sub, _ = precision_recall_fscore_support(

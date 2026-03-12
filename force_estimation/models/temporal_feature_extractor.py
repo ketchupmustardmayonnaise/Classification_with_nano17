@@ -18,7 +18,7 @@ class LSTM(nn.Module):
 
         self._export_multistep = export_multistep
         self._create_networks(size_of_input, size_of_hidden_layer_features, num_layer, is_bidirectional)
-        self._size_of_output = size_of_input if not is_bidirectional else size_of_input * 2
+        self._size_of_output = size_of_hidden_layer_features if not is_bidirectional else size_of_hidden_layer_features * 2
 
 
     def _create_networks(self,
@@ -54,6 +54,7 @@ class LSTM(nn.Module):
 
     def forward(self, x):
         # x.shape = (batch_size, timesteps, size_of_input)
+
         self.LSTM.flatten_parameters()
         outputs, h = self.LSTM(x)
 
