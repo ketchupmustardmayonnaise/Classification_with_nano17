@@ -1,8 +1,12 @@
 import time
+import os
 import hydra
+import torch
+import wandb
+import pytorch_lightning as pl
 from omegaconf import OmegaConf
 from models import *
-from utils.bodypart_label import bodypart_label
+from utils.bodypart_label import bodypart_14_label
 from omegaconf import DictConfig
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
@@ -18,7 +22,8 @@ from pytorch_lightning.loggers import WandbLogger
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    use_cuda = torch.cuda.is_available()
+    device = torch.device('cuda' if use_cuda else 'cpu')
     print(f"사용 장치: {device}")
 
     time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
@@ -67,6 +72,15 @@ def main(cfg: DictConfig):
     vf_net = VisionFeatureExtractor(cfg.model.encoder_type,
                                     cfg.data.image_size)
 
+    
+    # tf_net = LSTM(size_of_input=vf_net.size_of_output,
+    #                 size_of_hidden_layer_features=96,
+    #                 num_layer=cfg.model.lstm.num_layers,
+    #                 is_bidirectional=cfg.model.lstm.is_bidirectional,
+    #                 export_multistep = cfg.model.lstm.export_multistep)
+
+    
+    
     tf_net = Transformer(size_of_input=vf_net.size_of_output,
                         num_rnn_layer=cfg.model.transformer.num_layers,
                         num_of_heads=cfg.model.transformer.num_of_head,
@@ -79,7 +93,7 @@ def main(cfg: DictConfig):
 
     model = PredictionForce(vf_net, tf_net,
                     dim_of_regression=3, # axis
-                    classes=bodypart_label,
+                    classes=bodypart_14_label,
                     task="regression",
 
                     # [기존] use_force_axis_normalization 인자를 전달하지 않았음.
@@ -95,9 +109,9 @@ def main(cfg: DictConfig):
                     directory=save_dir)
 
     trainer = pl.Trainer(
-        accelerator='gpu',
+        accelerator='gpu' if use_cuda else 'cpu',
         devices=1,
-        precision=16,
+        precision='16-mixed' if use_cuda else 32,
         logger=wandb_logger,
         max_epochs=200,
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],

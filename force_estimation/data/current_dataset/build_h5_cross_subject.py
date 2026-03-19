@@ -1,5 +1,14 @@
 from force_estimation.data.current_dataset.module import *
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "1"):
+        return True
+    if v.lower() in ("no", "false", "f", "0"):
+        return False
+    raise argparse.ArgumentTypeError("Boolean value expected.")
+
 
 def main():# 랜덤 split
 # python build_h5_cross_subject.py --root C:\Users\Jeongmin\PycharmProjects\Classification_with_nano17\force_estimation\data\dataset\12_dataset
@@ -29,6 +38,8 @@ def main():# 랜덤 split
     ap.add_argument("--cutoff_hz", type=float, default=6.0)
     ap.add_argument("--filter_order", type=int, default=4)
     ap.add_argument("--otsu_k", type=float, default=0.0, help="final_thr = otsu + k*std_idle (log1p(sum(img)))")
+    ap.add_argument("--use_only_fingerpad", type=str2bool, default=False)
+
     args = ap.parse_args()
 
     root = Path(args.root)
@@ -37,7 +48,11 @@ def main():# 랜덤 split
 
 
     # Dataset 폴더 내에서 각 subject별로 정리가 되어 있어야 함.
-    subjects = sorted([p.name for p in root.iterdir() if p.is_dir()])
+    # 또한 subject 단어로 시작되어야 함. (.git과 같은 추가적인 파일/폴더들 무시하기 위함)
+    subjects = sorted([
+        p.name for p in root.iterdir()
+        if p.is_dir() and p.name.startswith("subject")
+    ])
     if len(subjects) == 0:
         raise RuntimeError(f"No subject folders found in {root}")
 
@@ -119,6 +134,10 @@ def main():# 랜덤 split
     total_force_intervals, total_force_dur = 0, 0.0
 
     for _subject, _bodypart, _npz_path in iter_npz(root):
+
+        if args.use_only_fingerpad and not _bodypart.startswith("FINGERPAD"):
+            continue
+
         _img, _img_ts, _is_valid, _force, _force_ts = load_one_npz(_npz_path)
 
         n_int, dur = sum_intervals_and_duration(_img_ts)
@@ -156,6 +175,10 @@ def main():# 랜덤 split
     train_meta = []
 
     for subject, bodypart, npz_path in iter_npz(root):
+
+        if args.use_only_fingerpad and not bodypart.startswith("FINGERPAD"):
+            continue
+
         if subject not in train_subj:
             continue
 
@@ -218,6 +241,10 @@ def main():# 랜덤 split
 
             seq_idx = 0
             for subject, bodypart, npz_path in iter_npz(root):
+
+                if args.use_only_fingerpad and not bodypart.startswith("FINGERPAD"):
+                    continue
+
                 if subject not in subjects_in_split:
                     continue
 
@@ -273,9 +300,16 @@ def main():# 랜덤 split
                 if threshold is None: raise Exception(f"No threshold found for bodypart: {bodypart}")
                 else:
                     threshold = float(threshold)
+                    bodypart_label_id = int(TAG_INV[bodypart])
+                    # [기존]
+                    # label_frame = np.where(
+                    #     s_sum > threshold,
+                    #     MERGED_MAP[int(TAG_INV[bodypart])],
+                    #     idle_label_id
+                    # ).astype(np.int32)
                     label_frame = np.where(
                         s_sum > threshold,
-                        MERGED_MAP[int(TAG_INV[bodypart])],
+                        bodypart_label_id,
                         idle_label_id
                     ).astype(np.int32)
                 # ==============================================

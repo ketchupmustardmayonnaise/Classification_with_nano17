@@ -8,11 +8,12 @@ wandb:
   log_model: all
 
 data:
-  data_dir: ./data/current_dataset/dataset/12_dataset_h5
-  length_of_window: 30
-  batch_size: 8
+  data_dir: ./data/current_dataset/output/bodypart/fold1
+  length_of_window: 150
+  batch_size: 32
   image_size: [6, 6]
-  num_classes: 8
+  # [기존] num_classes: 8
+  num_classes: 14
 
   xflip: True
   yflip: False
@@ -44,7 +45,7 @@ model:
   freeze_tf_net_for_classification: true
 
   transformer:
-    num_layers: 2
+    num_layers: 12
     dim_feedforward: default
     num_of_head: 2 # for transformer
     export_multistep: True # Many-To-One 또는 Many-To-Many

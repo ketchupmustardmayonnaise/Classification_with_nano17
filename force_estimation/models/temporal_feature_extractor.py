@@ -18,7 +18,7 @@ class LSTM(nn.Module):
 
         self._export_multistep = export_multistep
         self._create_networks(size_of_input, size_of_hidden_layer_features, num_layer, is_bidirectional)
-        self._size_of_output = size_of_input
+        self._size_of_output = size_of_hidden_layer_features * (2 if is_bidirectional else 1)
 
 
     def _create_networks(self,

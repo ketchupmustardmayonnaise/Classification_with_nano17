@@ -3,7 +3,7 @@ import time
 import hydra
 from omegaconf import OmegaConf
 from models import *
-from utils.bodypart_label import bodypart_label
+from utils.bodypart_label import *
 from utils.load_model import *
 from omegaconf import DictConfig
 import torch
@@ -43,6 +43,9 @@ def main(cfg: DictConfig):
         cfg.data.refer_recent_frames_for_classification,
     )
 
+    if isinstance(classes, dict):
+        classes = {int(k): v for k, v in classes.items()}
+
     print(
         "[Checkpoint hparams] "
         f"classification_type={classification_type}, "
@@ -77,7 +80,8 @@ def main(cfg: DictConfig):
         temporal_feature_extractor=tf_net,
 
         dim_of_regression=3,
-        classes=bodypart_label,
+        # [기존] classes=bodypart_label,
+        classes=bodypart_14_label,
         task="classification",
         refer_recent_frames_for_classification=refer_recent_frames,
         classification_type=classification_type,

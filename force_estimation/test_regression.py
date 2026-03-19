@@ -3,7 +3,7 @@ import hydra
 from omegaconf import OmegaConf
 from models import *
 from utils.load_model import *
-from utils.bodypart_label import bodypart_label
+from utils.bodypart_label import bodypart_14_label
 from omegaconf import DictConfig
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
         temporal_feature_extractor=tf_net,
 
         dim_of_regression=3,
-        classes=bodypart_label,
+        classes=bodypart_14_label,
         task="regression",
 
         # [기존] use_force_axis_normalization 인자를 전달하지 않았음.
