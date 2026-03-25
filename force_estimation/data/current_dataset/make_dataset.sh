@@ -19,12 +19,65 @@ cd "$ROOT"
 
 "$PYTHON_BIN" -m "$MODULE" \
   --root "$DATASET_ROOT" \
-  --out_dir "$OUT_BASE/fingerpad" \
+  --out_dir "$OUT_BASE/fingerpad/fold1" \
   --split loso \
   --test_subjects "subject7 subject8 subject13 subject23" \
   --val_subjects "subject1 subject4 subject18 subject24" \
   --use_only_fingerpad True \
   --otsu_k 0.0
+
+
+"$PYTHON_BIN" -m "$MODULE" \
+  --root "$DATASET_ROOT" \
+  --out_dir "$OUT_BASE/fingerpad/fold2" \
+  --split loso \
+  --test_subjects "subject1 subject4 subject18 subject24" \
+  --val_subjects "subject3 subject9 subject12 subject17" \
+  --use_only_fingerpad True \
+  --otsu_k 0.0
+
+
+"$PYTHON_BIN" -m "$MODULE" \
+  --root "$DATASET_ROOT" \
+  --out_dir "$OUT_BASE/fingerpad/fold3" \
+  --split loso \
+  --test_subjects "subject3 subject9 subject12 subject17" \
+  --val_subjects "subject2 subject6 subject20 subject22" \
+  --use_only_fingerpad True \
+  --otsu_k 0.0
+
+
+"$PYTHON_BIN" -m "$MODULE" \
+  --root "$DATASET_ROOT" \
+  --out_dir "$OUT_BASE/fingerpad/fold4" \
+  --split loso \
+  --test_subjects "subject2 subject6 subject20 subject22" \
+  --val_subjects "subject11 subject16 subject19 subject21" \
+  --use_only_fingerpad True \
+  --otsu_k 0.0
+
+
+"$PYTHON_BIN" -m "$MODULE" \
+  --root "$DATASET_ROOT" \
+  --out_dir "$OUT_BASE/fingerpad/fold5" \
+  --split loso \
+  --test_subjects "subject11 subject16 subject19 subject21" \
+  --val_subjects "subject5 subject10 subject14 subject15" \
+  --use_only_fingerpad True \
+  --otsu_k 0.0
+
+
+"$PYTHON_BIN" -m "$MODULE" \
+  --root "$DATASET_ROOT" \
+  --out_dir "$OUT_BASE/fingerpad/fold6" \
+  --split loso \
+  --test_subjects "subject5 subject10 subject14 subject15" \
+  --val_subjects "subject7 subject8 subject13 subject23" \
+  --use_only_fingerpad True \
+  --otsu_k 0.0
+
+
+# ====================================
 
 
 "$PYTHON_BIN" -m "$MODULE" \
