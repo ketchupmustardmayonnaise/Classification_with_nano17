@@ -54,7 +54,7 @@ def save_frame_sequences(sequence, seq_index, base_dir):
     # 최상위 출력 폴더 생성
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
-        print(f"✅ 최상위 출력 폴더 생성: '{base_dir}'")
+        print(f"출력 폴더 생성: '{base_dir}'")
 
     sequence_dir_name = f'sequence_{seq_index:03d}'
     sequence_path = os.path.join(base_dir, sequence_dir_name)
@@ -78,13 +78,14 @@ def save_frame_sequences(sequence, seq_index, base_dir):
         np.save(file_path, frame_data)
 
 
-def make_pairs(img:np.array, force:np.array, pair_list:list, sequence_index, data_type='train'):
+def make_pairs(img:np.array, force:np.array, pair_list:list, sequence_index, data_type='train',
+               subject: str = '', body_part: str = ''):
     # 이때 입력으로 들어오는 image는 각 시퀀스
-    # img shape: (frame 개수, 10, 8)
+    # img shape: (frame 개수, 6, 6)
 
     # # ============================================
     # (첫 번째 이미지, 두 번째 이미지)로 나누는 과정
-    # return으로 줘야 하는 image의 shape: (쌍 개수, 2, 10, 8)
+    # return으로 줘야 하는 image의 shape: (쌍 개수, 2, 6, 6)
     # return으로 줘야 하는 force의 shape: (쌍 개수, 6)
 
     frame_count = 0
@@ -100,7 +101,7 @@ def make_pairs(img:np.array, force:np.array, pair_list:list, sequence_index, dat
 
                 pair_list.append([sequence_index, first_filename, second_filename,
                                   diff_of_force[0], diff_of_force[1], diff_of_force[2],
-                                  max_of_first_image])
+                                  max_of_first_image, subject, body_part])
                 frame_count += 1
 
     elif data_type == 'test':
@@ -113,7 +114,7 @@ def make_pairs(img:np.array, force:np.array, pair_list:list, sequence_index, dat
 
             pair_list.append([sequence_index, first_filename, second_filename,
                               diff_of_force[0], diff_of_force[1], diff_of_force[2],
-                              max_of_first_image])
+                              max_of_first_image, subject, body_part])
             frame_count += 1
 
     return frame_count
@@ -243,7 +244,7 @@ def extract_frame_segments(
         original_img,
         original_force,
         frame=120,
-        threshold=100):
+        threshold=200):
     '''
     이미지 전체를 보면서, 이미지의 최대 capacitance value가 threshold를 넘지 못하는 경우
     터치가 안 된 순간으로 간주하고, 이를 제외함.
@@ -307,48 +308,3 @@ def filter_force(force):
     clipping_force[force[:, 2] > 0, 2] = 0
     return clipping_force
 
-
-
-def preprocess(img, force, label, img_ts, force_ts, data_type, num_classes=7):
-    '''
-    모든 전처리 여기에서 진행
-    '''
-    path = f'./preprocessed_images/{data_type}'
-
-    # 먼저 이전 데이터와 지금 데이터와 섞이지 않기 위해, npy 파일들을 저장할 디렉토리를 삭제함.
-    if os.path.exists(path):
-        shutil.rmtree(path)
-
-    # force data에 low-pass filter를 걺
-    force = apply_butterworth_filter(force, img_ts, force_ts)
-
-    # cap 이미지랑 force의 모으는 시간이 다르기 때문에, timestamp에 맞춰서 force data를 cap 시간에 interpolate
-    force = interpolate_nano_to_capacitance(force, img_ts, force_ts)
-
-    img, force = extract_frame_segments(img, force, frame=120)
-
-    # image 크기: (시퀀스 개수, 각 시퀀스의 프레임 개수, 2, 32, 23)
-    frame = []
-    pair_list = []
-    for sequence_index in range(len(img)):
-        force[sequence_index] = filter_force(force[sequence_index]) # z force가 0 이상은 것은 0으로
-        # !! 주의 !!
-        # 이미지를 translate한 후, divide_and_normalize_image를 실행하여야 함.
-        img[sequence_index] = translate_image(img[sequence_index]) # 이미지를 중심 정렬
-        img[sequence_index] = pad_image(img[sequence_index], (32, 32)) # 이미지를 32 * 32로 padding
-        save_frame_sequences(img[sequence_index], sequence_index, path)
-        frame_count = make_pairs(img[sequence_index], force[sequence_index],
-                                             pair_list, sequence_index, data_type=data_type)
-        frame.append(frame_count)
-
-    header = ['sequence index', 'first image', 'second image',
-              'difference of Fx', 'difference of Fy', 'difference of Fz',
-              'max capacitance value of the first image']
-    pair_list = pd.DataFrame(data=pair_list,
-                             columns=header)
-    pair_list.to_csv(f'preprocessed_images/{data_type}.csv', index=False)
-
-    # label
-    label = F.one_hot(torch.Tensor(label).to(torch.int64), num_classes=num_classes)
-
-    return img, force, label, frame

@@ -3,4 +3,5 @@ __pycache__
 saved_models
 force_estimation/wandb
 *.h5
-force_estimation/dataset/preprocessed_images
+force_estimation/dataset/24_subject_dataset
+force_estimation/dataset/preprocessed_24subject

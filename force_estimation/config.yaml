@@ -1,17 +1,12 @@
-train_mode: False
-use_wandb: True
+train_mode: true
+use_wandb: true
 
+dataset_path: ./dataset/preprocessed_24subject
 save_dir: ../saved_models
-model_dir: ../saved_models/3DTouchForce_threshold=100_11-14_01-34-35/best_model.pt # 확장자: .pt 또는 .pth
-
-optimizer_type: Adam # [Adam, SGD, rmsprop]
-loss_type: MSE # [MSE, MAE, MSE+MAE, huber]
-
-loss_weights :
-  - 1.0
-  - 1.0
-  - 1.0
+model_dir: ../saved_models/best_model.ckpt  # 테스트 모드에서만 사용
 
 batch_size: 64
 num_epoch: 200
-learning_rate: 0.001
+learning_rate: 0.01
+weight_decay: 0.001
+max_lr_reductions: 3  # ReduceLROnPlateau: 이 횟수만큼 LR 감소 후 학습 종료

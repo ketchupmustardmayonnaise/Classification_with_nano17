@@ -1,373 +1,167 @@
-import pathlib
+import os
 import sys
 import time
-
-import torch
-import torchinfo
 import yaml
-from tqdm import tqdm
-from utils import *
-from dataset import *
-from torch.optim import lr_scheduler
-from utils.earlystopping import *
-import wandb
-import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
+
+import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint, Callback
+from pytorch_lightning.loggers import WandbLogger
+from torch.utils.data import Dataset, DataLoader
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)) + '/../')
-from model import *
 
-f_mean = [ 3.38455280e-07, -4.57362519e-06, -1.18898044e-05]
-f_std = [0.03641479, 0.05464274, 0.0668863]
+from force_estimation.dataset.rftdataset import RFTDataset
+from model.predict_force import SiamesePredictionForce
+from utils.util import copy_config
 
-class ForceEstimation:
-    def __init__(self, cfg):
-        # parameters
-        self.cfg = cfg
-        self.best_epoch = 0
 
-        # 1. 파라미터 초기화를 위한 헬퍼 메소드 정의
-        def _init_param(key, p_type=None):
-            value = self.cfg.get(key)
+class StopAfterLRReductions(Callback):
+    """
+    LR이 max_reductions회 감소하면 학습을 종료하는 콜백.
+    ReduceLROnPlateau와 함께 사용.
+    """
+    def __init__(self, max_reductions: int = 3):
+        self.max_reductions = max_reductions
+        self._prev_lr = None
+        self._reduction_count = 0
 
-            if value is not None and p_type is not None:
-                # --- 수정된 부분 ---
-                # p_type이 ast.literal_eval이고, 실제 값이 문자열일 때만 변환을 수행합니다.
-                if p_type is ast.literal_eval:
-                    if isinstance(value, str):
-                        value = p_type(value)
-                else:  # int, float, str2bool 등 다른 타입 변환은 그대로 수행
-                    value = p_type(value)
-                # --- 수정 끝 ---
+    def on_train_epoch_end(self, trainer, pl_module):
+        current_lr = trainer.optimizers[0].param_groups[0]['lr']
+        if self._prev_lr is not None and current_lr < self._prev_lr - 1e-12:
+            self._reduction_count += 1
+            print(f'\n[StopAfterLRReductions] LR 감소 {self._reduction_count}/{self.max_reductions}: '
+                  f'{self._prev_lr:.2e} → {current_lr:.2e}')
+            if self._reduction_count >= self.max_reductions:
+                print('[StopAfterLRReductions] 최대 LR 감소 횟수 도달. 학습 종료.')
+                trainer.should_stop = True
+        self._prev_lr = current_lr
 
-            setattr(self, key, value)
 
-        # 2. 공통 파라미터 리스트 정의 (파라미터명, 타입)
-        # 타입이 None이면 변환 없이 그대로 사용
-        common_params = [
-            ('train_mode', bool),  # train일 때만 학습 (bool)
-            ('use_wandb', bool),  # wandb에 올릴 것인지 (bool)
+class _FlatTestDataset(Dataset):
+    """
+    RFTDataset(test)는 시퀀스 단위로 반환하므로,
+    SiamesePredictionForce의 test_step에 맞게 pair 단위로 펼쳐주는 래퍼.
+    시퀀스는 처음 접근할 때 한 번만 로드해서 캐싱함.
+    """
+    def __init__(self, test_dataset: RFTDataset):
+        self._ds = test_dataset
 
-            ('image_type', str),  # origin, rgb, diff (str)
-            ('image_size', ast.literal_eval),  # 이미지를 몇 size로 할 것인지 (int, int)
-            ('target_index', int),  # 몇 frame으로 자를 것인지 (bool)
-            ('stride', int),  # 몇 frame만큼 띄워서 학습할 것인지 (int)
-            # ('augmentation_angle', int),  # online augmentation 시, 각도 최대치 (int)
+        data_list = test_dataset.data_list
+        unique_seqs = sorted(data_list['sequence index'].unique())
 
-            ('encoder', str),  # 어떤 cnn을 쓸 것인지 (str)
+        self._flat = []  # (seq_value, pair_idx_within_seq)
+        for seq_val in unique_seqs:
+            n_pairs = int((data_list['sequence index'] == seq_val).sum())
+            for pair_idx in range(n_pairs):
+                self._flat.append((int(seq_val), pair_idx))
 
-            ('decoder', str),  # 어떤 시계열 모델을 사용할 것인지 (str)
-            ('decoder_layer', int),  # 시계열 모델 내 layer의 개수 (int)
-            ('decoder_dimension', int),
-            ('decoder_output', int),  # 시계열 모델에서 결과적으로 나온 embedding_vector의 차원 (int)
+        self._cache = {}
 
-            ('fc_num_layer', int),  # fully-connected layer의 개수 (int)
-            ('fc_hidden_dim', int),  # fully-connected layer의 hidden layer의 dimension 개수
+    def __len__(self):
+        return len(self._flat)
 
-            ('batch_size', int),
-            ('learning_rate', float),
-            ('weight_decay', float),
-            ('dropout', float),
-            ('num_epoch', int),
+    def __getitem__(self, index):
+        seq_val, pair_idx = self._flat[index]
+        if seq_val not in self._cache:
+            self._cache[seq_val] = self._ds[seq_val]
+        batch = self._cache[seq_val]
+        return {
+            'img':         batch['img'][pair_idx],          # (2, H, W)
+            'force':       batch['force'][pair_idx],         # (3,)
+            'sequence_id': batch['sequence_id'][pair_idx],  # scalar tensor
+            'subject_id':  batch['subject_id'],             # str
+            'bodypart':    batch['bodypart'],                # str
+        }
 
-            ('optimizer_type', str),
-            ('scheduler_type', str),
-            ('loss_type', str),
-            ('loss_weights', list),
 
-            ('model_dir', str),
-            ('save_dir', str)
-        ]
+def main(cfg: dict):
+    train_mode    = bool(cfg.get('train_mode', True))
+    use_wandb     = bool(cfg.get('use_wandb', False))
+    batch_size    = int(cfg.get('batch_size', 64))
+    num_epoch     = int(cfg.get('num_epoch', 200))
+    learning_rate = float(cfg.get('learning_rate', 1e-3))
+    weight_decay  = float(cfg.get('weight_decay', 1e-3))
+    max_lr_reductions = int(cfg.get('max_lr_reductions', 3))
+    dataset_path  = cfg.get('dataset_path', './dataset/preprocessed_24subject')
+    save_dir_base = cfg.get('save_dir', '../saved_models')
 
-        # 3. 반복문을 통해 공통 파라미터 한 번에 초기화
-        for key, p_type in common_params:
-            _init_param(key, p_type)
+    time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
 
-        # model configuration
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = CFModel(self.decoder_layer,
-                             self.decoder_dimension, 
-                             self.decoder_output)
-        self.model = self.model.to(self.device)
-        torchinfo.summary(self.model, input_size=(self.batch_size, 2, 32, 32))
+    # ──────────────────────────────────────────────
+    # 학습 모드
+    # ──────────────────────────────────────────────
+    if train_mode:
+        save_dir = os.path.join(save_dir_base, time_suffix)
+        os.makedirs(save_dir, exist_ok=True)
+        copy_config(save_dir)
 
-        # test dataset
-        self.test_dataset = RFTDataset(dataset_type='test')
-        self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, batch_size=1, shuffle=False)
+        train_dataset = RFTDataset(path=dataset_path, dataset_type='train')
+        val_dataset   = RFTDataset(path=dataset_path, dataset_type='val')
+        test_dataset  = _FlatTestDataset(RFTDataset(path=dataset_path, dataset_type='test'))
 
-        # optimizer
-        if self.optimizer_type.lower() == 'adam':
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate, betas=(0.9, 0.999),
-                                              eps=1e-08, amsgrad=False)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,  num_workers=0)
+        val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, num_workers=0)
+        test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False, num_workers=0)
 
-        # train
-        if self.train_mode:
-            # train dataset
-            self.train_dataset = RFTDataset(dataset_type='train')
-            self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
+        model = SiamesePredictionForce(
+            dim_of_regression=3,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            directory=save_dir,
+        )
 
-            # validation dataset
-            self.val_dataset = RFTDataset(dataset_type='val')
-            self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False)
-            
-            self.learning_rate = float(self.learning_rate)
+        checkpoint = ModelCheckpoint(
+            dirpath=save_dir,
+            filename='best_model',
+            monitor='loss_for_monitor',
+            mode='min',
+            save_top_k=1,
+        )
+        early_stop = StopAfterLRReductions(max_reductions=max_lr_reductions)
 
-            # create directories
-            time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())
-            self.save_dir = cfg['save_dir'] + "/" + time_suffix
-
-            if not os.path.exists(self.save_dir):
-                os.makedirs(self.save_dir)
-            copy_config(self.save_dir)
-
-            # loss
-            self.loss = torch.nn.MSELoss(reduction='none') if self.loss_type.lower() == "mse" else torch.nn.L1Loss(reduction='none')
-
-            # wandb
-            if self.use_wandb:
-                # wandb
-                wandb_config = {
-                    "target_index": self.target_index,
-                    "optimizer": self.optimizer_type,
-                    "batch_size": self.batch_size,
-                    "learning_rate": self.learning_rate,
-                    "weight_decay": self.weight_decay,
-                    "dropout": self.dropout,
-                    "loss": self.loss_type,
-                    "loss_weights": self.loss_weights,
+        if use_wandb:
+            logger = WandbLogger(
+                project='HandInterfacesWatch',
+                name=f'Siamese_{time_suffix}',
+                config={
+                    'batch_size': batch_size,
+                    'learning_rate': learning_rate,
+                    'weight_decay': weight_decay,
+                    'num_epoch': num_epoch,
+                    'max_lr_reductions': max_lr_reductions,
                 }
-
-                run_name = f'MTM_{time_suffix}_5people'
-                self.run_log = wandb.init(project="rft64_2", config=wandb_config, name=run_name)
-
-            self.train()
-
-        # test
+            )
         else:
-            self.save_dir = pathlib.Path(cfg['model_dir']).parent.__str__()
-            checkpoint = torch.load(cfg['model_dir'])
-            self.model.load_state_dict(checkpoint)
-            self.test()
+            logger = True  # 기본 CSVLogger
 
-    def validate(self, dataloader):
-        self.model.eval()
-        MSE = 0
-        MAE = 0
+        trainer = pl.Trainer(
+            max_epochs=num_epoch,
+            callbacks=[checkpoint, early_stop],
+            logger=logger,
+            log_every_n_steps=1,
+        )
 
-        with torch.no_grad():
-            for X, force in dataloader:
-                X, force = X.float().to(self.device), force.to(self.device)
+        trainer.fit(model, train_loader, val_loader)
+        trainer.test(model, test_loader, ckpt_path='best')
 
-                pred_force = self.model(X)
+    # ──────────────────────────────────────────────
+    # 테스트 모드
+    # ──────────────────────────────────────────────
+    else:
+        model_dir = cfg['model_dir']
+        save_dir  = os.path.dirname(model_dir)
 
-                MSE += torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='mean')
-                MAE += torch.nn.functional.huber_loss(pred_force.float(), force.float(), reduction='mean')
+        test_dataset = _FlatTestDataset(RFTDataset(path=dataset_path, dataset_type='test'))
+        test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
-        MSE /= len(dataloader)
-        MAE /= len(dataloader)
-        return MSE, MAE
+        model = SiamesePredictionForce.load_from_checkpoint(model_dir, directory=save_dir)
 
-    def train(self, start_epoch=0):
-        msg = '[Epoch: {}/{}], Lr: {:.6f}, Train MSE: {:.3f}, Train MAE: {:.3f}' \
-              ' Validation MSE: {:.3f}, Validation MAE: {:.3f}'
-
-        patience = 10
-        current_patience = 0
-        num_lr_reduces = 0
-        val_best_loss = 1e10
-        best_model_path = os.path.join(self.save_dir, 'best_model.pt')
-
-        for epoch in range(start_epoch, self.num_epoch):
-            self.model.train()
-
-            MSE = []
-            MAE = []
-
-            # tqdm으로 배치 진행 상황을 보여줌
-            progress_bar = tqdm(self.train_dataloader, desc="Training", leave=False)
-            running_loss = 0.0
-
-            # X.shape =
-            for batch in progress_bar:
-                X, force = batch
-                X, force = X.float().to(self.device), force.to(self.device)
-
-                self.optimizer.zero_grad()
-                pred_force = self.model(X)
-
-                MSEloss = torch.nn.functional.mse_loss(pred_force.float(), force.float(), reduction='none')
-                L1_loss = torch.nn.functional.l1_loss(pred_force.float(), force.float(), reduction='none')
-
-                loss = self.loss(pred_force.float(), force.float())
-                loss = loss
-                loss = loss.mean()
-                
-                loss.backward()
-                self.optimizer.step()
-                
-                MSE.append(MSEloss.mean().item())
-                MAE.append(L1_loss.mean().item())
-
-                # 현재 평균 loss를 tqdm description에 표시
-                running_loss += loss.item()
-                progress_bar.set_postfix(loss=running_loss / (progress_bar.n + 1))
-
-            # validate the model
-            val_MSE, val_MAE = self.validate(self.val_dataloader)
-            
-            if self.loss_type.lower() == 'mse': val_loss_to_monitor = val_MSE
-            elif self.loss_type.lower() == 'mae': val_loss_to_monitor = val_MAE
-
-            avg_train_mse = np.mean(MSE)
-            avg_train_mae = np.mean(MAE)
-            current_lr = self.optimizer.param_groups[0]['lr']
-            
-            print(msg.format(
-                epoch + 1,
-                self.num_epoch,
-                current_lr,
-                avg_train_mse,
-                avg_train_mae,
-                val_MSE,
-                val_MAE
-            ))
-            
-            train_txt_path = self.save_dir + "/train.txt"
-            with open(train_txt_path, 'a') as train_txt_file:
-                train_txt_file.write(msg.format(
-                    epoch + 1,
-                    self.num_epoch,
-                    float(self.learning_rate),
-                    float(np.mean(MSE)),
-                    float(np.mean(MAE)),
-                    float(val_MSE),
-                    float(val_MAE)
-                ) + '\n')
-
-            torch.save(self.model.state_dict(), "current_model.pt")  # best model path에 저장
-            if self.use_wandb:
-                try:
-                    wandb.log({"train_MSE": np.mean(MSE), "train_MAE": np.mean(MAE),
-                                  "validation_MSE": val_MSE, "validation_MAE": val_MAE})
-                    artifact = wandb.Artifact('model', type='model')
-                    artifact.add_file("current_model.pt")
-                    wandb.save("current_model.pt")
-                    self.run_log.log_artifact(artifact)
-                except:
-                    wandb.finish()
-
-            if val_loss_to_monitor < val_best_loss:
-                print(
-                    f'Validation loss decreased ({val_best_loss:.6f} --> {val_loss_to_monitor:.6f}).  Saving model ...')
-                torch.save(self.model.state_dict(), best_model_path) # best model path에 저장
-                val_best_loss = val_loss_to_monitor
-                current_patience = 0
-
-                if self.use_wandb:
-                    try:
-                        artifact = wandb.Artifact('model', type='model')
-                        artifact.add_file(best_model_path)
-                        wandb.save(best_model_path)
-                        self.run_log.log_artifact(artifact)
-                    except:
-                        pass
-            else:
-                current_patience += 1
-                if current_patience >= patience:
-                    if num_lr_reduces >= 3:
-                        break
-                    else:
-                        self.optimizer.param_groups[0]['lr'] *= 0.1
-                        num_lr_reduces += 1
-                        current_patience = 0
-
-        # --- 학습 종료 후 최종 작업 ---
-        print("Loading best model weights...")
-        # EarlyStopping에 의해 저장된 가장 좋은 모델의 가중치를 불러옵니다.
-        self.model.load_state_dict(torch.load(best_model_path))
-        
-        print("Running test with best model...")
-        self.test()
-        
-        if self.use_wandb:
-            wandb.finish()
-
-
-    def test(self):
-        self.model.eval()
-
-        f = [] # (# of sequences, full sequence, 3)
-        pf = [] # (# of sequences, # of chunks, 30)
-
-        MSE = [] # shape: (num of chunks, target_index, 3)
-        MAE = [] # shape: (num of chunks, target_index, 3)
-
-        with torch.no_grad():
-            for _X, _force in self.test_dataloader:  # 한 시퀀스씩 추정
-                _X = _X.squeeze().tolist()
-
-                _force = _force.squeeze()
-                _force = _force.tolist()
-
-                f.append([])  # 리스트에 각 시퀀스마다의 force label을 전체 저장
-                pf.append([])
-
-                # 모델을 통해 예측하기 위해 batch size마다 잘라서 predict
-                batch_start = 0
-                while True:
-                    if batch_start + self.batch_size < len(_X):
-                        X_batch, force_batch = torch.Tensor(_X[batch_start:batch_start + self.batch_size]), \
-                            torch.Tensor(_force[batch_start:batch_start + self.batch_size])
-                    else:
-                        X_batch, force_batch = torch.Tensor(_X[batch_start:len(_X)]), \
-                            torch.Tensor(_force[batch_start:len(_X)])
-
-                    X_batch, force_batch = X_batch.to(self.device), force_batch.to(self.device)
-
-                    pred_force = self.model(X_batch)  # shape: (batch size, sliding window size, 3) = (8, 30, 3)
-
-                    force_detach = force_batch.detach().cpu().numpy().tolist()
-                    f[len(f) - 1].extend(force_detach)
-
-                    _pred_force_detach = pred_force.detach().cpu().numpy().tolist()
-                    pf[len(pf) - 1].extend(_pred_force_detach)
-
-                    # 각 X, Y, Z별 MSE, MAE 계산
-                    MSE.extend(torch.nn.functional.mse_loss(pred_force, force_batch,
-                                                            reduction='none').tolist())
-                    MAE.extend(torch.nn.functional.l1_loss(pred_force, force_batch,
-                                                           reduction='none').tolist())
-
-                    batch_start += self.batch_size
-                    if batch_start >= len(_X): break
-
-        train_txt_path = self.save_dir + "/train.txt"
-        plot_for_lstm(f, pf, self.target_index, self.save_dir, train_txt_path)
-
-        MSE = torch.Tensor(MSE)
-        MAE = torch.Tensor(MAE)
-
-        MSE_for_axis = torch.mean(MSE, dim=0)
-        MAE_for_axis = torch.mean(MAE, dim=0)
-
-        print("TEST: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)))
-        print(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}')
-        print(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}')
-        std_MSE = torch.std(MSE)
-        std_MAE = torch.std(MAE)
-        print(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
-
-        with open(train_txt_path, 'a') as train_txt_file:
-            train_txt_file.write("Test: \tMSE loss: {:.5f}\tL1 loss: {:.5f}".format(torch.mean(MSE), torch.mean(MAE)) + '\n')
-            train_txt_file.write(f'(TEST MSE) X: {MSE_for_axis[0]}\tY: {MSE_for_axis[1]}\tZ: {MSE_for_axis[2]}\n')
-            train_txt_file.write(f'(TEST MAE) X: {MAE_for_axis[0]}\tY: {MAE_for_axis[1]}\tZ: {MAE_for_axis[2]}\n')
-            train_txt_file.write(f'(STD) MSE: {std_MSE}, MAE: {std_MAE}')
-
-        return MSE, MAE
+        trainer = pl.Trainer(logger=False)
+        trainer.test(model, test_loader)
 
 
 if __name__ == '__main__':
-    with open("config.yaml", 'r+', encoding='utf-8') as f:
+    with open('config.yaml', 'r', encoding='utf-8') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
-    force_estimation = ForceEstimation(config)
+    main(config)
