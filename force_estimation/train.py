@@ -81,6 +81,8 @@ def main(cfg: dict):
     num_epoch     = int(cfg.get('num_epoch', 200))
     learning_rate = float(cfg.get('learning_rate', 1e-3))
     weight_decay  = float(cfg.get('weight_decay', 1e-3))
+    scheduler_factor = float(cfg.get('scheduler_factor', 0.1))
+    scheduler_patience = int(cfg.get('scheduler_patience', 10))
     max_lr_reductions = int(cfg.get('max_lr_reductions', 3))
     dataset_path  = cfg.get('dataset_path', './dataset/preprocessed_24subject')
     save_dir_base = cfg.get('save_dir', '../saved_models')
@@ -107,6 +109,8 @@ def main(cfg: dict):
             dim_of_regression=3,
             learning_rate=learning_rate,
             weight_decay=weight_decay,
+            scheduler_factor=scheduler_factor,
+            scheduler_patience=scheduler_patience,
             directory=save_dir,
         )
 
@@ -127,6 +131,8 @@ def main(cfg: dict):
                     'batch_size': batch_size,
                     'learning_rate': learning_rate,
                     'weight_decay': weight_decay,
+                    'scheduler_factor': scheduler_factor,
+                    'scheduler_patience': scheduler_patience,
                     'num_epoch': num_epoch,
                     'max_lr_reductions': max_lr_reductions,
                 }

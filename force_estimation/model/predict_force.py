@@ -21,6 +21,7 @@ from torchmetrics.classification import Accuracy
 import os
 from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError, R2Score
 from force_estimation.model.resnet_small2 import resnet18_small
+from force_estimation.utils import *
 
 
 class SiamesePredictionForce(pl.LightningModule):
@@ -34,6 +35,8 @@ class SiamesePredictionForce(pl.LightningModule):
                  dim_of_regression: int = 3,
                  learning_rate: float = 1e-4,
                  weight_decay: float = 1e-3,
+                 scheduler_factor: float = 0.1,
+                 scheduler_patience: int = 10,
                  directory=None):
         super().__init__()
         self.save_hyperparameters()
@@ -109,7 +112,9 @@ class SiamesePredictionForce(pl.LightningModule):
         )
         scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode='min', factor=0.1, patience=10,
+                optimizer, mode='min',
+                factor=self.hparams.scheduler_factor,
+                patience=self.hparams.scheduler_patience,
             ),
             'monitor': 'loss_for_monitor',
         }
@@ -234,7 +239,7 @@ class SiamesePredictionForce(pl.LightningModule):
         pred_t = torch.Tensor(prediction_np).to(self.device)
         gt_t = torch.Tensor(ground_truth_np).to(self.device)
 
-        r2_all = R2Score(num_outputs=self.hparams.dim_of_regression, multioutput='uniform_average').to(self.device)(pred_t, gt_t)
+        r2_all = R2Score(multioutput='uniform_average').to(self.device)(pred_t, gt_t)
         rmse_all = MeanSquaredError(squared=False).to(self.device)(pred_t, gt_t)
         mae_all = MeanAbsoluteError().to(self.device)(pred_t, gt_t)
 
@@ -297,7 +302,7 @@ class SiamesePredictionForce(pl.LightningModule):
         pred = torch.Tensor(np.array(group_data['prediction'])).to(self.device)
         gt = torch.Tensor(np.array(group_data['target'])).to(self.device)
 
-        r2 = R2Score(num_outputs=self.hparams.dim_of_regression, multioutput='uniform_average').to(self.device)(pred, gt)
+        r2 = R2Score(multioutput='uniform_average').to(self.device)(pred, gt)
         rmse = MeanSquaredError(squared=False).to(self.device)(pred, gt)
         mae = MeanAbsoluteError().to(self.device)(pred, gt)
 

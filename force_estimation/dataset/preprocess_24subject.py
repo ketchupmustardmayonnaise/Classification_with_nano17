@@ -314,7 +314,7 @@ def preprocess_24subject(
         subjects: list,
         data_type: str,
         threshold: float = 200.0,
-        min_frames: int = 150,
+        min_frames: int = 0,
         pad_size: tuple = (32, 32),
 ):
     """
