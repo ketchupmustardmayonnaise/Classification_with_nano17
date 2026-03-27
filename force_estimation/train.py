@@ -84,6 +84,7 @@ def main(cfg: dict):
     scheduler_factor = float(cfg.get('scheduler_factor', 0.1))
     scheduler_patience = int(cfg.get('scheduler_patience', 10))
     max_lr_reductions = int(cfg.get('max_lr_reductions', 3))
+    num_workers = cfg.get('num_workers', 0)
     dataset_path  = cfg.get('dataset_path', './dataset/preprocessed_24subject')
     save_dir_base = cfg.get('save_dir', '../saved_models')
 
@@ -101,9 +102,9 @@ def main(cfg: dict):
         val_dataset   = RFTDataset(path=dataset_path, dataset_type='val')
         test_dataset  = _FlatTestDataset(RFTDataset(path=dataset_path, dataset_type='test'))
 
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,  num_workers=0)
-        val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, num_workers=0)
-        test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False, num_workers=0)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,  num_workers=num_workers, persistent_workers=True)
+        val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=True)
+        test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False, num_workers=num_workers, persistent_workers=True)
 
         model = SiamesePredictionForce(
             dim_of_regression=3,
