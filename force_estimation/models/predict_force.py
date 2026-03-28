@@ -582,8 +582,8 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH SUBJECT ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['prediction']))
-                ground_truth = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['target']))
+                prediction = torch.Tensor(grouped_data[sid]['prediction'])
+                ground_truth = torch.Tensor(grouped_data[sid]['target'])
 
                 r2_for_subject = R2Score()(prediction, ground_truth)
                 rmse_for_subject = MeanSquaredError(squared=False)(prediction, ground_truth)
@@ -613,8 +613,8 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH BODYPART ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['prediction']))
-                ground_truth = torch.Tensor(reconstruct_list_from_windows(grouped_data[sid]['target']))
+                prediction = torch.Tensor(grouped_data[sid]['prediction'])
+                ground_truth = torch.Tensor(grouped_data[sid]['target'])
 
                 r2_for_label = R2Score()(prediction, ground_truth)
                 rmse_for_label = MeanSquaredError(squared=False)(prediction, ground_truth)

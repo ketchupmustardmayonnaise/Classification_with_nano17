@@ -14,8 +14,8 @@ from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 # ===================================
 from pytorch_lightning.loggers import WandbLogger
 
-PATH = "./saved_models\\(Transformer 12x) 03-10_18-31-17_lightweight_convnexttiny_transformer"
-MODEL_NAME = "best_model_loss_for_monitor=0.1617.ckpt"
+PATH = "./saved_models\\[FOLD5] 03-19_04-57-03_lightweight_convnexttiny_transformer"
+MODEL_NAME = "best_model_loss_for_monitor=0.3500.ckpt"
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
