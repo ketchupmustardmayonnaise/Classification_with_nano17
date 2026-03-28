@@ -27,10 +27,11 @@ def load_model_from_local(model_cls, checkpoint_path, **init_kwargs):
 
     # PyTorch 2.6+에서 weights_only=True가 기본값이 되었으나,
     # 체크포인트에 omegaconf 등 다양한 타입이 포함되어 있으므로 False로 패치
+    map_location = f'cuda:0' if torch.cuda.is_available() else 'cpu'
     _original_load = torch.load
-    torch.load = lambda *args, **kwargs: _original_load(*args, **{**kwargs, 'weights_only': False})
+    torch.load = lambda *args, **kwargs: _original_load(*args, **{**kwargs, 'weights_only': False, 'map_location': map_location})
     try:
-        model = model_cls.load_from_checkpoint(checkpoint_path, **init_kwargs, strict=False)  # ⭐ 없는 키는 무시
+        model = model_cls.load_from_checkpoint(checkpoint_path, **init_kwargs, strict=False, map_location=map_location)
     finally:
         torch.load = _original_load
 
