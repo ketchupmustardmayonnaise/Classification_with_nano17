@@ -582,24 +582,24 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH SUBJECT ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(grouped_data[sid]['prediction'])
-                ground_truth = torch.Tensor(grouped_data[sid]['target'])
+                prediction = torch.Tensor(grouped_data[sid]['prediction']).reshape((-1, 3)).to(self.device)
+                ground_truth = torch.Tensor(grouped_data[sid]['target']).reshape((-1, 3)).to(self.device)
 
-                r2_for_subject = R2Score()(prediction, ground_truth)
-                rmse_for_subject = MeanSquaredError(squared=False)(prediction, ground_truth)
-                mae_for_subject = MeanAbsoluteError()(prediction, ground_truth)
+                r2_for_subject = R2Score().to(self.device)(prediction, ground_truth)
+                rmse_for_subject = MeanSquaredError(squared=False).to(self.device)(prediction, ground_truth)
+                mae_for_subject = MeanAbsoluteError().to(self.device)(prediction, ground_truth)
 
-                r2_x = R2Score()(prediction[:, 0], ground_truth[:, 0])
-                r2_y = R2Score()(prediction[:, 1], ground_truth[:, 1])
-                r2_z = R2Score()(prediction[:, 2], ground_truth[:, 2])
+                r2_x = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                r2_y = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                r2_z = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-                rmse_x = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
-                rmse_y = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
-                rmse_z = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
+                rmse_x = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                rmse_y = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                rmse_z = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-                mae_x = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
-                mae_y = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
-                mae_z = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
+                mae_x = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                mae_y = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                mae_z = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
                 with open(f'{self.directory}/test_result.txt', "a") as f:
                     f.write(f"[{sid}] R2 SCORE: {r2_for_subject:.6f} RMSE: {rmse_for_subject:.6f} MAE: {mae_for_subject:.6f} (mean of force: {torch.mean(torch.norm(ground_truth, dim=1))})\n")
@@ -613,24 +613,24 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH BODYPART ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(grouped_data[sid]['prediction'])
-                ground_truth = torch.Tensor(grouped_data[sid]['target'])
+                prediction = torch.Tensor(grouped_data[sid]['prediction']).reshape((-1, 3)).to(self.device)
+                ground_truth = torch.Tensor(grouped_data[sid]['target']).reshape((-1, 3)).to(self.device)
 
-                r2_for_label = R2Score()(prediction, ground_truth)
-                rmse_for_label = MeanSquaredError(squared=False)(prediction, ground_truth)
-                mae_for_label = MeanAbsoluteError()(prediction, ground_truth)
+                r2_for_label = R2Score().to(self.device)(prediction, ground_truth)
+                rmse_for_label = MeanSquaredError(squared=False).to(self.device)(prediction, ground_truth)
+                mae_for_label = MeanAbsoluteError().to(self.device)(prediction, ground_truth)
 
-                r2_x = R2Score()(prediction[:, 0], ground_truth[:, 0])
-                r2_y = R2Score()(prediction[:, 1], ground_truth[:, 1])
-                r2_z = R2Score()(prediction[:, 2], ground_truth[:, 2])
+                r2_x = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                r2_y = R2Score().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                r2_z = R2Score().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-                rmse_x = MeanSquaredError(squared=False)(prediction[:, 0], ground_truth[:, 0])
-                rmse_y = MeanSquaredError(squared=False)(prediction[:, 1], ground_truth[:, 1])
-                rmse_z = MeanSquaredError(squared=False)(prediction[:, 2], ground_truth[:, 2])
+                rmse_x = MeanSquaredError(squared=False).to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                rmse_y = MeanSquaredError(squared=False).to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                rmse_z = MeanSquaredError(squared=False).to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
-                mae_x = MeanAbsoluteError()(prediction[:, 0], ground_truth[:, 0])
-                mae_y = MeanAbsoluteError()(prediction[:, 1], ground_truth[:, 1])
-                mae_z = MeanAbsoluteError()(prediction[:, 2], ground_truth[:, 2])
+                mae_x = MeanAbsoluteError().to(self.device)(prediction[:, 0], ground_truth[:, 0])
+                mae_y = MeanAbsoluteError().to(self.device)(prediction[:, 1], ground_truth[:, 1])
+                mae_z = MeanAbsoluteError().to(self.device)(prediction[:, 2], ground_truth[:, 2])
 
                 with open(f'{self.directory}/test_result.txt', "a") as f:
                     f.write(f"[{sid}] R2 SCORE: {r2_for_label:.6f} RMSE: {rmse_for_label:.6f} MAE: {mae_for_label:.6f}\n")
