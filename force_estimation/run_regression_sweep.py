@@ -136,6 +136,7 @@ def train_one_run():
             task="regression",
             learning_rate=cfg.model.learning_rate,
             weight_decay=cfg.model.weight_decay,
+            test_report_last_frame_only=cfg.test.get("report_last_frame_only", False),
             directory=save_dir
         )
 

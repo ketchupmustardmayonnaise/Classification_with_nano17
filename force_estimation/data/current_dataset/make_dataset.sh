@@ -2,7 +2,6 @@
 set -e
 
 OUT_DIR_NAME="output"
-DATASET_DIR_NAME="24_subject_dataset"
 
 # 현재 sh 파일의 절대경로
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,9 +9,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../../../" && pwd)"
 OUT_BASE="$ROOT/force_estimation/data/current_dataset/$OUT_DIR_NAME"
 
-DATASET_ROOT="$ROOT/force_estimation/data/current_dataset/$DATASET_DIR_NAME"
+# 기본 입력 데이터는 sibling worktree의 Raw dataset을 사용.
+# 필요하면 실행 시 DATASET_ROOT 환경변수로 덮어쓸 수 있음.
+DEFAULT_DATASET_ROOT="$ROOT/../force_estimation/data/Raw"
+DATASET_ROOT="${DATASET_ROOT:-$DEFAULT_DATASET_ROOT}"
 MODULE="force_estimation.data.current_dataset.build_h5_cross_subject"
 PYTHON_BIN="${PYTHON_BIN:-python}"
+
+if [ ! -d "$DATASET_ROOT" ]; then
+  echo "Dataset root not found: $DATASET_ROOT" >&2
+  exit 1
+fi
 
 # ROOT로 이동
 cd "$ROOT"

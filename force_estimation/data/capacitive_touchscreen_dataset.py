@@ -1,4 +1,5 @@
 import os
+import json
 import zipfile
 import torch
 import torch.nn.functional as F
@@ -22,7 +23,9 @@ class CapTSDataset(Dataset):
 
                  xflip : bool = True,
                  yflip : bool = False,
-                 translation : bool = False):
+                 translation : bool = False,
+                 touch_only_last_frame : bool = False,
+                 touch_threshold_log : float = None):
 
         self.path = path
         self.dataset_type = dataset_type
@@ -41,17 +44,27 @@ class CapTSDataset(Dataset):
         self.xflip = xflip
         self.yflip = yflip
         self.translation = translation
+        self.touch_only_last_frame = bool(touch_only_last_frame)
+        self.touch_threshold_log = None if touch_threshold_log is None else float(touch_threshold_log)
 
         self.prefix = [0]
+        self.valid_windows = None
+
+        stats_path = os.path.join(os.path.dirname(self.path), "stats.json")
+        if not os.path.exists(stats_path):
+            raise FileNotFoundError(f"stats.json not found next to dataset file: {stats_path}")
+
+        with open(stats_path, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+
+        self.img_mean = torch.tensor(stats["img_mean"]).float()
+        self.img_std = torch.tensor(stats["img_std"]).float()
+
+        # (C,) -> (1, C, 1, 1) 형태로 reshape (broadcast용)
+        self.img_mean = self.img_mean.view(1, -1, 1, 1)
+        self.img_std = self.img_std.view(1, -1, 1, 1)
 
         with h5py.File(self.path, 'r') as f:
-            self.img_mean = torch.tensor(f.attrs["img_mean"]).float()
-            self.img_std = torch.tensor(f.attrs["img_std"]).float()
-
-            # (C,) -> (1, C, 1, 1) 형태로 reshape (broadcast용)
-            self.img_mean = self.img_mean.view(1, -1, 1, 1)
-            self.img_std = self.img_std.view(1, -1, 1, 1)
-
             sample_keys = sorted([k for k in f.keys() if k.startswith("sequence_")])
 
             for seq in sample_keys:
@@ -77,16 +90,40 @@ class CapTSDataset(Dataset):
                 self.translation_offline_augmentation()
 
         # frame 개수와 length_of_window 값으로부터, 각 시퀀스에서 학습 가능한 데이터 개수 찾음
-        for i in range(len(self.frame)):
-            self.frame[i] = int((self.frame[i] - length_of_window) / self.stride) + 1
-            self.prefix.append(self.frame[i] + self.prefix[-1])
-        self.len = sum(self.frame)
+        if self.dataset_type.lower() == 'test' and self.touch_only_last_frame and self.touch_threshold_log is not None:
+            self.valid_windows = []
+            total_candidate_windows = 0
+            for sequence_idx in range(len(self.img)):
+                n_windows = max(0, int((self.img[sequence_idx].shape[0] - length_of_window) / self.stride) + 1)
+                total_candidate_windows += n_windows
+                for frame_idx in range(n_windows):
+                    last_idx = frame_idx + self.length_of_window - 1
+                    # ch0 is the "current" frame in the RGB-like representation.
+                    last_frame_sum = np.clip(self.img[sequence_idx][last_idx, 0], a_min=0.0, a_max=None).sum()
+                    if last_frame_sum > self.touch_threshold_log:
+                        self.valid_windows.append((sequence_idx, frame_idx))
+            self.len = len(self.valid_windows)
+            passed_ratio = (100.0 * self.len / total_candidate_windows) if total_candidate_windows > 0 else 0.0
+            print(
+                f"[CapTSDataset:test] touch-only filter enabled "
+                f"(log1p(sum(last_frame_ch0)) > {self.touch_threshold_log:.4f}) | "
+                f"passed {self.len}/{total_candidate_windows} windows "
+                f"({passed_ratio:.2f}%)"
+            )
+        else:
+            for i in range(len(self.frame)):
+                self.frame[i] = max(0, int((self.frame[i] - length_of_window) / self.stride) + 1)
+                self.prefix.append(self.frame[i] + self.prefix[-1])
+            self.len = sum(self.frame)
 
 
 
     def __getitem__(self, index):
-        sequence_idx = bisect.bisect_right(self.prefix, index) - 1
-        frame_idx = index - self.prefix[sequence_idx]
+        if self.valid_windows is not None:
+            sequence_idx, frame_idx = self.valid_windows[index]
+        else:
+            sequence_idx = bisect.bisect_right(self.prefix, index) - 1
+            frame_idx = index - self.prefix[sequence_idx]
 
         img = torch.from_numpy(self.img[sequence_idx][frame_idx:frame_idx + self.length_of_window]).float()
         # normalize image

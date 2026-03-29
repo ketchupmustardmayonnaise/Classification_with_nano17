@@ -42,6 +42,7 @@ class PredictionForce(pl.LightningModule):
                  # === Hyperparameter ===
                  learning_rate : float = 1e-4,
                  weight_decay : float = 1e-3,
+                 test_report_last_frame_only: bool = False,
 
                  directory = None
                  ):
@@ -462,13 +463,20 @@ class PredictionForce(pl.LightningModule):
             self.log("test/loss_fy", loss_fy, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
             self.log("test/loss_fz", loss_fz, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=False, sync_dist=True)
 
-            # (B, T, 3) -> (B*T, 3)
-            preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
-            targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
+            if getattr(self.hparams, "test_report_last_frame_only", False):
+                preds_flat = prediction.detach()[:, -1, :]  # (B,3)
+                targets_flat = batch['force'].detach()[:, -1, :]  # (B,3)
+            else:
+                # (B, T, 3) -> (B*T, 3)
+                preds_flat = prediction.detach().reshape((-1, 3))  # (B*T,3)
+                targets_flat = batch['force'].detach().reshape((-1, 3))  # (B*T,3)
 
-            self.test_metrics.update(preds_flat, targets_flat)
+            # Keep the full window results so sequence plots and grouped reports can
+            # still reconstruct the original sequence even when metrics use only the last frame.
             self._save_result(self.test_results, prediction.detach(), batch['force'].detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
+
+            self.test_metrics.update(preds_flat, targets_flat)
 
 
         elif self._task == "classification":
@@ -491,43 +499,63 @@ class PredictionForce(pl.LightningModule):
         self.log_dict(metrics)
 
         if self._task == "regression":
+            report_last_frame_only = getattr(self.hparams, "test_report_last_frame_only", False)
             # test 결과를 csv 파일로 저장함
-            ground_truth = np.array(self.test_results["target"])  # (num_windows, window_size, 3)
-            prediction = np.array(self.test_results["prediction"])  # (num_windows, window_size, 3)
+            ground_truth = np.array(self.test_results["target"])
+            prediction = np.array(self.test_results["prediction"])
 
             sequence_ids = np.array(self.test_results["sequence_id"])
             subject_ids = np.array(self.test_results["subject_id"])
             bodyparts = np.array(self.test_results["bodypart"])
 
-            num_windows, window_size, _ = ground_truth.shape
-
             rows = []
-
-            for w in range(num_windows):
-                for f in range(window_size):
+            if report_last_frame_only:
+                num_windows = ground_truth.shape[0]
+                for w in range(num_windows):
                     rows.append({
                         "window_idx": w,
-                        "frame_idx": f,
-
-                        "gt_x": ground_truth[w, f, 0],
-                        "gt_y": ground_truth[w, f, 1],
-                        "gt_z": ground_truth[w, f, 2],
-
-                        "pred_x": prediction[w, f, 0],
-                        "pred_y": prediction[w, f, 1],
-                        "pred_z": prediction[w, f, 2],
-
+                        "frame_idx": -1,
+                        "gt_x": ground_truth[w, -1, 0],
+                        "gt_y": ground_truth[w, -1, 1],
+                        "gt_z": ground_truth[w, -1, 2],
+                        "pred_x": prediction[w, -1, 0],
+                        "pred_y": prediction[w, -1, 1],
+                        "pred_z": prediction[w, -1, 2],
                         "sequence_id": sequence_ids[w],
                         "subject_id": subject_ids[w],
                         "bodypart": bodyparts[w],
                     })
+            else:
+                num_windows, window_size, _ = ground_truth.shape
+                for w in range(num_windows):
+                    for f in range(window_size):
+                        rows.append({
+                            "window_idx": w,
+                            "frame_idx": f,
+
+                            "gt_x": ground_truth[w, f, 0],
+                            "gt_y": ground_truth[w, f, 1],
+                            "gt_z": ground_truth[w, f, 2],
+
+                            "pred_x": prediction[w, f, 0],
+                            "pred_y": prediction[w, f, 1],
+                            "pred_z": prediction[w, f, 2],
+
+                            "sequence_id": sequence_ids[w],
+                            "subject_id": subject_ids[w],
+                            "bodypart": bodyparts[w],
+                        })
 
             raw_df = pd.DataFrame(rows)
             raw_df.to_csv(f"{self.directory}/test_predictions_regression.csv", index=False)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
-            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
+            if report_last_frame_only:
+                prediction = torch.Tensor(self.test_results['prediction'])[:, -1, :].to(self.device)
+                ground_truth = torch.Tensor(self.test_results['target'])[:, -1, :].to(self.device)
+            else:
+                prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
+                ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
 
             r2_all = R2Score().to(self.device)(prediction, ground_truth)
             r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])

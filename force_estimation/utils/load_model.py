@@ -25,16 +25,31 @@ def load_model_from_local(model_cls, checkpoint_path, **init_kwargs):
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"체크포인트 파일을 찾을 수 없습니다: {checkpoint_path}")
 
+    map_location = init_kwargs.pop("map_location", None)
+    if map_location is None:
+        map_location = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # PyTorch 2.6+에서 weights_only=True가 기본값이 되었으나,
     # 체크포인트에 omegaconf 등 다양한 타입이 포함되어 있으므로 False로 패치
-    map_location = f'cuda:0' if torch.cuda.is_available() else 'cpu'
     _original_load = torch.load
-    torch.load = lambda *args, **kwargs: _original_load(*args, **{**kwargs, 'weights_only': False, 'map_location': map_location})
+    torch.load = lambda *args, **kwargs: _original_load(
+        *args,
+        **{
+            **kwargs,
+            'weights_only': False,
+            'map_location': kwargs.get('map_location', map_location),
+        }
+    )
     try:
-        model = model_cls.load_from_checkpoint(checkpoint_path, **init_kwargs, strict=False, map_location=map_location)
+        model = model_cls.load_from_checkpoint(
+            checkpoint_path,
+            **init_kwargs,
+            strict=False,
+            map_location=map_location,
+        )  # ⭐ 없는 키는 무시
     finally:
         torch.load = _original_load
 
     model.eval()
-    print(f"모델 로드 완료: {checkpoint_path}")
+    print(f"모델 로드 완료: {checkpoint_path} (map_location={map_location})")
     return model

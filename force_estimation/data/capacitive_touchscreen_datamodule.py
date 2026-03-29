@@ -35,7 +35,9 @@ class CapacitiveImageDataModule(LightningDataModule):
             self.test_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                              num_classes=self.hparams.cfg.data.num_classes,
                                              path=f"{self.hparams.cfg.data.data_dir}/test.h5",
-                                             dataset_type='test')
+                                             dataset_type='test',
+                                             touch_only_last_frame=self.hparams.cfg.data.get("test_touch_only", False),
+                                             touch_threshold_log=self.hparams.cfg.data.get("test_touch_log_threshold", None))
 
     def train_dataloader(self):
         num_workers = self.hparams.cfg.data.get("num_workers", 0)

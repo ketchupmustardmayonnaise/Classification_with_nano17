@@ -1,144 +1,176 @@
 import os
+import sys
 import time
-import torch
-import hydra
-import wandb
-import pytorch_lightning as pl
+from pathlib import Path
 
-from omegaconf import OmegaConf, DictConfig
-from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
+import hydra
+import pytorch_lightning as pl
+import torch
+import wandb
+from omegaconf import DictConfig, OmegaConf
+from pytorch_lightning.callbacks import EarlyStopping, LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
-from force_estimation.models import *
-from force_estimation.utils.bodypart_label import *
-from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+PROJECT_PARENT = Path(__file__).resolve().parent.parent
+if str(PROJECT_PARENT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_PARENT))
 
-# 만약 리눅스에서 Background로 돌리고 싶다면
-# config 파일에서 data.data_dir: ./data/current_dataset/output/bodypart/fold~ 이런 식으로 바꿔 주고
-# 리눅스에서 path를 가장 최상위 폴더 (force_estimation의 상위 폴더)로 돌아긴 흐
-# PYTHONPATH=$(pwd) nohup python force_estimation/run_regression.py > output.log 2>&1 &
+from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+from force_estimation.models import PredictionForce, Transformer, VisionFeatureExtractor
+from force_estimation.utils.bodypart_label import bodypart_14_label
+from force_estimation.utils.load_model import load_model_from_local
+
+
+def resolve_path(path_value, base_dir):
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = base_dir / path
+    return path.resolve()
+
+
+def normalize_cfg_paths(cfg: DictConfig):
+    script_dir = Path(__file__).resolve().parent
+    cfg.save_directory = str(resolve_path(cfg.save_directory, script_dir))
+    cfg.data.data_dir = str(resolve_path(cfg.data.data_dir, script_dir))
+    return cfg
+
+
+def validate_dataset_dir(dataset_dir):
+    dataset_path = Path(dataset_dir)
+    required_files = ["train.h5", "val.h5", "test.h5"]
+    missing = [name for name in required_files if not (dataset_path / name).exists()]
+    if missing:
+        missing_text = ", ".join(missing)
+        raise FileNotFoundError(f"Missing dataset files in {dataset_path}: {missing_text}")
 
 
 @hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
-    OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
+    OmegaConf.register_new_resolver("as_tuple", lambda *values: tuple(values), replace=True)
+    cfg = normalize_cfg_paths(cfg)
+    validate_dataset_dir(cfg.data.data_dir)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"사용 장치: {device}")
+    print(f"데이터셋 경로: {cfg.data.data_dir}")
 
-    # DDP subprocess에서는 LOCAL_RANK 환경변수가 설정됨
+    save_root = Path(cfg.save_directory)
+    save_root.mkdir(parents=True, exist_ok=True)
+
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    _save_dir_marker = os.path.join(cfg.save_directory, ".current_save_dir")
+    save_dir_marker = save_root / ".current_save_dir"
 
     if local_rank == 0:
-        time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
-        save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-        os.makedirs(save_dir, exist_ok=True)
-        # 다른 rank들이 같은 경로를 쓸 수 있도록 기록
-        with open(_save_dir_marker, "w") as f:
-            f.write(save_dir)
+        time_suffix = time.strftime("%m-%d_%H-%M-%S", time.localtime())
+        save_dir = save_root / f"{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        with open(save_dir_marker, "w", encoding="utf-8") as marker_file:
+            marker_file.write(str(save_dir))
     else:
-        # rank 0가 디렉토리를 생성할 때까지 대기
-        while not os.path.exists(_save_dir_marker):
+        while not save_dir_marker.exists():
             time.sleep(0.2)
-        with open(_save_dir_marker) as f:
-            save_dir = f.read().strip()
+        with open(save_dir_marker, encoding="utf-8") as marker_file:
+            save_dir = Path(marker_file.read().strip())
 
-    time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())  # 로그 이름용
+    time_suffix = time.strftime("_%m-%d_%H-%M-%S", time.localtime())
+    wandb_group = f"{cfg.wandb.group}_fingerpad_fold{cfg.data.fold}"
 
-    # W&B logger (WandbLogger는 rank 0에서만 실제 run을 생성함)
     wandb_logger = WandbLogger(
         name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
+        group=wandb_group,
         log_model=cfg.wandb.log_model,
     )
 
     if local_rank == 0:
         wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
 
-    # =========================================
-    # callback 함수들
-    # =========================================
-
     checkpoint_callback = ModelCheckpoint(
-        monitor='loss_for_monitor',
-        mode='min',
+        monitor="loss_for_monitor",
+        mode="min",
         save_top_k=3,
-        dirpath=save_dir,
-        filename='best_model_{loss_for_monitor:.4f}',
-        verbose=True
+        dirpath=str(save_dir),
+        filename="best_model_{loss_for_monitor:.4f}",
+        verbose=True,
     )
 
-    # early stopping callback
     early_stop_callback = EarlyStopping(
-        monitor='loss_for_monitor',
+        monitor="loss_for_monitor",
         patience=5,
-        min_delta=1e-4,  # 0.001 미만 개선은 무시
-        verbose=True)
+        min_delta=1e-4,
+        verbose=True,
+    )
 
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
-
-    # 데이터셋
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
     data_module = CapacitiveImageDataModule(cfg)
 
+    vf_net = VisionFeatureExtractor(cfg.model.encoder_type, cfg.data.image_size)
 
-    # =========================================
-    # 학습 모델 정의
-    # =========================================
-
-    vf_net = VisionFeatureExtractor(cfg.model.encoder_type,
-                                    cfg.data.image_size)
-
-    rf_net = Transformer(size_of_input=vf_net.size_of_output,
-                        num_rnn_layer=cfg.model.transformer.num_layers,
-                        num_of_heads=cfg.model.transformer.num_of_head,
-
-                        dropout=cfg.model.dropout,
-                        length_of_sequence=cfg.data.length_of_window,
-
-                        dim_feedforward=cfg.model.transformer.dim_feedforward,
-                        export_multistep = cfg.model.transformer.export_multistep)
-
-    '''
-    cf_net = LSTM(size_of_input=vf_net.size_of_output,
-                  size_of_hidden_layer_features=cfg.model.lstm.size_of_hidden_layer_features,
-                  num_layer=cfg.model.lstm.num_layers,
-                  is_bidirectional=cfg.model.lstm.is_bidirectional,
-                  export_multistep=cfg.model.lstm.export_multistep)
-    '''
+    rf_net = Transformer(
+        size_of_input=vf_net.size_of_output,
+        num_rnn_layer=cfg.model.transformer.num_layers,
+        num_of_heads=cfg.model.transformer.num_of_head,
+        dropout=cfg.model.dropout,
+        length_of_sequence=cfg.data.length_of_window,
+        dim_feedforward=cfg.model.transformer.dim_feedforward,
+        export_multistep=cfg.model.transformer.export_multistep,
+    )
 
     model = PredictionForce(
-                vision_feature_extractor=vf_net,
-                regression_feature_extractor=rf_net,
-                # classification_feature_extractor=cf_net,
-
-                dim_of_regression=3, # axis
-                classes=bodypart_14_label,
-                task="regression",
-
-                learning_rate=cfg.model.learning_rate,
-                weight_decay=cfg.model.weight_decay,
-
-                directory=save_dir
+        vision_feature_extractor=vf_net,
+        regression_feature_extractor=rf_net,
+        dim_of_regression=3,
+        classes=bodypart_14_label,
+        task="regression",
+        learning_rate=cfg.model.learning_rate,
+        weight_decay=cfg.model.weight_decay,
+        test_report_last_frame_only=cfg.test.get("report_last_frame_only", False),
+        directory=str(save_dir),
     )
 
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
-        # strategy="ddp",         # multi-GPU 전략
-        precision=16,
+        precision="16-mixed" if torch.cuda.is_available() else 32,
         logger=wandb_logger,
         max_epochs=200,
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
     )
 
     trainer.fit(model, datamodule=data_module)
-    trainer.test(model, datamodule=data_module, ckpt_path="best")
 
+    best_ckpt_path = checkpoint_callback.best_model_path
+    if best_ckpt_path:
+        test_vf_net = VisionFeatureExtractor(cfg.model.encoder_type, cfg.data.image_size)
+        test_rf_net = Transformer(
+            size_of_input=test_vf_net.size_of_output,
+            num_rnn_layer=cfg.model.transformer.num_layers,
+            num_of_heads=cfg.model.transformer.num_of_head,
+            dropout=cfg.model.dropout,
+            length_of_sequence=cfg.data.length_of_window,
+            dim_feedforward=cfg.model.transformer.dim_feedforward,
+            export_multistep=cfg.model.transformer.export_multistep,
+        )
+        test_model = load_model_from_local(
+            PredictionForce,
+            best_ckpt_path,
+            vision_feature_extractor=test_vf_net,
+            regression_feature_extractor=test_rf_net,
+            dim_of_regression=3,
+            classes=bodypart_14_label,
+            task="regression",
+            learning_rate=cfg.model.learning_rate,
+            weight_decay=cfg.model.weight_decay,
+            test_report_last_frame_only=cfg.test.get("report_last_frame_only", False),
+            directory=str(save_dir),
+        )
+    else:
+        test_model = model
+
+    trainer.test(test_model, datamodule=data_module)
     wandb.finish()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
