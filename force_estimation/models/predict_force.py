@@ -124,6 +124,34 @@ class PredictionForce(pl.LightningModule):
             self.val_results = self._init_result_dict()
             self.test_results = self._init_result_dict()
 
+        elif self._task == "multitask":
+            if classes is None:
+                raise Exception("Multitask task requires classes.")
+            self.criterion_reg = torch.nn.MSELoss(reduction='mean')
+            self.criterion_cls = torch.nn.CrossEntropyLoss(reduction='mean')
+
+            reg_metrics = MetricCollection({
+                "rmse": MeanSquaredError(squared=False),
+                "mae": MeanAbsoluteError(),
+                "r2": R2Score()
+            })
+            cls_metrics = MetricCollection({
+                "accuracy": Accuracy(task="multiclass", num_classes=len(classes)),
+                "cross_entropy": CrossEntropyMetrics()
+            })
+
+            self.train_metrics_reg = reg_metrics.clone(prefix="train/reg_")
+            self.train_metrics_cls = cls_metrics.clone(prefix="train/cls_")
+
+            self.val_metrics_reg = reg_metrics.clone(prefix="val/reg_")
+            self.val_metrics_cls = cls_metrics.clone(prefix="val/cls_")
+
+            self.test_metrics_reg = reg_metrics.clone(prefix="test/reg_")
+            self.test_metrics_cls = cls_metrics.clone(prefix="test/cls_")
+
+            self.test_results_reg = self._init_result_dict()
+            self.test_results_cls = self._init_result_dict()
+
         else:
             raise Exception("정확한 Task 기입")
 
@@ -148,6 +176,17 @@ class PredictionForce(pl.LightningModule):
             x = self.classification_head(x)
 
             return x
+
+        elif self._task == "multitask":
+            if self.rf_net is None or self.regression_head is None:
+                raise RuntimeError("Regression branch is not attached.")
+            if self.cf_net is None or self.classification_head is None:
+                raise RuntimeError("Classification branch is not attached.")
+            reg_out = self.rf_net(x)
+            reg_out = self.regression_head(reg_out)   # (B, T, dim_of_regression)
+            cls_out = self.cf_net(x)
+            cls_out = self.classification_head(cls_out)  # (B, num_classes)
+            return {"regression": reg_out, "classification": cls_out}
 
         else:
             raise ValueError(f"Unknown task: {self._task}")
@@ -248,6 +287,9 @@ class PredictionForce(pl.LightningModule):
         elif self._task == "finetune":
             params = self.parameters()  # 전체
 
+        elif self._task == "multitask":
+            params = self.parameters()  # 전체
+
         return torch.optim.Adam(params, lr=self.hparams.learning_rate, weight_decay=self.hparams.weight_decay)
 
 
@@ -293,11 +335,40 @@ class PredictionForce(pl.LightningModule):
             self._save_result(self.train_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
+        elif self._task == "multitask":
+            reg_out = prediction["regression"]   # (B, T, 3)
+            cls_out = prediction["classification"]  # (B, num_classes)
+
+            ground_truth_reg = batch['force']           # (B, T, 3)
+            ground_truth_cls = batch['label'].to(torch.long)  # (B,)
+
+            loss_reg = self.criterion_reg(reg_out, ground_truth_reg)
+            loss_cls = self.criterion_cls(cls_out, ground_truth_cls)
+            loss = loss_reg + loss_cls
+
+            preds_flat = reg_out.detach().reshape((-1, 3))
+            targets_flat = ground_truth_reg.detach().reshape((-1, 3))
+            self.train_metrics_reg.update(preds_flat, targets_flat)
+            self.train_metrics_cls.update(cls_out.detach(), ground_truth_cls)
+
+            self.log("train/loss", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("train/loss_reg", loss_reg, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, sync_dist=True)
+            self.log("train/loss_cls", loss_cls, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, sync_dist=True)
+
         return {"loss": loss}
 
 
 
     def on_train_epoch_end(self):
+        if self._task == "multitask":
+            reg_m = self.train_metrics_reg.compute()
+            cls_m = self.train_metrics_cls.compute()
+            self.log_dict(reg_m)
+            self.log_dict(cls_m)
+            self.train_metrics_reg.reset()
+            self.train_metrics_cls.reset()
+            return
+
         metrics = self.train_metrics.compute()
         self.log_dict(metrics)
 
@@ -377,11 +448,41 @@ class PredictionForce(pl.LightningModule):
             self._save_result(self.val_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
+        elif self._task == "multitask":
+            reg_out = prediction["regression"]   # (B, T, 3)
+            cls_out = prediction["classification"]  # (B, num_classes)
+
+            ground_truth_reg = batch['force']
+            ground_truth_cls = batch['label'].to(torch.long)
+
+            loss_reg = self.criterion_reg(reg_out, ground_truth_reg)
+            loss_cls = self.criterion_cls(cls_out, ground_truth_cls)
+            loss = loss_reg + loss_cls
+
+            preds_flat = reg_out.detach().reshape((-1, 3))
+            targets_flat = ground_truth_reg.detach().reshape((-1, 3))
+            self.val_metrics_reg.update(preds_flat, targets_flat)
+            self.val_metrics_cls.update(cls_out.detach(), ground_truth_cls)
+
+            self.log("loss_for_monitor", loss, batch_size=batch['img'].size(0), on_step=False, on_epoch=True,
+                     prog_bar=False, sync_dist=True)
+            self.log("val/loss_reg", loss_reg, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, sync_dist=True)
+            self.log("val/loss_cls", loss_cls, batch_size=batch['img'].size(0), on_step=False, on_epoch=True, sync_dist=True)
+
         return {"loss": loss}
 
 
 
     def on_validation_epoch_end(self):
+        if self._task == "multitask":
+            reg_m = self.val_metrics_reg.compute()
+            cls_m = self.val_metrics_cls.compute()
+            self.log_dict(reg_m)
+            self.log_dict(cls_m)
+            self.val_metrics_reg.reset()
+            self.val_metrics_cls.reset()
+            return
+
         metrics = self.val_metrics.compute()
         self.log_dict(metrics)
 
@@ -484,9 +585,37 @@ class PredictionForce(pl.LightningModule):
             self._save_result(self.test_results, prediction.detach(), ground_truth.detach(),
                               batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
 
+        elif self._task == "multitask":
+            reg_out = prediction["regression"]   # (B, T, 3)
+            cls_out = prediction["classification"]  # (B, num_classes)
+
+            ground_truth_reg = batch['force']
+            ground_truth_cls = batch['label'].to(torch.long)
+
+            preds_flat = reg_out.detach().reshape((-1, 3))
+            targets_flat = ground_truth_reg.detach().reshape((-1, 3))
+            self.test_metrics_reg.update(preds_flat, targets_flat)
+            self.test_metrics_cls.update(cls_out.detach(), ground_truth_cls)
+
+            self._save_result(self.test_results_reg, reg_out.detach(), ground_truth_reg.detach(),
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
+            self._save_result(self.test_results_cls, cls_out.detach(), ground_truth_cls.detach(),
+                              batch['sequence_id'].detach(), batch['subject_id'], batch['bodypart'])
+
 
 
     def on_test_epoch_end(self):
+        if self._task == "multitask":
+            reg_m = self.test_metrics_reg.compute()
+            cls_m = self.test_metrics_cls.compute()
+            self.log_dict(reg_m)
+            self.log_dict(cls_m)
+            self.test_metrics_reg.reset()
+            self.test_metrics_cls.reset()
+            self.test_results_reg = self._init_result_dict()
+            self.test_results_cls = self._init_result_dict()
+            return
+
         metrics = self.test_metrics.compute()
         self.log_dict(metrics)
 

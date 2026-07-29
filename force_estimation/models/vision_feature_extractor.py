@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import models
 
 class VisionFeatureExtractor(nn.Module):
@@ -24,6 +25,8 @@ class VisionFeatureExtractor(nn.Module):
     def _create_networks(self,
                          cnn_name : str,
                          image_size : (int, int)):
+
+        self._resize_to = None  # 대부분 모델은 resize 불필요; AlexNet은 224로 설정됨
 
         if cnn_name.lower() == "resnet18":
             self._size_of_output = 64
@@ -74,7 +77,15 @@ class VisionFeatureExtractor(nn.Module):
 
 
         elif cnn_name.lower() == 'alexnet':
-            self.model = models.alexnet(pretrained=True)
+            self._size_of_output = 4096
+            self._resize_to = 224  # AlexNet은 224x224 입력 필요
+
+            pretrained_model = models.alexnet(pretrained=True)
+            # 마지막 1000-way Linear 제거 → 4096-dim feature extractor로 사용
+            pretrained_model.classifier = nn.Sequential(
+                *list(pretrained_model.classifier.children())[:-1]
+            )
+            self.model = pretrained_model
             for param in self.model.parameters():
                 param.requires_grad = False
 
@@ -114,12 +125,18 @@ class VisionFeatureExtractor(nn.Module):
         # x.shape = (batch, timesteps, channels, height, width)
         if len(x.shape) == 4:
             b, c, h, w = x.shape
+            if self._resize_to is not None:
+                x = F.interpolate(x, size=(self._resize_to, self._resize_to),
+                                  mode='bilinear', align_corners=False)
             x = self.model(x)
             x = torch.flatten(x, 1)
 
         elif len(x.shape) == 5:
             b, t, c, h, w = x.shape
             x = x.reshape(b * t, c, h, w)
+            if self._resize_to is not None:
+                x = F.interpolate(x, size=(self._resize_to, self._resize_to),
+                                  mode='bilinear', align_corners=False)
             x = self.model(x)
             x = torch.flatten(x, 1)
             x = x.reshape((b, t, -1))
