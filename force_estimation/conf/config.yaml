@@ -1,6 +1,10 @@
 
 save_directory: ./saved_models
 
+resume:
+  enabled: False   # True로 두면 중간에 끊긴 학습을 이어서 진행함 (wandb run도 이어짐)
+  run_dir: null     # 이어서 학습할 run 폴더 경로. null이면 save_directory 안에서 last.ckpt가 있는 폴더 중 가장 최근 걸 자동으로 사용
+
 wandb:
   project: HandInterfacesWatch
   entity: pinkmiro-kyung-hee-university

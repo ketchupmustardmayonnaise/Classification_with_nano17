@@ -11,6 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from force_estimation.models import *
 from force_estimation.utils.bodypart_label import *
+from force_estimation.utils.resume import find_latest_run_dir, read_wandb_run_id, write_wandb_run_id
 from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
 
 # 만약 리눅스에서 Background로 돌리고 싶다면
@@ -29,34 +30,62 @@ def main(cfg: DictConfig):
     # DDP subprocess에서는 LOCAL_RANK 환경변수가 설정됨
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     _save_dir_marker = os.path.join(cfg.save_directory, ".current_save_dir")
+    _ckpt_path_marker = os.path.join(cfg.save_directory, ".current_ckpt_path")
 
     if local_rank == 0:
-        time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
-        save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-        os.makedirs(save_dir, exist_ok=True)
+        resume_dir = None
+        if cfg.resume.enabled:
+            resume_dir = cfg.resume.run_dir if cfg.resume.run_dir else find_latest_run_dir(cfg.save_directory)
+            if resume_dir is None or not os.path.isfile(os.path.join(resume_dir, "last.ckpt")):
+                print(f"[resume] last.ckpt를 찾지 못해서 새로 학습을 시작합니다. (resume_dir={resume_dir})")
+                resume_dir = None
+
+        if resume_dir is not None:
+            save_dir = resume_dir
+            ckpt_path = os.path.join(resume_dir, "last.ckpt")
+            print(f"[resume] 이어서 학습합니다: {save_dir}")
+        else:
+            time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
+            save_dir = f"{cfg.save_directory}/{time_suffix}_{cfg.model.encoder_type}_{cfg.model.decoder_type}"
+            os.makedirs(save_dir, exist_ok=True)
+            ckpt_path = None
+
         # 다른 rank들이 같은 경로를 쓸 수 있도록 기록
         with open(_save_dir_marker, "w") as f:
             f.write(save_dir)
+        with open(_ckpt_path_marker, "w") as f:
+            f.write(ckpt_path or "")
     else:
         # rank 0가 디렉토리를 생성할 때까지 대기
-        while not os.path.exists(_save_dir_marker):
+        while not (os.path.exists(_save_dir_marker) and os.path.exists(_ckpt_path_marker)):
             time.sleep(0.2)
         with open(_save_dir_marker) as f:
             save_dir = f.read().strip()
+        with open(_ckpt_path_marker) as f:
+            ckpt_path = f.read().strip() or None
+
+    # 이어서 학습하는 경우, 같은 wandb run에 로그가 계속 쌓이도록 run id를 재사용
+    wandb_run_id = read_wandb_run_id(save_dir)
 
     time_suffix = time.strftime('_%m-%d_%H-%M-%S', time.localtime())  # 로그 이름용
 
     # W&B logger (WandbLogger는 rank 0에서만 실제 run을 생성함)
+    # wandb_run_id가 있으면(=이어서 학습) 같은 run에 이어서 기록하고, 없으면 새 run을 만듦
     wandb_logger = WandbLogger(
         name=f"{cfg.model.encoder_type}_{cfg.model.decoder_type}_{time_suffix}",
         project=cfg.wandb.project,
         entity=cfg.wandb.entity,
         group=cfg.wandb.group,
         log_model=cfg.wandb.log_model,
+        id=wandb_run_id,
+        resume="allow" if wandb_run_id else None,
     )
 
     if local_rank == 0:
         wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
+
+        # run id를 저장해 둬서, 다음에 끊긴 학습을 이어갈 때 같은 wandb run을 재사용함
+        write_wandb_run_id(save_dir, wandb_logger.experiment.id)
 
     # =========================================
     # callback 함수들
@@ -66,6 +95,7 @@ def main(cfg: DictConfig):
         monitor='loss_for_monitor',
         mode='min',
         save_top_k=3,
+        save_last=True,  # 끊긴 학습을 이어갈 수 있도록 매 epoch last.ckpt도 함께 저장
         dirpath=save_dir,
         filename='best_model_{loss_for_monitor:.4f}',
         verbose=True
@@ -134,7 +164,7 @@ def main(cfg: DictConfig):
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
     )
 
-    trainer.fit(model, datamodule=data_module)
+    trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
     trainer.test(model, datamodule=data_module, ckpt_path="best")
 
     wandb.finish()
