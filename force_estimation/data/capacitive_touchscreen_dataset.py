@@ -22,7 +22,8 @@ class CapTSDataset(Dataset):
 
                  xflip : bool = True,
                  yflip : bool = False,
-                 translation : bool = False):
+                 translation : bool = False,
+                 rotation : bool = False):
 
         self.path = path
         self.dataset_type = dataset_type
@@ -41,6 +42,7 @@ class CapTSDataset(Dataset):
         self.xflip = xflip
         self.yflip = yflip
         self.translation = translation
+        self.rotation = rotation
 
         self.prefix = [0]
 
@@ -75,6 +77,8 @@ class CapTSDataset(Dataset):
                 self.vertical_flip_offline_augmentaion()
             if self.translation:
                 self.translation_offline_augmentation()
+            if self.rotation:
+                self.rotation_offline_augmentation()
 
         # frame 개수와 length_of_window 값으로부터, 각 시퀀스에서 학습 가능한 데이터 개수 찾음
         for i in range(len(self.frame)):
@@ -198,6 +202,43 @@ class CapTSDataset(Dataset):
 
                 # ---------- force ----------
                 force = copy.deepcopy(base_force)
+                self.force.append(force)
+
+                # ---------- meta 복사 ----------
+                self.label.append(self.label[i])
+                self.bodypart.append(self.bodypart[i])
+                self.frame.append(self.frame[i])
+                self.name.append(self.name[i])
+
+
+    def rotation_offline_augmentation(self, angles=(45, 90, 135, 180, 225, 270, 315)):
+        """
+        이미지를 45도 단위로 45~315도까지 회전시킨 버전을 미리 생성 (Offline Augmentation).
+        force의 x, y축 성분도 이미지 회전과 동일한 방향/각도로 함께 회전시킴.
+        (TF.rotate가 pixel 좌표 (col, row)를 변환하는 방향과 동일하게
+         Fx' = Fx*cos + Fy*sin, Fy' = -Fx*sin + Fy*cos 로 계산)
+        """
+
+        original_length = len(self.img)
+
+        for i in range(original_length):
+            base_img = torch.from_numpy(self.img[i])  # (T, C, H, W)
+            base_force = self.force[i]
+
+            for angle in angles:
+                # ---------- image rotation ----------
+                rotated = TF.rotate(base_img, angle).numpy()
+                self.img.append(rotated)
+
+                # ---------- force rotation (x, y만 회전, z 이하는 그대로) ----------
+                theta = math.radians(angle)
+                cos_t, sin_t = math.cos(theta), math.sin(theta)
+
+                force = copy.deepcopy(base_force)
+                fx = base_force[:, 0]
+                fy = base_force[:, 1]
+                force[:, 0] = fx * cos_t + fy * sin_t
+                force[:, 1] = -fx * sin_t + fy * cos_t
                 self.force.append(force)
 
                 # ---------- meta 복사 ----------

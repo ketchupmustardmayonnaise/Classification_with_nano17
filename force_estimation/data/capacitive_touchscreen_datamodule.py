@@ -24,7 +24,8 @@ class CapacitiveImageDataModule(LightningDataModule):
 
                                               xflip=self.hparams.cfg.data.xflip,
                                               yflip=self.hparams.cfg.data.yflip,
-                                              translation=self.hparams.cfg.data.translation)
+                                              translation=self.hparams.cfg.data.translation,
+                                              rotation=self.hparams.cfg.data.rotation)
 
             self.val_dataset = CapTSDataset(length_of_window=self.hparams.cfg.data.length_of_window,
                                             num_classes=self.hparams.cfg.data.num_classes,
