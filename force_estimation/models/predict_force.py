@@ -655,8 +655,8 @@ class PredictionForce(pl.LightningModule):
             raw_df.to_csv(f"{self.directory}/test_predictions_regression.csv", index=False)
 
             # 축별 R2, RMSE, MAE를 수동으로 계산하고 로깅
-            prediction = torch.Tensor(self.test_results['prediction']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
-            ground_truth = torch.Tensor(self.test_results['target']).reshape((-1, 3)).to(self.device)  # (B, T, 3) -> (B*T, 3)
+            prediction = torch.Tensor(self.test_results['prediction'])[:, -1, :].to(self.device)  # (B, T, 3) -> (B, 3)
+            ground_truth = torch.Tensor(self.test_results['target'])[:, -1, :].to(self.device)  # (B, T, 3) -> (B, 3)
 
             r2_all = R2Score().to(self.device)(prediction, ground_truth)
             r2_fx = R2Score().to(self.device)(prediction[:, 0], ground_truth[:, 0])
@@ -698,8 +698,8 @@ class PredictionForce(pl.LightningModule):
             # 시퀀스 별로 plot
             grouped_data, unique_seq = self.group_by_sequence(self.test_results)
             for sid in unique_seq:
-                prediction = reconstruct_list_from_windows(grouped_data[sid]['prediction'])
-                ground_truth = reconstruct_list_from_windows(grouped_data[sid]['target'])
+                prediction = grouped_data[sid]['prediction'][:, -1, :]
+                ground_truth = grouped_data[sid]['target'][:, -1, :]
 
                 plot_sequence(ground_truth, prediction, f"{self.directory}/test", sid,
                               label=grouped_data[sid]['bodypart'][0],
@@ -711,8 +711,8 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH SUBJECT ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(grouped_data[sid]['prediction']).reshape((-1, 3)).to(self.device)
-                ground_truth = torch.Tensor(grouped_data[sid]['target']).reshape((-1, 3)).to(self.device)
+                prediction = torch.Tensor(grouped_data[sid]['prediction'])[:, -1, :].to(self.device) # (B, T, 3) -> (B, 3)
+                ground_truth = torch.Tensor(grouped_data[sid]['target'])[:, -1, :].to(self.device) # (B, T, 3) -> (B, 3)
 
                 r2_for_subject = R2Score().to(self.device)(prediction, ground_truth)
                 rmse_for_subject = MeanSquaredError(squared=False).to(self.device)(prediction, ground_truth)
@@ -742,8 +742,8 @@ class PredictionForce(pl.LightningModule):
             with open(f'{self.directory}/test_result.txt', "a") as f:
                 f.write(f"\n\n ========= REPORT FOR EACH BODYPART ========= \n\n")
             for sid in unique_seq:
-                prediction = torch.Tensor(grouped_data[sid]['prediction']).reshape((-1, 3)).to(self.device)
-                ground_truth = torch.Tensor(grouped_data[sid]['target']).reshape((-1, 3)).to(self.device)
+                prediction = torch.Tensor(grouped_data[sid]['prediction'])[:, -1, :].to(self.device)  # (B, T, 3) -> (B, 3)
+                ground_truth = torch.Tensor(grouped_data[sid]['target'])[:, -1, :].to(self.device)  # (B, T, 3) -> (B, 3)
 
                 r2_for_label = R2Score().to(self.device)(prediction, ground_truth)
                 rmse_for_label = MeanSquaredError(squared=False).to(self.device)(prediction, ground_truth)
