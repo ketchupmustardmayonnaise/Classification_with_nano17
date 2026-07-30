@@ -237,8 +237,8 @@ class CapTSDataset(Dataset):
                 force = copy.deepcopy(base_force)
                 fx = base_force[:, 0]
                 fy = base_force[:, 1]
-                force[:, 0] = fx * cos_t + fy * sin_t
-                force[:, 1] = -fx * sin_t + fy * cos_t
+                force[:, 0] = fx * cos_t - fy * sin_t
+                force[:, 1] = fx * sin_t + fy * cos_t
                 self.force.append(force)
 
                 # ---------- meta 복사 ----------
