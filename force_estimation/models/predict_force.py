@@ -70,7 +70,7 @@ class PredictionForce(pl.LightningModule):
 
         if self.rf_net is not None:
             self.regression_head = nn.Linear(
-                self.vf_net.size_of_output,
+                self.rf_net.size_of_output,
                 dim_of_regression
             )
 
