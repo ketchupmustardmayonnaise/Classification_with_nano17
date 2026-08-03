@@ -9,7 +9,7 @@ test_result.txt -> 구글 스프레드시트 '[ROTATION AUG][REGRESSION][BODYPAR
     bodypart 순서는 test_result.txt의 "REPORT FOR EACH BODYPART" 순서와 동일함.
 
 사용법:
-  python test_result_to_sheet.py <test_result.txt 경로> [--fold N] [--out-dir DIR]
+  python test_regression_result_to_sheet.py <test_result.txt 경로> [--fold N] [--out-dir DIR]
 
 출력:
   <out-dir>/paste_top_summary.txt   -> 시트의 C7(또는 해당 fold 열)7행에 붙여넣기
