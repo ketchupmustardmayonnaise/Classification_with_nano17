@@ -3,6 +3,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import models
 
+
+class _AlexNetWithNewHead(nn.Module):
+    """
+    Pretrained AlexNet은 그대로 두고(제거/슬라이싱 없이),
+    classifier의 4096-dim 출력(마지막 1000-way Linear 이전) 위에
+    새로운 Linear(4096, 96) 레이어만 덧붙여서 그 레이어만 학습시킵니다.
+    """
+
+    def __init__(self, pretrained_model):
+        super().__init__()
+        self.pretrained_model = pretrained_model  # 통째로 보존 (마지막 레이어 포함, frozen)
+        self.new_head = nn.Linear(4096, 96)  # 이 레이어만 학습
+
+    def forward(self, x):
+        x = self.pretrained_model.features(x)
+        x = self.pretrained_model.avgpool(x)
+        x = torch.flatten(x, 1)
+        # classifier의 마지막 Linear(4096, 1000) 직전까지만 통과시켜 4096-dim feature를 얻음
+        x = self.pretrained_model.classifier[:-1](x)
+        x = self.new_head(x)
+        return x
+
+
 class VisionFeatureExtractor(nn.Module):
     """
     각 이미지의 feature를 extract하는 코드
@@ -77,17 +100,16 @@ class VisionFeatureExtractor(nn.Module):
 
 
         elif cnn_name.lower() == 'alexnet':
-            self._size_of_output = 4096
+            self._size_of_output = 96
             self._resize_to = 224  # AlexNet은 224x224 입력 필요
 
             pretrained_model = models.alexnet(pretrained=True)
-            # 마지막 1000-way Linear 제거 → 4096-dim feature extractor로 사용
-            pretrained_model.classifier = nn.Sequential(
-                *list(pretrained_model.classifier.children())[:-1]
-            )
-            self.model = pretrained_model
-            for param in self.model.parameters():
+            # pretrained_model은 그대로 유지(제거 없음)하고, 동결한 뒤
+            # 4096-dim feature 위에 새로운 Linear(4096, 96) 레이어만 덧붙여 학습합니다.
+            for param in pretrained_model.parameters():
                 param.requires_grad = False
+
+            self.model = _AlexNetWithNewHead(pretrained_model)
 
         elif cnn_name.lower() == 'vgg16':
             self.model = models.vgg16(pretrained=True)
