@@ -11,7 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from force_estimation.models import *
 from force_estimation.utils.bodypart_label import bodypart_label
-from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule, resolve_length_of_window
 
 
 # ================================
@@ -48,7 +48,7 @@ def build_cfg(base_config_path, sweep_params):
         cfg.model.weight_decay = float(sweep_params["weight_decay"])
 
     if "length_of_window" in sweep_params:
-        cfg.data.length_of_window = int(sweep_params["length_of_window"])
+        cfg.data.length_of_window.regression = int(sweep_params["length_of_window"])
 
     return cfg
 
@@ -69,9 +69,11 @@ def train_one_run():
 
         time_suffix = time.strftime('%m-%d_%H-%M-%S', time.localtime())
 
+        length_of_window = resolve_length_of_window(cfg, task="regression")
+
         run_name = (
             f"{cfg.model.encoder_type}_{cfg.model.decoder_type}"
-            f"_{cfg.data.length_of_window}frames"
+            f"_{length_of_window}frames"
             f"_{time_suffix}"
         )
 
@@ -111,7 +113,7 @@ def train_one_run():
 
         lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
-        data_module = CapacitiveImageDataModule(cfg)
+        data_module = CapacitiveImageDataModule(cfg, task="regression")
 
         vf_net = VisionFeatureExtractor(
             cfg.model.encoder_type,
@@ -123,7 +125,7 @@ def train_one_run():
             num_rnn_layer=cfg.model.transformer.num_layers,
             num_of_heads=cfg.model.transformer.num_of_head,
             dropout=cfg.model.dropout,
-            length_of_sequence=cfg.data.length_of_window,
+            length_of_sequence=length_of_window,
             dim_feedforward=cfg.model.transformer.dim_feedforward,
             export_multistep=cfg.model.transformer.export_multistep
         )

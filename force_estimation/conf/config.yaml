@@ -13,7 +13,14 @@ wandb:
 
 data:
   data_dir: ./data/current_dataset/output/bodypart/fold1
-  length_of_window: 150
+
+  # sliding window 길이를 task별로 따로 지정함
+  # regression: rf_net(Transformer)의 positional encoding 길이도 이 값으로 정해짐
+  # classification: cf_net(LSTM)만 쓰므로 regression과 다른 길이를 자유롭게 써도 됨
+  length_of_window:
+    regression: 150
+    classification: 50
+
   batch_size: 256
   image_size: [6, 6]
   num_classes: 8
@@ -23,7 +30,7 @@ data:
   xflip: True
   yflip: False
   translation: False
-  rotation: True
+  rotation: False
 
 
 model:
@@ -36,7 +43,7 @@ model:
 
   transformer:
     num_layers: 12
-    dim_feedforward: 128
+    dim_feedforward: default
     num_of_head: 2 # for transformer
     export_multistep: True # Many-To-One 또는 Many-To-Many
 

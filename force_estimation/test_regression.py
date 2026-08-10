@@ -7,7 +7,7 @@ from utils.bodypart_label import *
 from omegaconf import DictConfig
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
-from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule, resolve_length_of_window
 
 # ===================================
 # wandb
@@ -25,7 +25,8 @@ def main(cfg: DictConfig):
     print(f"사용 장치: {device}")
 
     # 데이터셋
-    data_module = CapacitiveImageDataModule(cfg)
+    length_of_window = resolve_length_of_window(cfg, task="regression")
+    data_module = CapacitiveImageDataModule(cfg, task="regression")
 
     # =========================================
     # 학습 모델 정의
@@ -39,7 +40,7 @@ def main(cfg: DictConfig):
                         num_of_heads=cfg.model.transformer.num_of_head,
 
                         dropout=cfg.model.dropout,
-                        length_of_sequence=cfg.data.length_of_window,
+                        length_of_sequence=length_of_window,
 
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)

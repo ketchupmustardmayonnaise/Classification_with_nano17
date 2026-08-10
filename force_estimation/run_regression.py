@@ -12,10 +12,10 @@ from pytorch_lightning.loggers import WandbLogger
 from force_estimation.models import *
 from force_estimation.utils.bodypart_label import *
 from force_estimation.utils.resume import find_latest_run_dir, read_wandb_run_id, write_wandb_run_id
-from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+from force_estimation.data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule, resolve_length_of_window
 
 # 만약 리눅스에서 Background로 돌리고 싶다면
-# config 파일에서 data.data_dir: ./data/current_dataset/output/bodypart/fold~ 이런 식으로 바꿔 주고
+# config 파일에서 data.data_dir: ./force_estimation/data/current_dataset/output/bodypart/fold~ 이런 식으로 바꿔 주고
 # 리눅스에서 path를 가장 최상위 폴더 (force_estimation의 상위 폴더)로 돌아긴 흐
 # PYTHONPATH=$(pwd) nohup python force_estimation/run_regression.py > output.log 2>&1 &
 
@@ -111,7 +111,8 @@ def main(cfg: DictConfig):
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
     # 데이터셋
-    data_module = CapacitiveImageDataModule(cfg)
+    length_of_window = resolve_length_of_window(cfg, task="regression")
+    data_module = CapacitiveImageDataModule(cfg, task="regression")
 
 
     # =========================================
@@ -126,7 +127,7 @@ def main(cfg: DictConfig):
                         num_of_heads=cfg.model.transformer.num_of_head,
 
                         dropout=cfg.model.dropout,
-                        length_of_sequence=cfg.data.length_of_window,
+                        length_of_sequence=length_of_window,
 
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
@@ -164,7 +165,7 @@ def main(cfg: DictConfig):
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
     )
 
-    trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
+    trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path, weights_only=False)
     trainer.test(model, datamodule=data_module, ckpt_path="best")
 
     wandb.finish()

@@ -8,7 +8,7 @@ from utils.resume import find_latest_run_dir, read_wandb_run_id, write_wandb_run
 from omegaconf import DictConfig
 
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
-from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule
+from data.capacitive_touchscreen_datamodule import CapacitiveImageDataModule, resolve_length_of_window
 
 # ===================================
 # wandb
@@ -19,8 +19,8 @@ from pytorch_lightning.loggers import WandbLogger
 def main(cfg: DictConfig):
     OmegaConf.register_new_resolver("as_tuple", lambda *args: tuple(args))
 
-    PATH = "./saved_models\\03-12_11-32-22_lightweight_convnexttiny_transformer"
-    MODEL_NAME = "best_model_loss_for_monitor=0.3571.ckpt"
+    PATH = "C:/Users/user/Documents/SynologyDrive/Research/[이정민] HandInterface+@/Experiment/Model/Ticwatch Pro 3/24 subject/[Train ALL BODY PART Data]/[FOLD1] 03-12_08-19-52_lightweight_convnexttiny_transformer"
+    MODEL_NAME = "best_model_loss_for_monitor=0.2877.ckpt"
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"사용 장치: {device}")
@@ -86,8 +86,8 @@ def main(cfg: DictConfig):
 
     lr_monitor = LearningRateMonitor(logging_interval='epoch')
 
-    # 데이터셋
-    data_module = CapacitiveImageDataModule(cfg)
+    # 데이터셋 - classification용 sliding window 길이를 사용함
+    data_module = CapacitiveImageDataModule(cfg, task="classification")
 
 
     # =========================================
@@ -97,12 +97,14 @@ def main(cfg: DictConfig):
     vf_net = VisionFeatureExtractor(cfg.model.encoder_type,
                                     cfg.data.image_size)
 
+    # rf_net은 classification forward에서 쓰이지 않지만, 불러올 regression 체크포인트의
+    # positional encoding(pe) 버퍼와 shape을 맞춰야 하므로 regression window 길이로 만듦
     rf_net = Transformer(size_of_input=vf_net.size_of_output,
                         num_rnn_layer=cfg.model.transformer.num_layers,
                         num_of_heads=cfg.model.transformer.num_of_head,
 
                         dropout=cfg.model.dropout,
-                        length_of_sequence=cfg.data.length_of_window,
+                        length_of_sequence=resolve_length_of_window(cfg, task="regression"),
 
                         dim_feedforward=cfg.model.transformer.dim_feedforward,
                         export_multistep = cfg.model.transformer.export_multistep)
